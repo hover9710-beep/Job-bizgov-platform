@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>AI 분석 결과</title>
+</head>
+<body>
+    <h1>AI 분석 결과</h1>
+
+    <p><strong>공고명:</strong> {{ row["title"] }}</p>
+    <p><strong>기관:</strong> {{ row["organization"] }}</p>
+    <p><strong>상태:</strong> {{ row["status"] }}</p>
+    <p><strong>URL:</strong> <a href="{{ row['url'] }}" target="_blank">{{ row["url"] }}</a></p>
+
+    <pre>{{ ai_result }}</pre>
+
+    {% if pdf_filename %}
+        <a href="/download/{{ pdf_filename }}">PDF 보기</a>
+        &nbsp;|&nbsp;
+        <a href="/send_email/{{ row['id'] }}">이메일 발송</a>
+    {% endif %}
+
+    <br><br>
+    <a href="/detail/{{ row['id'] }}">← 상세로 돌아가기</a>
+</body>
+</html>

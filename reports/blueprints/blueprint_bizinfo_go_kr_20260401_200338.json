@@ -1,0 +1,20 @@
+{
+  "site": "https://www.bizinfo.go.kr",
+  "list_api": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200View.do",
+  "list_method": "GET",
+  "list_payload": {},
+  "list_fields": {},
+  "page_param": "pageNo",
+  "page_start": 1,
+  "detail_url_pattern": "https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?hashCode=&rowsSel=&rows=15&cpage=&cat=&schPblancDiv=&schJrsdCodeTy=&schWntyAt=&schAreaDetailCodes=&schEndAt=N&orderGb=&sort=&preKeywords=&condition=&condition1=&keyword=&pblancId={seq}",
+  "detail_param": "pblancId",
+  "detail_secondary_param": "",
+  "attach_strategy": "UNKNOWN",
+  "attach_url": "",
+  "attach_uuid_example": "",
+  "attach_path_num": "",
+  "csrf_needed": false,
+  "csrf_param": "",
+  "confidence": 70,
+  "notes": []
+}

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>공고 목록</title>
+</head>
+<body>
+    <h1>공고 목록</h1>
+
+    <form method="get" action="/">
+        <label>상태:
+            <input type="text" name="status" value="{{ status or '' }}">
+        </label>
+        <label>검색어:
+            <input type="text" name="q" value="{{ q or '' }}">
+        </label>
+        <button type="submit">검색</button>
+        <a href="/">초기화</a>
+    </form>
+
+    <br>
+
+    <table border="1">
+        <tr>
+            <th>ID</th>
+            <th>공고명</th>
+            <th>기관</th>
+            <th>상태</th>
+            <th>상세</th>
+        </tr>
+
+        {% for row in rows %}
+        <tr>
+            <td>{{ row["id"] }}</td>
+            <td>{{ row["title"] }}</td>
+            <td>{{ row["organization"] }}</td>
+            <td>{{ row["status"] }}</td>
+            <td><a href="/detail/{{ row['id'] }}">보기</a></td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
