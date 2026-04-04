@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <title>신규 공고 목록</title>
+    <style>
+        table { border-collapse: collapse; }
+        th, td { border: 1px solid #999; padding: 6px 10px; }
+        .err { color: #c00; }
+        .topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
+        .topnav a { text-decoration: none; color: #1d4ed8; font-weight: 600; }
+        .topnav a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>신규 공고 목록</h1>
+    <nav class="topnav">
+        <a href="{{ url_for('index') }}">공고목록</a>
+        <a href="{{ url_for('new_announcements') }}">신규공고</a>
+        <a href="{{ url_for('projects_list') }}">전체공고</a>
+        <a href="{{ url_for('company') }}">회사정보</a>
+        <a href="{{ url_for('recommend') }}">맞춤추천</a>
+        <a href="{{ url_for('run_pipeline_route') }}">파이프라인 실행</a>
+    </nav>
+    <p>
+        <code>data/today.json</code> 대비 <code>data/yesterday.json</code>에 없는 제목만 표시합니다.
+    </p>
+
+    {% if err %}
+    <p class="err">오류: {{ err }}</p>
+    {% else %}
+    <p><strong>신규 {{ count }}건</strong></p>
+
+    <table>
+        <tr>
+            <th>#</th>
+            <th>제목</th>
+            <th>기관</th>
+            <th>상태</th>
+            <th>URL</th>
+        </tr>
+        {% for item in items %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ item.get('title') or item.get('공고제목') or '' }}</td>
+            <td>{{ item.get('organization') or item.get('기관') or '' }}</td>
+            <td>{{ item.get('status') or item.get('상태') or '' }}</td>
+            <td>{% set u = item.get('url') or item.get('상세URL') or '' %}<a href="{{ u }}" target="_blank">{{ u[:80] }}{% if u|length > 80 %}…{% endif %}</a></td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+</body>
+</html>

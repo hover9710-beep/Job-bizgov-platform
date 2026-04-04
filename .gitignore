@@ -1,0 +1,6 @@
+.env
+.env.*
+data/filtered/
+db/*.db
+logs/
+__pycache__/

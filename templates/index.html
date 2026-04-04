@@ -3,9 +3,23 @@
 <head>
     <meta charset="utf-8">
     <title>공고 목록</title>
+    <style>
+        .topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
+        .topnav a { text-decoration: none; color: #1d4ed8; font-weight: 600; }
+        .topnav a:hover { text-decoration: underline; }
+    </style>
 </head>
 <body>
     <h1>공고 목록</h1>
+
+    <nav class="topnav">
+        <a href="{{ url_for('index') }}">공고목록</a>
+        <a href="{{ url_for('new_announcements') }}">신규공고</a>
+        <a href="{{ url_for('projects_list') }}">전체공고</a>
+        <a href="{{ url_for('company') }}">회사정보</a>
+        <a href="{{ url_for('recommend') }}">맞춤추천</a>
+        <a href="{{ url_for('run_pipeline_route') }}">파이프라인 실행</a>
+    </nav>
 
     <form method="get" action="/">
         <label>상태:

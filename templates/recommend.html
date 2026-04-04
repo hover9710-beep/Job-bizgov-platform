@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <title>맞춤 추천 공고</title>
+    <style>
+        body { font-family: sans-serif; max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+        table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+        th, td { border: 1px solid #999; padding: 8px 10px; text-align: left; vertical-align: top; }
+        th { background: #f0f0f0; }
+        .muted { color: #666; }
+        .box { padding: 16px; background: #fff8e6; border: 1px solid #e5c76b; border-radius: 8px; margin: 16px 0; }
+        .flash { padding: 10px; margin: 12px 0; border-radius: 6px; }
+        .flash.success { background: #d1fae5; color: #065f46; }
+        .flash.danger { background: #fee2e2; color: #991b1b; }
+        .flash.warning { background: #fef3c7; color: #92400e; }
+        .flash.info { background: #e0f2fe; color: #075985; }
+        a.btn { display: inline-block; padding: 10px 18px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600; }
+        button.btn { border: none; cursor: pointer; font-size: 1rem; }
+        .topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
+        .topnav a { text-decoration: none; color: #1d4ed8; font-weight: 600; }
+        .topnav a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>⭐ 맞춤 추천 공고</h1>
+    <nav class="topnav">
+        <a href="{{ url_for('index') }}">공고목록</a>
+        <a href="{{ url_for('new_announcements') }}">신규공고</a>
+        <a href="{{ url_for('projects_list') }}">전체공고</a>
+        <a href="{{ url_for('company') }}">회사정보</a>
+        <a href="{{ url_for('recommend') }}">맞춤추천</a>
+        <a href="{{ url_for('run_pipeline_route') }}">파이프라인 실행</a>
+    </nav>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% if no_company %}
+    <div class="box">
+        <p><strong>등록된 회사 정보가 없습니다.</strong></p>
+        <p class="muted">추천을 받으려면 먼저 회사 정보를 입력해 주세요.</p>
+        <p><a class="btn" href="{{ url_for('company') }}">회사 정보 입력하기</a></p>
+    </div>
+    {% elif no_projects %}
+    <p><strong>등록된 공고가 없습니다.</strong></p>
+    {% if company %}
+    <p class="muted">기준 회사: {{ company["company_name"] }}</p>
+    {% endif %}
+    {% else %}
+    {% if company %}
+    <p>기준 회사: <strong>{{ company["company_name"] }}</strong>
+        <span class="muted">(ID: {{ company["id"] }}{% if company_id_param is not none %} · URL /recommend/{{ company["id"] }}{% endif %})</span>
+    </p>
+    <p class="muted">추천 목록은 <code>py pipeline/recommend_projects.py</code> 실행 후 DB에 저장됩니다. 저장 전에는 화면에서 규칙 기반 즉시 계산 결과를 보여 줍니다.</p>
+    {% endif %}
+
+    <p>
+        <form method="post" action="{{ url_for('recommend_send') }}" style="display:inline;">
+            {% if company %}
+            <input type="hidden" name="company_id" value="{{ company['id'] }}">
+            {% endif %}
+            <button type="submit" class="btn">추천 결과 메일로 보내기</button>
+        </form>
+        <span class="muted" style="margin-left:8px;">(상위 10건 · 수신: MAIL_TO 환경변수)</span>
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>공고명</th>
+                <th>소관부처</th>
+                <th>사업수행기관</th>
+                <th>기간</th>
+                <th>점수</th>
+                <th>추천 이유</th>
+                <th>PDF</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for it in items %}
+            <tr>
+                <td>{{ it["title"] }}</td>
+                <td>{{ it["ministry"] if it.get("ministry") else "정보 없음" }}</td>
+                <td>{{ it["executing_agency"] if it.get("executing_agency") else "정보 없음" }}</td>
+                <td>{{ it["period"] }}</td>
+                <td>{{ it["score"] }}</td>
+                <td style="max-width: 320px; font-size: 0.9rem;">{{ it["reason"] or '-' }}</td>
+                <td>
+                    {% if company %}
+                    <a href="{{ url_for('recommend_pdf', company_id=company['id'], project_id=it['id']) }}">추천 PDF</a>
+                    {% else %}
+                    —
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</body>
+</html>

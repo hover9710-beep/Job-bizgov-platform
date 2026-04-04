@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <title>전체 공고 목록</title>
+    <style>
+        table { border-collapse: collapse; width: 100%; max-width: 1200px; }
+        th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
+        th { background: #f0f0f0; }
+        tr:nth-child(even) { background: #fafafa; }
+        .topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
+        .topnav a { text-decoration: none; color: #1d4ed8; font-weight: 600; }
+        .topnav a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>전체 공고 목록</h1>
+    <nav class="topnav">
+        <a href="{{ url_for('index') }}">공고목록</a>
+        <a href="{{ url_for('new_announcements') }}">신규공고</a>
+        <a href="{{ url_for('projects_list') }}">전체공고</a>
+        <a href="{{ url_for('company') }}">회사정보</a>
+        <a href="{{ url_for('recommend') }}">맞춤추천</a>
+        <a href="{{ url_for('run_pipeline_route') }}">파이프라인 실행</a>
+    </nav>
+
+    <p>총 <strong>{{ rows|length }}</strong>건</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>제목</th>
+                <th>기관</th>
+                <th>시작일</th>
+                <th>마감일</th>
+                <th>상태</th>
+                <th>상세보기</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <td>{{ row["title"] or "" }}</td>
+                <td>{{ row["organization"] or "—" }}</td>
+                <td>{{ row["start_date"] or "—" }}</td>
+                <td>{{ row["end_date"] or "—" }}</td>
+                <td>{{ row["status"] or "—" }}</td>
+                <td><a href="{{ url_for('project_detail', pid=row['id']) }}">보기</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

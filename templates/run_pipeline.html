@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <title>파이프라인 실행</title>
+    <style>
+        pre { background:#f4f4f4; padding:12px; overflow:auto; max-height:420px; border:1px solid #ccc; }
+        .ok { color: green; }
+        .fail { color: #c00; }
+        .topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
+        .topnav a { text-decoration: none; color: #1d4ed8; font-weight: 600; }
+        .topnav a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>파이프라인 실행</h1>
+    <nav class="topnav">
+        <a href="{{ url_for('index') }}">공고목록</a>
+        <a href="{{ url_for('new_announcements') }}">신규공고</a>
+        <a href="{{ url_for('projects_list') }}">전체공고</a>
+        <a href="{{ url_for('company') }}">회사정보</a>
+        <a href="{{ url_for('recommend') }}">맞춤추천</a>
+        <a href="{{ url_for('run_pipeline_route') }}">파이프라인 실행</a>
+    </nav>
+
+    {% if not ran %}
+    <p>메인 페이지의 <strong>파이프라인 실행</strong> 버튼으로 실행하거나, 아래에서 다시 실행하세요.</p>
+    <form method="post" action="{{ url_for('run_pipeline_route') }}">
+        <button type="submit">지금 실행</button>
+    </form>
+    {% else %}
+    <p>
+        종료 코드: <strong>{{ returncode }}</strong>
+        {% if success %}
+        <span class="ok">성공</span>
+        {% else %}
+        <span class="fail">실패 또는 비교 오류</span>
+        {% endif %}
+    </p>
+    {% if error_message %}
+    <p class="fail">오류: {{ error_message }}</p>
+    {% endif %}
+    {% if new_count is not none %}
+    <p><strong>이번 스냅샷 대비 신규 공고(제목 기준): {{ new_count }}건</strong></p>
+    <p><a href="{{ url_for('new_announcements') }}">신규 목록 보기</a></p>
+    {% elif ran and error_message is none %}
+    <p>신규 건수를 계산하지 못했습니다.</p>
+    {% endif %}
+
+    <h2>실행 로그 (일부)</h2>
+    <pre>{{ log_preview or "(로그 없음)" }}</pre>
+    {% endif %}
+</body>
+</html>

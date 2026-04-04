@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <title>회사 정보 등록</title>
+    <style>
+        body { font-family: sans-serif; max-width: 520px; margin: 24px auto; padding: 0 16px; }
+        label { display: block; margin-top: 14px; font-weight: 600; }
+        input[type="text"], select { width: 100%; max-width: 400px; padding: 8px; margin-top: 4px; box-sizing: border-box; }
+        button { margin-top: 20px; padding: 10px 20px; cursor: pointer; }
+        .flash { padding: 10px; margin: 12px 0; border-radius: 6px; }
+        .flash.success { background: #d1fae5; color: #065f46; }
+        .flash.danger { background: #fee2e2; color: #991b1b; }
+        .flash.warning { background: #fef3c7; color: #92400e; }
+        .topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
+        .topnav a { text-decoration: none; color: #1d4ed8; font-weight: 600; }
+        .topnav a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>회사 정보 입력</h1>
+    <nav class="topnav">
+        <a href="{{ url_for('index') }}">공고목록</a>
+        <a href="{{ url_for('new_announcements') }}">신규공고</a>
+        <a href="{{ url_for('projects_list') }}">전체공고</a>
+        <a href="{{ url_for('company') }}">회사정보</a>
+        <a href="{{ url_for('recommend') }}">맞춤추천</a>
+        <a href="{{ url_for('run_pipeline_route') }}">파이프라인 실행</a>
+    </nav>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="post" action="{{ url_for('company') }}">
+        <label for="company_name">회사명 <span style="color:#c00">*</span></label>
+        <input type="text" id="company_name" name="company_name" required maxlength="200" placeholder="예: (주)테크코리아">
+
+        <label for="industry">업종</label>
+        <input type="text" id="industry" name="industry" maxlength="200" placeholder="예: 제조업, IT서비스">
+
+        <label for="region">지역</label>
+        <input type="text" id="region" name="region" maxlength="200" placeholder="예: 전북특별자치도">
+
+        <label for="employee_count">직원수</label>
+        <input type="text" id="employee_count" name="employee_count" maxlength="100" placeholder="예: 15명">
+
+        <label for="revenue">매출</label>
+        <input type="text" id="revenue" name="revenue" maxlength="200" placeholder="예: 10억 원">
+
+        <label for="export_flag">수출 여부</label>
+        <select id="export_flag" name="export_flag">
+            <option value="">선택</option>
+            <option value="예">예</option>
+            <option value="아니오">아니오</option>
+        </select>
+
+        <div>
+            <button type="submit">저장</button>
+        </div>
+    </form>
+</body>
+</html>

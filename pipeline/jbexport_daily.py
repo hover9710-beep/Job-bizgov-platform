@@ -1,14 +1,22 @@
 import json
+import os
 import re
+import sys
 import urllib.parse
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from pipeline.today_yesterday import save_today_snapshot
 
 # =========================================================
 # 기본 설정
@@ -25,8 +33,20 @@ MAX_PAGES = 100
 TIMEOUT = 30
 OPEN_STATUSES = {"접수중", "공고중"}
 
+# 목록 API에 기간이 비어 있을 때 상세 HTML에서 접수기간·상태 보강 (0/false 로 끔)
+_FETCH_DETAIL_META = os.getenv("JBEXPORT_FETCH_DETAIL_META", "1").strip().lower() not in (
+    "0",
+    "false",
+    "no",
+    "off",
+)
+
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# today.json / yesterday.json 은 프로젝트 루트 기준 data/ (cwd 무관)
+_SNAPSHOT_DATA_DIR = _ROOT / "data"
+_SNAPSHOT_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 JBEXPORT_DIR = DATA_DIR / "jbexport"
 JBEXPORT_DIR.mkdir(parents=True, exist_ok=True)
@@ -65,6 +85,52 @@ def rows_from_json(payload: Any) -> List[Any]:
 
 
 # =========================================================
+# 상세 HTML에서 접수기간·상태 (목록에 없을 때)
+# =========================================================
+def extract_period_status_from_jbexport_html(html: str) -> Tuple[str, str]:
+    period = ""
+    status = ""
+    m = re.search(
+        r"(?:접수기간|신청기간|공고기간|모집기간)\s*[:：]?\s*([^<\n\r]+?)(?:<|$)",
+        html,
+        re.IGNORECASE,
+    )
+    if m:
+        period = re.sub(r"\s+", " ", m.group(1)).strip()
+    m2 = re.search(
+        r"(?:진행상태|공고상태|접수상태|상태)\s*[:：]?\s*([^<\n\r]+?)(?:<|$)",
+        html,
+        re.IGNORECASE,
+    )
+    if m2:
+        status = re.sub(r"\s+", " ", m2.group(1)).strip()
+    # 라벨 매칭 실패 시 본문에 나오는 YYYY-MM-DD 두 개로 기간 추정
+    if not period:
+        dates = re.findall(r"\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}", html)
+        uniq: List[str] = []
+        for d in dates:
+            if d not in uniq:
+                uniq.append(d)
+            if len(uniq) >= 2:
+                break
+        if len(uniq) >= 2:
+            period = f"{uniq[0]} ~ {uniq[1]}"
+        elif len(uniq) == 1:
+            period = uniq[0]
+    return period, status
+
+
+def enrich_detail_meta_from_url(detail_url: str) -> Tuple[str, str]:
+    try:
+        res = requests.get(detail_url, timeout=TIMEOUT, verify=False)
+        if res.status_code != 200:
+            return "", ""
+        return extract_period_status_from_jbexport_html(res.text)
+    except Exception:
+        return "", ""
+
+
+# =========================================================
 # 공고 1건 정규화
 # =========================================================
 def extract_announcement(row: Any) -> Optional[Dict[str, Any]]:
@@ -95,6 +161,9 @@ def extract_announcement(row: Any) -> Optional[Dict[str, Any]]:
         or row.get("접수기간")
         or row.get("rcptPd")
         or row.get("사업기간")
+        or row.get("rcptPdTxt")
+        or row.get("dateRange")
+        or row.get("applyPeriod")
         or ""
     ).strip()
 
@@ -103,10 +172,18 @@ def extract_announcement(row: Any) -> Optional[Dict[str, Any]]:
         or row.get("상태")
         or row.get("ingYnNm")
         or row.get("progressStatus")
+        or row.get("prgrsStts")
         or ""
     ).strip()
 
     detail_url = f"{DETAIL_BASE}?menuUUID={MENU_UUID}&spSeq={sp_seq}"
+
+    if _FETCH_DETAIL_META and (not period or not status):
+        p2, s2 = enrich_detail_meta_from_url(detail_url)
+        if not period and p2:
+            period = p2
+        if not status and s2:
+            status = s2
 
     return {
         "spSeq": sp_seq,
@@ -573,17 +650,37 @@ def print_new_announcements(new_items: List[Dict[str, Any]]) -> None:
 # =========================================================
 # 실행
 # =========================================================
+def _load_snapshot_today() -> List[Dict[str, Any]]:
+    p = _SNAPSHOT_DATA_DIR / "today.json"
+    if not p.exists():
+        return []
+    try:
+        raw = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if isinstance(raw, list):
+        return [x for x in raw if isinstance(x, dict)]
+    return []
+
+
 def run_daily() -> Dict[str, Any]:
+    prev_snapshot = _load_snapshot_today()
+
     all_items = fetch_all_announcements()
     open_items = filter_open_announcements(all_items)
 
     today_path = save_today_json(open_items)
 
-    yesterday_items = load_yesterday_json()
-    new_items = find_new_announcements(open_items, yesterday_items)
+    new_items = find_new_announcements(open_items, prev_snapshot)
 
     new_items = enrich_new_items_with_files(new_items)
     new_path = save_new_json(new_items)
+
+    if open_items:
+        snap_path = save_today_snapshot(open_items, _SNAPSHOT_DATA_DIR)
+        log(f"[스냅샷] {snap_path} (이전 today → yesterday)")
+    else:
+        log("[스냅샷] 수집 결과가 비어 있어 today.json/yesterday.json 은 갱신하지 않습니다.")
 
     print_new_announcements(new_items)
 
