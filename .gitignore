@@ -1,9 +1,11 @@
 .env
 .env.*
 data/
-db/
+reports/
 logs/
 __pycache__/
+*.pdf
+*.log
+db/
 debug_detail.html
-reports/
 *.db

@@ -5,6 +5,8 @@ BizGovPlanner 전체 파이프라인 실행기
 사용: py run_pipeline.py
 """
 
+from __future__ import annotations
+
 import os
 import sqlite3
 import subprocess
@@ -19,7 +21,7 @@ DB_PATH = ROOT / "db" / "biz.db"
 
 
 def log(msg: str) -> None:
-    LOG_DIR.mkdir(exist_ok=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
     now_full = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     now_short = datetime.now().strftime("%H:%M:%S")
     line = f"[{now_full}] {msg}"
@@ -29,66 +31,45 @@ def log(msg: str) -> None:
 
 
 def run_step(label: str, args: list[str]) -> bool:
-    result = subprocess.run(
-        [sys.executable] + args,
-        cwd=str(ROOT),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    try:
+        result = subprocess.run(
+            [sys.executable] + args,
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except Exception as e:
+        log(f"{label} FAIL - subprocess 예외: {e}")
+        return False
+
+    if result.stdout:
+        print(result.stdout.strip())
+    if result.stderr:
+        print(result.stderr.strip())
 
     if result.returncode == 0:
         log(f"{label} OK")
         return True
 
-    err_lines = result.stderr.strip().splitlines()
-    out_lines = result.stdout.strip().splitlines()
-    last_err = err_lines[-1] if err_lines else (out_lines[-1] if out_lines else "(unknown)")
-    log(f"{label} FAIL - {last_err}")
+    err_lines = result.stderr.strip().splitlines() if result.stderr else []
+    err_msg = err_lines[-1] if err_lines else f"exit code {result.returncode}"
+    log(f"{label} FAIL - {err_msg}")
     return False
 
 
-def _load_kakao_recommend_rows(company_id: int) -> tuple[str, list[dict]]:
-    """카카오 메시지용: 회사명 + 추천 공고 title 목록 (recommendations + biz_projects)."""
-    if not DB_PATH.exists():
-        return "", []
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT company_name FROM companies WHERE id = ?",
-        (company_id,),
-    )
-    crow = cur.fetchone()
-    if not crow:
-        conn.close()
-        return "", []
-    cname = str(crow["company_name"] or "").strip()
-    cur.execute(
-        """
-        SELECT p.title
-        FROM recommendations r
-        JOIN biz_projects p ON r.project_id = p.id
-        WHERE r.company_id = ?
-        ORDER BY r.score DESC
-        LIMIT 80
-        """,
-        (company_id,),
-    )
-    rows = [{"title": r["title"] or ""} for r in cur.fetchall()]
-    conn.close()
-    return cname, rows
-
-
-def get_recommend_count() -> int:
+def get_recommend_count(company_id: int) -> int:
     if not DB_PATH.exists():
         return 0
 
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     try:
-        cur.execute("SELECT COUNT(*) FROM recommendations")
+        cur.execute(
+            "SELECT COUNT(*) FROM recommendations WHERE company_id = ?",
+            (company_id,),
+        )
         row = cur.fetchone()
         return int(row[0]) if row else 0
     except Exception:
@@ -97,104 +78,129 @@ def get_recommend_count() -> int:
         conn.close()
 
 
-def main() -> None:
-    if sys.platform == "win32":
-        for stream in (sys.stdout, sys.stderr):
-            try:
-                stream.reconfigure(encoding="utf-8")
-            except Exception:
-                pass
+def load_recommend_rows(company_id: int, limit: int = 3) -> list[tuple[str, str]]:
+    """
+    카카오 메시지용 상위 추천 몇 건만 읽음
+    return: [(title, reason), ...]
+    """
+    if not DB_PATH.exists():
+        return []
 
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            SELECT p.title, COALESCE(r.reason, '')
+            FROM recommendations r
+            JOIN biz_projects p ON r.project_id = p.id
+            WHERE r.company_id = ?
+            ORDER BY r.score DESC, r.id DESC
+            LIMIT ?
+            """,
+            (company_id, limit),
+        )
+        return [(str(t or ""), str(r or "")) for t, r in cur.fetchall()]
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+
+def load_company_name(company_id: int) -> str:
+    if not DB_PATH.exists():
+        return "회사"
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT company_name FROM companies WHERE id = ?", (company_id,))
+        row = cur.fetchone()
+        if row and row[0]:
+            return str(row[0])
+        return "회사"
+    except Exception:
+        return "회사"
+    finally:
+        conn.close()
+
+
+def build_kakao_message(company_id: int, count: int) -> str:
+    company_name = load_company_name(company_id)
+    rows = load_recommend_rows(company_id, limit=3)
+
+    lines = [
+        "[BizGovPlanner 추천 알림]",
+        "",
+        f"회사: {company_name}",
+        f"추천 공고: {count}건 생성",
+        "",
+    ]
+
+    if not rows:
+        lines.append("추천 결과 요약 없음")
+    else:
+        for idx, (title, _reason) in enumerate(rows, 1):
+            lines.append(f"{idx}. {title}")
+
+    return "\n".join(lines)
+
+
+def main() -> None:
+    # .env 로드
     try:
         from dotenv import load_dotenv
-
         load_dotenv(ROOT / ".env")
         load_dotenv()
         log(".env loaded")
-    except Exception:
-        log(".env skipped")
+    except Exception as e:
+        log(f".env load skipped - {e}")
 
+    # 0) 카카오 토큰 갱신
     run_step("kakao_refresh", ["scripts/kakao_token_refresh.py"])
-    try:
-        from dotenv import load_dotenv
-
-        load_dotenv(ROOT / ".env")
-        load_dotenv()
-    except Exception:
-        pass
 
     log("START")
 
-    # STEP 1: 추천 생성
-    recommend_ok = run_step(
+    company_id = 1
+
+    # 1) 추천 생성
+    run_step(
         "recommend_projects",
-        ["pipeline/recommend_projects.py", "--company-id", "1", "--top", "10"],
+        ["pipeline/recommend_projects.py", "--company-id", str(company_id), "--top", "10"],
     )
 
-    if not recommend_ok:
-        log("추천 생성 실패 → 후속 알림 중단")
-        log("END")
-        return
-
-    # STEP 2: 추천 결과 확인
-    count = get_recommend_count()
+    # 2) 추천 결과 수 확인
+    count = get_recommend_count(company_id)
     log(f"추천 결과 {count}건")
 
-    if count == 0:
-        log("추천 없음 → 알림 생략")
-        log("END")
-        return
+    # 3) PDF 생성
+    if count > 0:
+        run_step("make_report_pdf", ["pipeline/make_report_pdf.py"])
 
-    # STEP 3: PDF 리포트
-    run_step("make_report_pdf", ["pipeline/make_report_pdf.py"])
-
-    # STEP 4: 이메일
-    email_ok = False
-    notify_path = ROOT / "pipeline" / "notify_dispatch.py"
-    if notify_path.exists():
-        email_ok = run_step("email", [str(notify_path.relative_to(ROOT))])
-    else:
-        log("email SKIPPED - pipeline/notify_dispatch.py 없음")
-
+    # 4) 이메일
+    email_ok = run_step("email", ["pipeline/notify_dispatch.py"])
     if email_ok:
         print("email OK")
         print(">>> email 직후 통과")
 
-    # STEP 5: 카카오
-    kakao_token = os.environ.get("KAKAO_ACCESS_TOKEN", "").strip()
-    kakao_path = ROOT / "pipeline" / "kakao_notify.py"
-    if not kakao_path.exists():
-        kakao_path = ROOT / "kakao_notify.py"
-
-    if not kakao_path.exists():
-        log("kakao SKIPPED - kakao_notify.py 없음")
-    elif not kakao_token:
-        log("kakao SKIPPED - KAKAO_ACCESS_TOKEN 없음")
-    else:
+    # 5) 카카오
+    try:
         print(">>> kakao 호출 직전")
-        try:
-            from kakao_notify import build_recommend_kakao_text, send_kakao_message
 
-            pipeline_company_id = 1
-            company_name, rec_rows = _load_kakao_recommend_rows(pipeline_company_id)
-            kakao_message = build_recommend_kakao_text(
-                company_name or "회사",
-                str(pipeline_company_id),
-                rec_rows,
-            )
-            base = (os.environ.get("APP_BASE_URL") or "").strip().rstrip("/")
-            rec_url = f"{base}/recommend/{pipeline_company_id}" if base else ""
-            result = send_kakao_message(
-                kakao_message,
-                web_url=rec_url,
-                mobile_web_url=rec_url,
-            )
-            print("kakao OK")
-            print(">>> kakao result =", result)
-            log("kakao OK")
-        except Exception as e:
-            print("kakao ERROR:", e)
-            log(f"kakao FAIL - {e}")
+        import kakao_notify
+        print("KAKAO FILE =", kakao_notify.__file__)
+
+        from kakao_notify import send_kakao_message
+
+        kakao_message = build_kakao_message(company_id, count)
+        result = send_kakao_message(kakao_message)
+
+        print("kakao OK")
+        print(">>> kakao result =", result)
+        log("kakao OK")
+    except Exception as e:
+        print("kakao ERROR:", e)
+        log(f"kakao FAIL - {e}")
 
     log("END")
 
