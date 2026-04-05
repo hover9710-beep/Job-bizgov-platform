@@ -49,6 +49,38 @@ def run_step(label: str, args: list[str]) -> bool:
     return False
 
 
+def _load_kakao_recommend_rows(company_id: int) -> tuple[str, list[dict]]:
+    """카카오 메시지용: 회사명 + 추천 공고 title 목록 (recommendations + biz_projects)."""
+    if not DB_PATH.exists():
+        return "", []
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT company_name FROM companies WHERE id = ?",
+        (company_id,),
+    )
+    crow = cur.fetchone()
+    if not crow:
+        conn.close()
+        return "", []
+    cname = str(crow["company_name"] or "").strip()
+    cur.execute(
+        """
+        SELECT p.title
+        FROM recommendations r
+        JOIN biz_projects p ON r.project_id = p.id
+        WHERE r.company_id = ?
+        ORDER BY r.score DESC
+        LIMIT 80
+        """,
+        (company_id,),
+    )
+    rows = [{"title": r["title"] or ""} for r in cur.fetchall()]
+    conn.close()
+    return cname, rows
+
+
 def get_recommend_count() -> int:
     if not DB_PATH.exists():
         return 0
@@ -82,6 +114,15 @@ def main() -> None:
     except Exception:
         log(".env skipped")
 
+    run_step("kakao_refresh", ["scripts/kakao_token_refresh.py"])
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(ROOT / ".env")
+        load_dotenv()
+    except Exception:
+        pass
+
     log("START")
 
     # STEP 1: 추천 생성
@@ -108,11 +149,16 @@ def main() -> None:
     run_step("make_report_pdf", ["pipeline/make_report_pdf.py"])
 
     # STEP 4: 이메일
+    email_ok = False
     notify_path = ROOT / "pipeline" / "notify_dispatch.py"
     if notify_path.exists():
-        run_step("email", [str(notify_path.relative_to(ROOT))])
+        email_ok = run_step("email", [str(notify_path.relative_to(ROOT))])
     else:
         log("email SKIPPED - pipeline/notify_dispatch.py 없음")
+
+    if email_ok:
+        print("email OK")
+        print(">>> email 직후 통과")
 
     # STEP 5: 카카오
     kakao_token = os.environ.get("KAKAO_ACCESS_TOKEN", "").strip()
@@ -125,7 +171,30 @@ def main() -> None:
     elif not kakao_token:
         log("kakao SKIPPED - KAKAO_ACCESS_TOKEN 없음")
     else:
-        run_step("kakao", [str(kakao_path.relative_to(ROOT))])
+        print(">>> kakao 호출 직전")
+        try:
+            from kakao_notify import build_recommend_kakao_text, send_kakao_message
+
+            pipeline_company_id = 1
+            company_name, rec_rows = _load_kakao_recommend_rows(pipeline_company_id)
+            kakao_message = build_recommend_kakao_text(
+                company_name or "회사",
+                str(pipeline_company_id),
+                rec_rows,
+            )
+            base = (os.environ.get("APP_BASE_URL") or "").strip().rstrip("/")
+            rec_url = f"{base}/recommend/{pipeline_company_id}" if base else ""
+            result = send_kakao_message(
+                kakao_message,
+                web_url=rec_url,
+                mobile_web_url=rec_url,
+            )
+            print("kakao OK")
+            print(">>> kakao result =", result)
+            log("kakao OK")
+        except Exception as e:
+            print("kakao ERROR:", e)
+            log(f"kakao FAIL - {e}")
 
     log("END")
 

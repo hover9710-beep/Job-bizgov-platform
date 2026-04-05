@@ -17,35 +17,33 @@ from typing import Any, List
 import requests
 
 _ROOT = Path(__file__).resolve().parent
-_ENV_PATH = _ROOT / ".env"
 
 try:
     from dotenv import load_dotenv
 
-    load_dotenv(_ENV_PATH)
+    load_dotenv()
+    load_dotenv(_ROOT / ".env")
 except Exception:
     pass
-
 
 KAKAO_MEMO_URL = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
 
 
-def send_kakao_memo(text: str, web_url: str = "", mobile_web_url: str = "") -> bool:
+def send_kakao_message(
+    message: str,
+    web_url: str = "",
+    mobile_web_url: str = "",
+) -> dict[str, Any]:
     """
-    Send KakaoTalk memo to my own Kakao account.
-    Returns True/False.
+    카카오 메모 API 호출. HTTP 200 + result_code==0 이어야 성공.
     """
-    token = (os.getenv("KAKAO_ACCESS_TOKEN") or "").strip()
-    if not token:
-        print(
-            "[kakao] skipped: token missing (set KAKAO_ACCESS_TOKEN in .env)",
-            flush=True,
-        )
-        return False
+    access_token = os.getenv("KAKAO_ACCESS_TOKEN")
+    if not (access_token or "").strip():
+        raise ValueError("KAKAO_ACCESS_TOKEN 없음")
 
-    template_obj: dict[str, Any] = {
+    template_object: dict[str, Any] = {
         "object_type": "text",
-        "text": text,
+        "text": message,
         "link": {
             "web_url": web_url or "",
             "mobile_web_url": mobile_web_url or "",
@@ -53,31 +51,52 @@ def send_kakao_memo(text: str, web_url: str = "", mobile_web_url: str = "") -> b
     }
 
     headers = {
-        "Authorization": f"Bearer {token}",
+        "Authorization": f"Bearer {access_token.strip()}",
         "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
     }
-    data = {"template_object": json.dumps(template_obj, ensure_ascii=False)}
+    data = {"template_object": json.dumps(template_object, ensure_ascii=False)}
+
+    print("[KAKAO] 요청 시작", flush=True)
+    print(f"[KAKAO] message = {message!r}", flush=True)
+
+    resp = requests.post(
+        KAKAO_MEMO_URL,
+        headers=headers,
+        data=data,
+        timeout=15,
+    )
+
+    print(f"[KAKAO] status_code = {resp.status_code}", flush=True)
+    print(f"[KAKAO] response_text = {resp.text!r}", flush=True)
+
+    if resp.status_code != 200:
+        raise RuntimeError(
+            f"Kakao HTTP {resp.status_code}: {resp.text[:800]!r}"
+        )
 
     try:
-        r = requests.post(
-            KAKAO_MEMO_URL,
-            headers=headers,
-            data=data,
-            timeout=15,
-        )
-        if r.status_code == 200:
-            print("[kakao] memo send OK", flush=True)
-            return True
-        print(
-            f"[kakao] memo send failed: HTTP {r.status_code} {r.text[:500]}",
-            flush=True,
-        )
-        return False
-    except requests.RequestException as exc:
-        print(f"[kakao] memo send error: {exc}", flush=True)
-        return False
+        result = resp.json()
     except Exception as exc:
-        print(f"[kakao] memo unexpected error: {exc}", flush=True)
+        raise RuntimeError(f"Kakao 응답 JSON 파싱 실패: {resp.text[:800]!r}") from exc
+
+    rc = result.get("result_code", 0)
+    if rc != 0:
+        raise RuntimeError(f"Kakao API 실패: {result}")
+
+    print("[KAKAO] 전송 성공", flush=True)
+    return result
+
+
+def send_kakao_memo(text: str, web_url: str = "", mobile_web_url: str = "") -> bool:
+    """
+    Send KakaoTalk memo to my own Kakao account.
+    Returns True/False (레거시 호출부 호환).
+    """
+    try:
+        send_kakao_message(text, web_url=web_url, mobile_web_url=mobile_web_url)
+        return True
+    except Exception as exc:
+        print(f"[kakao] memo send failed: {exc}", flush=True)
         return False
 
 
@@ -130,9 +149,14 @@ if __name__ == "__main__":
     ]
     text = build_recommend_kakao_text("TestCo", "1", sample_rows)
     print(text)
-    ok = send_kakao_memo(
-        text,
-        web_url="http://127.0.0.1:5000/recommend/1",
-        mobile_web_url="http://127.0.0.1:5000/recommend/1",
-    )
-    print("result:", ok)
+    try:
+        base = (os.getenv("APP_BASE_URL") or "").strip().rstrip("/")
+        rec_url = f"{base}/recommend/1" if base else ""
+        r = send_kakao_message(
+            text,
+            web_url=rec_url,
+            mobile_web_url=rec_url,
+        )
+        print("result:", r)
+    except Exception as exc:
+        print("error:", exc)
