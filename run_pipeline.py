@@ -163,27 +163,39 @@ def main() -> None:
 
     company_id = 1
 
-    # 1) 추천 생성
+    # 1) connectors
+    run_step("connectors", ["connectors/connector_bizinfo.py"])
+
+    # 2) merge_all
+    run_step("merge_all", ["pipeline/merge_all.py"])
+
+    # 3) detect_new
+    run_step("detect_new", ["pipeline/detect_new.py"])
+
+    # 4) detect_deadline
+    run_step("detect_deadline", ["pipeline/detect_deadline.py"])
+
     run_step(
         "recommend_projects",
         ["pipeline/recommend_projects.py", "--company-id", str(company_id), "--top", "10"],
     )
 
-    # 2) 추천 결과 수 확인
     count = get_recommend_count(company_id)
     log(f"추천 결과 {count}건")
 
-    # 3) PDF 생성
     if count > 0:
         run_step("make_report_pdf", ["pipeline/make_report_pdf.py"])
 
-    # 4) 이메일
-    email_ok = run_step("email", ["pipeline/notify_dispatch.py"])
+    # 5) make_mail
+    run_step("make_mail", ["pipeline/make_mail.py"])
+
+    # 6) 이메일 (mailer)
+    email_ok = run_step("email", ["mailer.py"])
     if email_ok:
         print("email OK")
         print(">>> email 직후 통과")
 
-    # 5) 카카오
+    # 7) 카카오
     try:
         print(">>> kakao 호출 직전")
 

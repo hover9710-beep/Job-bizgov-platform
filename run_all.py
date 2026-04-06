@@ -5,12 +5,15 @@ Run the full pipeline in order (project root = cwd for each subprocess).
 1) JBEXPORT: connectors/connectors_jbexport/jbexport_proxy.py (Flask — background for pipeline duration)
 2) BIZINFO: connectors/connector_bizinfo.py
 3) filter_recommend
-4) notify_dispatch --dry-run
-5) notify_dispatch (real send)
+4) mailer --dry-run
+5) mailer (real send)
 """
 from __future__ import annotations
 
+from dotenv import load_dotenv
 import os
+load_dotenv()
+
 import subprocess
 import sys
 import time
@@ -84,19 +87,25 @@ def main() -> int:
                 [PY, str(ROOT / "pipeline" / "filter_recommend.py")],
             ),
             (
-                "4) Notify dispatch (dry-run)",
-                [PY, str(ROOT / "pipeline" / "notify_dispatch.py"), "--dry-run"],
+                "4) Mailer (dry-run)",
+                [PY, str(ROOT / "mailer.py"), "--dry-run"],
             ),
         ]
 
         for title, cmd in steps:
             _section(title)
+            if any("mailer.py" in str(p) for p in cmd):
+                print("==== SMTP DEBUG ====")
+                print("SMTP_USER:", os.getenv("SMTP_USER"))
+                print("SMTP_PASS:", bool(os.getenv("SMTP_PASS")))
+                print("MAIL_TO:", os.getenv("MAIL_TO"))
+                print("====================")
             rc = _run(cmd)
             if rc != 0:
                 print(f"[run_all] FAILED: {title} (exit {rc})", flush=True)
                 return rc
 
-        _section("5) Notify dispatch (real send)")
+        _section("5) Mailer (real send)")
         smtp_user = (os.environ.get("SMTP_USER") or "").strip()
         smtp_pass = (os.environ.get("SMTP_PASS") or "").strip()
         if not smtp_user or not smtp_pass:
@@ -105,16 +114,21 @@ def main() -> int:
                 flush=True,
             )
             print(
-                "  (notify_dispatch.py would exit 1 without them.)",
+                "  (mailer.py would exit 1 without them.)",
                 flush=True,
             )
         else:
+            print("==== SMTP DEBUG ====")
+            print("SMTP_USER:", os.getenv("SMTP_USER"))
+            print("SMTP_PASS:", bool(os.getenv("SMTP_PASS")))
+            print("MAIL_TO:", os.getenv("MAIL_TO"))
+            print("====================")
             rc = _run(
-                [PY, str(ROOT / "pipeline" / "notify_dispatch.py")],
+                [PY, str(ROOT / "mailer.py")],
             )
             if rc != 0:
                 print(
-                    f"[run_all] FAILED: 5) Notify dispatch (real send) (exit {rc})",
+                    f"[run_all] FAILED: 5) Mailer (real send) (exit {rc})",
                     flush=True,
                 )
                 return rc

@@ -9,7 +9,7 @@
   py pipeline/run_pipeline.py
   py pipeline/run_pipeline.py --skip-bizinfo   # 기업마당 수집 생략
   py pipeline/run_pipeline.py --skip-collect   # merge_jb 생략
-  py pipeline/run_pipeline.py --post-process   # filter_recommend + notify_dispatch
+  py pipeline/run_pipeline.py --post-process   # filter_recommend + mailer (dry-run)
 """
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ def main() -> None:
     parser.add_argument(
         "--post-process",
         action="store_true",
-        help="update_db 이후 filter_recommend.py + notify_dispatch.py 실행",
+        help="update_db 이후 filter_recommend.py + mailer.py (--dry-run) 실행",
     )
     args = parser.parse_args()
 
@@ -74,7 +74,7 @@ def main() -> None:
             _run_script("filter_recommend.py")
             cmd = [
                 sys.executable,
-                str(PIPELINE_DIR / "notify_dispatch.py"),
+                str(ROOT_DIR / "mailer.py"),
                 "--dry-run",
             ]
             print(f"[run_pipeline] {' '.join(cmd)}", flush=True)
