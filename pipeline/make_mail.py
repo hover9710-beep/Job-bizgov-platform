@@ -1,130 +1,181 @@
 # -*- coding: utf-8 -*-
 """
 pipeline/make_mail.py
-전북지원사업 메일자동알림서비스 메일 본문 생성
+메일 본문 생성 — 신규 / 마감임박 / 전체 접수중 (기관별 그룹)
 """
 
 import json
+from collections import defaultdict
 from pathlib import Path
-from datetime import datetime
 
-TODAY = datetime.now().strftime("%Y-%m-%d")
-
-NEW_FILE      = Path("data/processed/new.json")
+ALL_FILE      = Path("data/all_jb.json")
+NEW_FILE      = Path("data/jbexport_new.json")
 DEADLINE_FILE = Path("data/processed/deadline.json")
-ALL_FILE      = Path("data/raw") / f"{TODAY}_all.json"
 OUT_FILE      = Path("data/mail/mail_body.txt")
 
 
-def load_json(path: Path):
+def load_json(path: Path) -> list:
     if not path.exists():
-        return {}
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def get_items(data):
+        return []
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
     if isinstance(data, dict):
         return data.get("items", [])
-    if isinstance(data, list):
-        return data
-    return []
+    return data if isinstance(data, list) else []
 
 
-def fmt_new_item(x: dict) -> str:
-    return (
-        f"- 사업명: {x.get('title', '')}\n"
-        f"  기관: {x.get('org_name', x.get('agency', ''))}\n"
-        f"  접수기간: {x.get('start_date', '')} ~ {x.get('end_date', '')}\n"
-        f"  링크: {x.get('url', x.get('detail_url', ''))}\n"
-    )
+def get_field(item: dict, *keys: str) -> str:
+    aliases = {
+        "org_name":   ["org_name", "org", "agency", "organization", "기관", "기관명"],
+        "title":      ["title", "사업명", "공고명", "제목"],
+        "url":        ["url", "link", "detail_url", "href"],
+        "start_date": ["start_date", "start", "접수시작일", "공고일", "posted_at"],
+        "end_date":   ["end_date", "end", "deadline", "마감일", "접수마감일"],
+    }
+    expanded = []
+    for k in keys:
+        expanded.append(k)
+        expanded.extend(aliases.get(k, []))
+    for k in expanded:
+        v = item.get(k)
+        if v:
+            return str(v).strip()
+    return ""
 
 
-def fmt_deadline_item(x: dict) -> str:
-    return (
-        f"- 사업명: {x.get('title', '')}\n"
-        f"  기관: {x.get('org_name', x.get('agency', ''))}\n"
-        f"  마감일: {x.get('end_date', '')} (D-{x.get('d_day', '')})\n"
-        f"  링크: {x.get('url', x.get('detail_url', ''))}\n"
-    )
+def group_by_org(items: list) -> dict:
+    g = defaultdict(list)
+    for x in items:
+        org = get_field(x, "org_name", "agency", "organization") or "기타"
+        g[org].append(x)
+    return g
 
 
-def fmt_all_preview_item(x: dict) -> str:
-    return (
-        f"- {x.get('title', '')} / "
-        f"{x.get('org_name', x.get('agency', ''))} / "
-        f"{x.get('end_date', '')}"
-    )
+def fmt_item(item: dict, show_dday: bool = False) -> str:
+    title   = get_field(item, "title") or "(제목없음)"
+    start   = get_field(item, "start_date")
+    end     = get_field(item, "end_date")
+    url     = get_field(item, "url", "detail_url")
+    period  = f"{start} ~ {end}" if start and end else (end or start or "-")
+    dday    = f" (D-{item.get('d_day', '')})" if show_dday and item.get("d_day", "") != "" else ""
+
+    lines = [f"  - {title}"]
+    lines.append(f"    기간: {period}{dday}")
+    if url:
+        lines.append(f"    링크: {url}")
+    return "\n".join(lines)
 
 
-def build_ai_summary() -> str:
-    return "\n".join([
-        "- 최근 전북 지역 수출·판로·전시회 관련 지원사업 공고가 꾸준히 올라오고 있습니다.",
-        "- 마감 임박 공고는 조기 마감될 수 있으므로 빠른 확인이 필요합니다.",
-        "- 자세한 신청 조건과 제출 서류는 반드시 각 기관의 공고문 원문을 확인해 주세요.",
-    ])
+def build_section(title: str, icon: str, items: list,
+                  show_dday: bool = False, limit: int = 30) -> str:
+    if not items:
+        return f"{icon} {title}\n  해당 공고 없음\n"
+
+    # 중복 제거 (url 기준)
+    seen = set()
+    deduped = []
+    for x in items:
+        key = get_field(x, "url", "detail_url", "id")
+        if key not in seen:
+            seen.add(key)
+            deduped.append(x)
+
+    grouped = group_by_org(deduped)
+    lines   = [f"{icon} {title}"]
+
+    for org, org_items in grouped.items():
+        lines.append(f"\n  [{org}]")
+        for item in org_items[:limit]:
+            lines.append(fmt_item(item, show_dday=show_dday))
+
+    return "\n".join(lines)
 
 
 def main():
-    new_data      = load_json(NEW_FILE)
-    deadline_data = load_json(DEADLINE_FILE)
-    all_data      = load_json(ALL_FILE)
+    # ── 디버그: 소스 파일 확인 ──────────
+    print(f"[make_mail] ALL_FILE: {ALL_FILE} exists={ALL_FILE.exists()}")
+    print(f"[make_mail] NEW_FILE: {NEW_FILE} exists={NEW_FILE.exists()}")
+    print(f"[make_mail] DEADLINE_FILE: {DEADLINE_FILE} exists={DEADLINE_FILE.exists()}")
 
-    new_items      = get_items(new_data)
-    deadline_items = get_items(deadline_data)
-    all_items      = get_items(all_data)
+    all_items = load_json(ALL_FILE)
+    new_items = load_json(NEW_FILE)
+    deadline_items = load_json(DEADLINE_FILE)
 
-    total_count    = len(all_items)
-    new_count      = len(new_items)
-    deadline_count = len(deadline_items)
+    if not all_items:
+        raw_dir = Path("data/raw")
+        candidates = sorted(
+            raw_dir.glob("*.json"),
+            key=lambda f: f.stat().st_mtime,
+            reverse=True,
+        )
+        for f in candidates:
+            try:
+                with open(f, encoding="utf-8") as fh:
+                    fallback = json.load(fh)
+                if isinstance(fallback, list) and fallback:
+                    all_items = fallback
+                    print(f"[make_mail] fallback 파일 사용: {f}")
+                    break
+                elif isinstance(fallback, dict):
+                    tmp = fallback.get("items", [])
+                    if tmp:
+                        all_items = tmp
+                        print(f"[make_mail] fallback 파일 사용: {f}")
+                        break
+            except Exception:
+                continue
 
-    new_section      = "\n".join(fmt_new_item(x) for x in new_items[:20])      if new_items      else "신규 공고가 없습니다."
-    deadline_section = "\n".join(fmt_deadline_item(x) for x in deadline_items[:20]) if deadline_items else "마감 임박 공고가 없습니다."
-    all_preview      = "\n".join(fmt_all_preview_item(x) for x in all_items[:30])   if all_items      else "전체 공고 데이터가 없습니다."
-    ai_summary       = build_ai_summary()
+    if all_items:
+        print(f"[make_mail] all_items: {len(all_items)}건, keys={list(all_items[0].keys())[:6]}")
+    print(f"[make_mail] jbexport_new.json: {len(new_items)}건")
+    print(f"[make_mail] deadline.json: {len(deadline_items)}건")
+
+    # ── 분류: 파일 우선 사용 ─────────────────
+    active_items = [
+        x for x in all_items
+        if x.get("status") in ["접수중", "공고중", "접수", "진행중"]
+    ]
+
+    # 신규는 jbexport_new.json 우선
+    final_new_items = new_items if new_items else []
+
+    # 마감임박은 deadline.json 우선
+    final_deadline_items = deadline_items if deadline_items else []
+
+    print(f"[make_mail] 신규: {len(final_new_items)}건")
+    print(f"[make_mail] 마감임박: {len(final_deadline_items)}건")
+    print(f"[make_mail] 접수중: {len(active_items)}건")
+
+    deadline_sorted = sorted(
+        final_deadline_items,
+        key=lambda x: get_field(x, "end_date") or "9999-12-31",
+    )
+
+    # 섹션 생성
+    sec_new      = build_section("신규 공고 (최근 7일)",  "🔥", final_new_items)
+    sec_deadline = build_section("마감임박 공고 (D-7)",   "⚠",  deadline_sorted, show_dday=True)
+    sec_all      = build_section("전체 접수중 공고",       "📌", active_items, limit=20)
 
     body = f"""전북지원사업 메일자동알림서비스입니다.
 
-매일 전북 지역 지원사업 공고를 수집하여
-신규 공고와 마감 임박 공고를 안내드립니다.
+────────────────────────────
+{sec_new}
 
 ────────────────────────────
-1. 오늘 신규 공고
-────────────────────────────
-
-{new_section}
+{sec_deadline}
 
 ────────────────────────────
-2. 마감 임박 공고 (D-7 이내)
-────────────────────────────
-
-{deadline_section}
+{sec_all}
 
 ────────────────────────────
-3. 전체 공고 현황
-────────────────────────────
-
-- 오늘 기준 전체 공고 수: {total_count}건
-- 신규 공고: {new_count}건
-- 마감 임박 공고: {deadline_count}건
-
-{all_preview}
-
-────────────────────────────
-4. AI 요약
-────────────────────────────
-
-{ai_summary}
-
-※ 본 메일은 전북 지원사업 공고를 자동 수집하여 발송되는 알림 메일입니다.
-※ AI는 거짓말을 할 수 있으니, 자세한 신청 조건과 제출 서류는 반드시 각 기관의 공고문 원문을 확인해 주세요.
+※ 본 메일은 지원사업 공고를 자동 수집하여 발송됩니다.
+※ 자세한 신청 조건은 반드시 각 기관의 공고문 원문을 확인해 주세요.
 """
 
     OUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     OUT_FILE.write_text(body, encoding="utf-8")
 
-    print(f"[make_mail] 메일 본문 생성 완료 → {OUT_FILE}")
-    print(f"[make_mail] 전체 {total_count}건 / 신규 {new_count}건 / 마감임박 {deadline_count}건")
+    print(f"[make_mail] 저장: {OUT_FILE}")
 
 
 if __name__ == "__main__":

@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Tuple
 ROOT = Path(__file__).resolve().parent
 RECOMMENDED_JSON = ROOT / "data" / "filtered" / "recommended.json"
 LIST_PREVIEW_MAX = 20
+MAIL_BODY_FILE = Path("data/mail/mail_body.txt")
 
 
 def _utf8_stdio() -> None:
@@ -87,9 +88,9 @@ def build_subject_and_body(
         )
 
     today = datetime.now().strftime("%Y-%m-%d")
-    subject = f"[전북지원사업 메일자동알림서비스] 신규·마감임박 공고 안내 ({today})"
-    body = "\n".join(body_lines).strip()
-    return subject, body, matched_count
+    subject = f"[전북지원사업 메일자동알림서비스] 신규·마감임박·전체 접수중 공고 안내 ({today})"
+    built_body = "\n".join(body_lines).strip()
+    return subject, built_body, matched_count
 
 
 def send_gmail_plain(
@@ -193,13 +194,25 @@ def main() -> int:
     items = load_recommended()
     matched_count = len(items)
 
-    if matched_count == 0:
-        stats["skipped_zero"] = 1
-        print("[mailer] 매칭 0건 → 메일 생략", flush=True)
-        _print_summary(stats)
-        return 0
+    # ── 메일 본문: 파일 우선 (상대 경로는 프로젝트 루트 기준) ──────────────
+    _mail_body_path = ROOT / MAIL_BODY_FILE
+    if _mail_body_path.exists():
+        body = _mail_body_path.read_text(encoding="utf-8")
+        print(f"[mailer] 본문 파일 사용: {MAIL_BODY_FILE}")
+    else:
+        print("[mailer] 본문 파일 없음 → 기존 로직 사용")
+        body = None
 
-    subject, body, _n = build_subject_and_body(company_name, items)
+    if body is None:
+        if matched_count == 0:
+            stats["skipped_zero"] = 1
+            print("[mailer] 매칭 0건 → 메일 생략", flush=True)
+            _print_summary(stats)
+            return 0
+        subject, body, _n = build_subject_and_body(company_name, items)
+    else:
+        today = datetime.now().strftime("%Y-%m-%d")
+        subject = f"[전북지원사업 메일자동알림서비스] 신규·마감임박·전체 접수중 공고 안내 ({today})"
 
     if args.dry_run:
         stats["dry_run"] = 1

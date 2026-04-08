@@ -5,8 +5,9 @@ Run the full pipeline in order (project root = cwd for each subprocess).
 1) JBEXPORT: connectors/connectors_jbexport/jbexport_proxy.py (Flask — background for pipeline duration)
 2) BIZINFO: connectors/connector_bizinfo.py
 3) filter_recommend
-4) mailer --dry-run
-5) mailer (real send)
+4) make_mail (data/mail/mail_body.txt)
+5) mailer --dry-run
+6) mailer (real send)
 """
 from __future__ import annotations
 
@@ -87,7 +88,11 @@ def main() -> int:
                 [PY, str(ROOT / "pipeline" / "filter_recommend.py")],
             ),
             (
-                "4) Mailer (dry-run)",
+                "4) Make mail body",
+                [PY, str(ROOT / "pipeline" / "make_mail.py")],
+            ),
+            (
+                "5) Mailer (dry-run)",
                 [PY, str(ROOT / "mailer.py"), "--dry-run"],
             ),
         ]
@@ -105,7 +110,7 @@ def main() -> int:
                 print(f"[run_all] FAILED: {title} (exit {rc})", flush=True)
                 return rc
 
-        _section("5) Mailer (real send)")
+        _section("6) Mailer (real send)")
         smtp_user = (os.environ.get("SMTP_USER") or "").strip()
         smtp_pass = (os.environ.get("SMTP_PASS") or "").strip()
         if not smtp_user or not smtp_pass:
@@ -128,7 +133,7 @@ def main() -> int:
             )
             if rc != 0:
                 print(
-                    f"[run_all] FAILED: 5) Mailer (real send) (exit {rc})",
+                    f"[run_all] FAILED: 6) Mailer (real send) (exit {rc})",
                     flush=True,
                 )
                 return rc
