@@ -1,17 +1,27 @@
 # -*- coding: utf-8 -*-
 """
 pipeline/make_mail.py
-메일 본문 생성 — 신규 / 마감임박 / 전체 접수중 (기관별 그룹)
+메일 본문 생성 — 날짜 기준: 진행 중 / 신규(7일) / 곧 마감(7일)
 """
 
 import json
+import re
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
-ALL_FILE      = Path("data/all_jb.json")
-NEW_FILE      = Path("data/jbexport_new.json")
-DEADLINE_FILE = Path("data/processed/deadline.json")
-OUT_FILE      = Path("data/mail/mail_body.txt")
+_DATE_YMD = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+today = datetime.today().date()
+
+ALL_FILE = Path("data/all_sites.json")
+NEW_FILE = Path("data/new.json")
+OUT_FILE = Path("data/mail/mail_body.txt")
+
+# 전체 접수중 섹션 가독성 (기관당 / 전체 상한)
+# 기관당이 너무 낮으면 기관 수·소형 기관 한도 때문에 전체 상한(60)에 못 미침 (예: 8×9 - 소형 = 53)
+SEC_ALL_PER_ORG_LIMIT = 10
+SEC_ALL_MAX_ITEMS = 60
 
 
 def load_json(path: Path) -> list:
@@ -29,8 +39,8 @@ def get_field(item: dict, *keys: str) -> str:
         "org_name":   ["org_name", "org", "agency", "organization", "기관", "기관명"],
         "title":      ["title", "사업명", "공고명", "제목"],
         "url":        ["url", "link", "detail_url", "href"],
-        "start_date": ["start_date", "start", "접수시작일", "공고일", "posted_at"],
-        "end_date":   ["end_date", "end", "deadline", "마감일", "접수마감일"],
+        "start_date": ["start_date", "start", "접수시작일", "공고일", "posted_at", "기간", "period"],
+        "end_date":   ["end_date", "end", "deadline", "마감일", "접수마감일", "기간", "period"],
     }
     expanded = []
     for k in keys:
@@ -41,6 +51,117 @@ def get_field(item: dict, *keys: str) -> str:
         if v:
             return str(v).strip()
     return ""
+
+
+def get_date(item: dict, which: str) -> str:
+    """
+    which: 'start' | 'end'
+    우선 해당 키(start_date / end_date), 없거나 날짜가 없으면 period·기간·description 등에서
+    YYYY-MM-DD 패턴만 추출 (기간 문자열이면 시작=첫 날짜, 종료=마지막 날짜).
+    """
+    if which == "start":
+        blobs = [
+            get_field(item, "start_date"),
+            item.get("period"),
+            item.get("기간"),
+            item.get("description"),
+            get_field(item, "end_date"),
+        ]
+        take = "first"
+    elif which == "end":
+        blobs = [
+            get_field(item, "end_date"),
+            item.get("period"),
+            item.get("기간"),
+            item.get("description"),
+            get_field(item, "start_date"),
+        ]
+        take = "last"
+    else:
+        return ""
+
+    for blob in blobs:
+        if not blob:
+            continue
+        text = str(blob).strip()
+        if not text:
+            continue
+        dates = _DATE_YMD.findall(text)
+        if not dates:
+            continue
+        return dates[0] if take == "first" else dates[-1]
+    return ""
+
+
+def is_active(item: dict) -> bool:
+    end = item.get("end_date")
+    if not end:
+        return False
+    try:
+        end_dt = datetime.strptime(end, "%Y-%m-%d").date()
+        return end_dt >= today
+    except Exception:
+        return False
+
+
+def is_new(item: dict) -> bool:
+    start = item.get("start_date")
+    if not start:
+        return False
+    try:
+        start_dt = datetime.strptime(start, "%Y-%m-%d").date()
+        return 0 <= (today - start_dt).days <= 7
+    except Exception:
+        return False
+
+
+def is_ending_soon(item: dict) -> bool:
+    end = item.get("end_date")
+    if not end:
+        return False
+    try:
+        end_dt = datetime.strptime(end, "%Y-%m-%d").date()
+        return 0 <= (end_dt - today).days <= 7
+    except Exception:
+        return False
+
+
+def build_active_section(items: list, cap: int = 60) -> str:
+    lines: list[str] = []
+
+    for x in items[:cap]:
+        title = x.get("title", "")
+        url = x.get("url", "")
+        src = x.get("_source", "")
+
+        lines.append(f"[{src}] {title}")
+        lines.append(f"링크: {url}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _item_dedupe_key(item: dict) -> str:
+    u = get_field(item, "url", "detail_url", "id")
+    if u:
+        return u
+    return f"{get_field(item, 'title')}|{get_field(item, 'org_name', 'organization')}"
+
+
+def _dedupe_merge_pref_file(file_list: list, derived_list: list) -> list:
+    """파일 목록을 먼저 넣고, 이어서 파생 목록에서 URL·제목 기준 미등록만 추가."""
+    seen: set[str] = set()
+    out: list[dict] = []
+    for lst in (file_list, derived_list):
+        for x in lst:
+            if not isinstance(x, dict):
+                continue
+            k = _item_dedupe_key(x)
+            if k in seen:
+                continue
+            seen.add(k)
+            out.append(x)
+    return out
 
 
 def group_by_org(items: list) -> dict:
@@ -67,7 +188,8 @@ def fmt_item(item: dict, show_dday: bool = False) -> str:
 
 
 def build_section(title: str, icon: str, items: list,
-                  show_dday: bool = False, limit: int = 30) -> str:
+                  show_dday: bool = False, limit: int = 30,
+                  max_total_items: int | None = None) -> str:
     if not items:
         return f"{icon} {title}\n  해당 공고 없음\n"
 
@@ -83,94 +205,175 @@ def build_section(title: str, icon: str, items: list,
     grouped = group_by_org(deduped)
     lines   = [f"{icon} {title}"]
 
-    for org, org_items in grouped.items():
-        lines.append(f"\n  [{org}]")
-        for item in org_items[:limit]:
+    if max_total_items is not None:
+        # 기관당 limit·전체 max를 동시에 만족하려면 기관별로 한 번만 자르면 안 됨 → 라운드로빈
+        orgs = list(grouped.keys())
+        idx = {o: 0 for o in orgs}
+        n_org = {o: 0 for o in orgs}
+        picked: list[tuple[str, dict]] = []
+        while len(picked) < max_total_items:
+            progressed = False
+            for org in orgs:
+                if len(picked) >= max_total_items:
+                    break
+                if n_org[org] >= limit:
+                    continue
+                i = idx[org]
+                org_list = grouped[org]
+                if i >= len(org_list):
+                    continue
+                picked.append((org, org_list[i]))
+                idx[org] = i + 1
+                n_org[org] += 1
+                progressed = True
+            if not progressed:
+                break
+        shown = len(picked)
+        cur_org = None
+        for org, item in picked:
+            if org != cur_org:
+                lines.append(f"\n  [{org}]")
+                cur_org = org
             lines.append(fmt_item(item, show_dday=show_dday))
+    else:
+        shown = 0
+        for org, org_items in grouped.items():
+            lines.append(f"\n  [{org}]")
+            for item in org_items[:limit]:
+                lines.append(fmt_item(item, show_dday=show_dday))
+                shown += 1
+
+    if max_total_items is not None and shown < len(deduped):
+        lines.append(f"\n  … 외 {len(deduped) - shown}건 (전체 목록은 사이트에서 확인)")
 
     return "\n".join(lines)
 
 
-def main():
-    # ── 디버그: 소스 파일 확인 ──────────
-    print(f"[make_mail] ALL_FILE: {ALL_FILE} exists={ALL_FILE.exists()}")
-    print(f"[make_mail] NEW_FILE: {NEW_FILE} exists={NEW_FILE.exists()}")
-    print(f"[make_mail] DEADLINE_FILE: {DEADLINE_FILE} exists={DEADLINE_FILE.exists()}")
+def normalize_status(text: str) -> str:
+    if not text:
+        return ""
+    return str(text).strip().replace(" ", "")
 
-    all_items = load_json(ALL_FILE)
-    new_items = load_json(NEW_FILE)
-    deadline_items = load_json(DEADLINE_FILE)
 
-    if not all_items:
-        raw_dir = Path("data/raw")
-        candidates = sorted(
-            raw_dir.glob("*.json"),
-            key=lambda f: f.stat().st_mtime,
-            reverse=True,
-        )
-        for f in candidates:
-            try:
-                with open(f, encoding="utf-8") as fh:
-                    fallback = json.load(fh)
-                if isinstance(fallback, list) and fallback:
-                    all_items = fallback
-                    print(f"[make_mail] fallback 파일 사용: {f}")
-                    break
-                elif isinstance(fallback, dict):
-                    tmp = fallback.get("items", [])
-                    if tmp:
-                        all_items = tmp
-                        print(f"[make_mail] fallback 파일 사용: {f}")
-                        break
-            except Exception:
-                continue
+ACTIVE_KEYWORDS = [
+    "접수중",
+    "공고중",
+    "접수",
+    "진행중",
+    "신청가능",
+    "모집중",
+    "사업공고",
+    "상시",
+    "공고",
+]
 
-    if all_items:
-        print(f"[make_mail] all_items: {len(all_items)}건, keys={list(all_items[0].keys())[:6]}")
-    print(f"[make_mail] jbexport_new.json: {len(new_items)}건")
-    print(f"[make_mail] deadline.json: {len(deadline_items)}건")
+CLOSED_KEYWORDS = [
+    "마감",
+    "종료",
+    "완료",
+    "접수마감",
+    "선정완료",
+]
 
-    # ── 분류: 파일 우선 사용 ─────────────────
-    active_items = [
-        x for x in all_items
-        if x.get("status") in ["접수중", "공고중", "접수", "진행중"]
-    ]
 
-    # 신규는 jbexport_new.json 우선
-    final_new_items = new_items if new_items else []
-
-    # 마감임박은 deadline.json 우선
-    final_deadline_items = deadline_items if deadline_items else []
-
-    print(f"[make_mail] 신규: {len(final_new_items)}건")
-    print(f"[make_mail] 마감임박: {len(final_deadline_items)}건")
-    print(f"[make_mail] 접수중: {len(active_items)}건")
-
-    deadline_sorted = sorted(
-        final_deadline_items,
-        key=lambda x: get_field(x, "end_date") or "9999-12-31",
+def is_active_by_status(item: dict) -> bool:
+    status = normalize_status(
+        item.get("status")
+        or item.get("state")
+        or item.get("progress_status")
+        or item.get("condition")
+        or ""
     )
 
-    # 섹션 생성
-    sec_new      = build_section("신규 공고 (최근 7일)",  "🔥", final_new_items)
-    sec_deadline = build_section("마감임박 공고 (D-7)",   "⚠",  deadline_sorted, show_dday=True)
-    sec_all      = build_section("전체 접수중 공고",       "📌", active_items, limit=20)
+    if not status:
+        return True
 
-    body = f"""전북지원사업 메일자동알림서비스입니다.
+    if any(k in status for k in CLOSED_KEYWORDS):
+        return False
 
-────────────────────────────
-{sec_new}
+    if any(k in status for k in ACTIVE_KEYWORDS):
+        return True
 
-────────────────────────────
-{sec_deadline}
+    # 기본은 포함
+    return True
 
-────────────────────────────
-{sec_all}
 
-────────────────────────────
-※ 본 메일은 지원사업 공고를 자동 수집하여 발송됩니다.
-※ 자세한 신청 조건은 반드시 각 기관의 공고문 원문을 확인해 주세요.
-"""
+INCLUDE_BIZINFO_KEYWORDS = [
+    "수출", "해외", "글로벌", "무역",
+    "바우처", "수출바우처",
+    "전시회", "박람회",
+    "해외진출", "시장개척",
+    "판로", "유통", "마케팅",
+    "브랜드", "디자인",
+    "인증", "규격", "CE", "FDA",
+    "물류", "배송",
+]
+
+EXCLUDE_BIZINFO_KEYWORDS = [
+    "창업교육", "교육", "강의",
+    "음식점", "외식", "카페",
+    "농업", "농촌", "귀농",
+    "복지", "청년복지",
+    "문화", "예술", "공연",
+    "관광", "해설사",
+    "사회적기업(일반지원)",
+    "평생교육",
+]
+
+
+def is_relevant_bizinfo(item: dict) -> bool:
+    title = str(item.get("title", ""))
+    desc = str(item.get("description", ""))
+    org = str(item.get("organization", ""))
+    text = f"{title} {desc} {org}"
+
+    # 강한 제외 먼저
+    if any(k in text for k in EXCLUDE_BIZINFO_KEYWORDS):
+        return False
+
+    # 포함 조건
+    if any(k in text for k in INCLUDE_BIZINFO_KEYWORDS):
+        return True
+
+    # 기본 차단 (이게 핵심)
+    return False
+
+
+def main():
+    all_items = load_json(ALL_FILE)
+    new_items_raw = load_json(NEW_FILE)
+
+    active_items = [x for x in all_items if is_active(x)]
+    ending_items = [x for x in all_items if is_ending_soon(x)]
+    new_items = [x for x in new_items_raw if is_new(x)]
+
+    print(f"[mail] all_items: {len(all_items)}")
+    print(f"[mail] new_items_raw: {len(new_items_raw)}")
+    print(f"[mail] active: {len(active_items)}")
+    print(f"[mail] new: {len(new_items)}")
+    print(f"[mail] ending soon: {len(ending_items)}")
+
+    body = ""
+
+    body += "전북지원사업 메일자동알림서비스입니다.\n\n"
+
+    body += "🔥 신규 공고\n"
+    if new_items:
+        body += build_active_section(new_items)
+    else:
+        body += "해당 공고 없음\n"
+
+    body += "\n⚠ 마감 임박\n"
+    if ending_items:
+        body += build_active_section(ending_items)
+    else:
+        body += "해당 공고 없음\n"
+
+    body += "\n📌 전체 접수중\n"
+    if active_items:
+        body += build_active_section(active_items, cap=SEC_ALL_MAX_ITEMS)
+    else:
+        body += "해당 공고 없음\n"
 
     OUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     OUT_FILE.write_text(body, encoding="utf-8")

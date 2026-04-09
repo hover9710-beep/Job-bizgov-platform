@@ -9,16 +9,6 @@
 4) 어제 JSON 로드
 5) URL(상세URL) 기준 신규 공고 비교/출력
 """
-from pathlib import Path
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
-JBEXPORT_DIR = DATA_DIR / "jbexport"
-JSON_DIR = JBEXPORT_DIR / "json"
-FILES_DIR = JBEXPORT_DIR / "files"
-
-JSON_DIR.mkdir(parents=True, exist_ok=True)
-FILES_DIR.mkdir(parents=True, exist_ok=True)
 from __future__ import annotations
 
 import json

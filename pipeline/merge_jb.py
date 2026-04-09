@@ -1,4 +1,9 @@
 """
+IMPORTANT:
+This file MUST NOT perform any HTTP request.
+All crawling must be completed in connectors.
+This file only merges JSON outputs.
+
 루트(data/) 아래 JSON을 병합 → data/all_jb/all_jb.json
 병합 성공 시 data/today.json 갱신(기존 today → yesterday).
 
@@ -7,9 +12,10 @@
 """
 from __future__ import annotations
 
+import inspect
 import json
-import os
 import re
+import shutil
 import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set
@@ -19,7 +25,38 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from pipeline.fields_normalize import enrich_dates_and_status, normalize_status, parse_dates_from_item
+from pipeline.fields_normalize import enrich_dates_and_status
+
+
+def assert_no_network_calls() -> None:
+    """merge 단계에 HTTP 클라이언트 호출 패턴이 없어야 함.
+
+    참고: getsource(assert_no_network_calls) + banned 리터럴에 "requests.get"를 넣으면
+    소스 문자열 자체에 패턴이 포함되어 항상 실패하므로 merge_jb_json 본문만 검사함.
+    """
+    src = inspect.getsource(merge_jb_json)
+    banned = ["requests.get", "sess.get"]
+    for b in banned:
+        if b in src:
+            raise RuntimeError("Network call detected in merge stage")
+
+
+def validate_item(item: Dict[str, Any]) -> bool:
+    required = ["title", "url"]
+    for r in required:
+        if not item.get(r):
+            return False
+    return True
+
+
+def _ensure_canonical_fields(item: Dict[str, Any]) -> Dict[str, Any]:
+    """title, organization, status, start_date, end_date, url — 없으면 빈 str."""
+    out = dict(item)
+    for k in ("title", "organization", "status", "start_date", "end_date", "url"):
+        out[k] = str(out.get(k) or "").strip()
+    return out
+
+
 DATA_DIR = ROOT_DIR / "data"
 OUT_DIR = DATA_DIR / "all_jb"
 OUT_PATH = OUT_DIR / "all_jb.json"
@@ -229,6 +266,8 @@ def _dedup_key_title_source(item: Dict[str, str]) -> str:
 
 
 def merge_jb_json() -> Path:
+    assert_no_network_calls()
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     merged: List[Dict[str, Any]] = []
@@ -268,13 +307,25 @@ def merge_jb_json() -> Path:
             seen_keys.add(key)
             merged.append(item)
 
+    merged = [_ensure_canonical_fields(x) for x in merged]
+    merged = [x for x in merged if validate_item(x)]
+
     jbexport_n = sum(1 for x in merged if x.get("source") == "jbexport")
     bizinfo_n = sum(1 for x in merged if x.get("source") == "bizinfo")
 
-    _enrich_jbexport_from_live_detail(merged)
+    print(f"[merge_jb] total items: {len(merged)}")
+    sample = merged[0] if merged else {}
+    print("[merge_jb sample keys]:", list(sample.keys()))
 
     OUT_PATH.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[merge_jb] saved: {OUT_PATH} ({len(merged)}건)")
+
+    root_all_jb = DATA_DIR / "all_jb.json"
+    try:
+        shutil.copy2(OUT_PATH, root_all_jb)
+        print(f"[merge_jb] copied: {OUT_PATH} -> {root_all_jb}")
+    except OSError as e:
+        print(f"[merge_jb] copy to {root_all_jb} failed: {e}")
     print(f"[merge_jb] jbexport: {jbexport_n}건, bizinfo: {bizinfo_n}건, merged 총: {len(merged)}건")
     print(
         f"[merge_jb] 중복 제거: {duplicates_removed}건 "
@@ -294,41 +345,6 @@ def merge_jb_json() -> Path:
         print("[merge_jb] snapshot: 병합 결과가 비어 있어 today.json 은 갱신하지 않습니다.")
 
     return OUT_PATH
-
-
-def _enrich_jbexport_from_live_detail(merged: List[Dict[str, str]]) -> None:
-    """
-    jbexport 건 중 기간이 비어 있으면 상세 URL HTML에서 보강.
-    기본 켜짐. 끄려면 MERGE_JBEXPORT_DETAIL=0 (네트워크 호출).
-    """
-    v = os.getenv("MERGE_JBEXPORT_DETAIL", "1").strip().lower()
-    if v in ("0", "false", "no", "off"):
-        return
-    try:
-        from pipeline.jbexport_daily import enrich_detail_meta_from_url
-    except Exception:
-        print("[merge_jb] MERGE_JBEXPORT_DETAIL: jbexport_daily 로드 실패, 건너뜀")
-        return
-
-    for m in merged:
-        if m.get("source") != "jbexport":
-            continue
-        if str(m.get("start_date") or "").strip() and str(m.get("end_date") or "").strip():
-            continue
-        url = str(m.get("url") or "").strip()
-        if not url:
-            continue
-        p2, s2 = enrich_detail_meta_from_url(url)
-        if p2:
-            sd, ed, _ = parse_dates_from_item({"기간": p2, "period": p2}, body_fallback=p2)
-            if sd:
-                m["start_date"] = sd
-            if ed:
-                m["end_date"] = ed
-            if not str(m.get("description") or "").strip():
-                m["description"] = p2
-        if s2:
-            m["status"] = normalize_status(s2)
 
 
 def _print_merge_field_stats(merged: List[Dict[str, str]]) -> None:
