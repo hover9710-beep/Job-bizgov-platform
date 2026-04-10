@@ -4,9 +4,11 @@
 
 실행(프로젝트 루트):
   py connectors/connector_bizinfo.py
-      → 기본: 전체 목록만 수집(상세 생략, 수 분 내 완료). 전체수집→서버필터 전략에 맞춤.
+      → 기본: 전체 목록만 수집(상세 생략, 수 분 내 완료).
   py connectors/connector_bizinfo.py --with-detail
-      → 공고별 상세까지 수집(기간·본문 보강, 시간 매우 김).
+      → 목록 수집 시 공고별 상세까지 요청(접수기간·본문, HTTP 다수).
+  py connectors/connector_bizinfo.py --enrich-detail
+      → 이미 저장된 bizinfo_all.json에 상세만 재요청해 접수기간·start/end_date 보강.
   py connectors/connector_bizinfo.py --max-pages 5
 
 저장: data/bizinfo/json/bizinfo_all.json
@@ -44,9 +46,20 @@ from reports.blueprints.connector_www_bizinfo_go_kr import (
 _PIPELINE = ROOT / "pipeline"
 if str(_PIPELINE) not in sys.path:
     sys.path.insert(0, str(_PIPELINE))
-from project_quality import normalize_status, parse_period_from_item
+from project_quality import normalize_status
+
+from pipeline.bizinfo_dates import extract_date_range, parse_bizinfo_dates
 
 OUT_JSON = ROOT / "data" / "bizinfo" / "json" / "bizinfo_all.json"
+
+# 상세 페이지에서 접수·신청 기간 라벨 우선순위 (앞이 우선)
+_APPLICATION_PERIOD_LABEL_ORDER: Tuple[Tuple[str, ...], ...] = (
+    ("접수기간",),
+    ("신청기간",),
+    ("모집기간",),
+    ("사업기간",),
+    ("공고기간",),
+)
 
 def _today_str() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -143,8 +156,9 @@ def fetch_detail(url: str, session: requests.Session) -> Dict[str, Any]:
         try:
             r = session.get(url, timeout=max(TIMEOUT, 25))
             r.raise_for_status()
-            soup = BeautifulSoup(r.text, "html.parser")
-            return _parse_detail_soup(soup, url)
+            html = r.text
+            soup = BeautifulSoup(html, "html.parser")
+            return _parse_detail_soup(soup, url, html)
         except requests.RequestException:
             return out
 
@@ -154,8 +168,9 @@ def fetch_detail(url: str, session: requests.Session) -> Dict[str, Any]:
         r.raise_for_status()
     except requests.RequestException:
         return out
-    soup = BeautifulSoup(r.text, "html.parser")
-    return _parse_detail_soup(soup, detail_url)
+    html = r.text
+    soup = BeautifulSoup(html, "html.parser")
+    return _parse_detail_soup(soup, detail_url, html)
 
 
 def _extract_period_status_from_detail_table(soup: BeautifulSoup) -> Tuple[str, str]:
@@ -177,6 +192,74 @@ def _extract_period_status_from_detail_table(soup: BeautifulSoup) -> Tuple[str, 
         ):
             status = val or status
     return period, status
+
+
+def _extract_period_from_s_title_list(soup: BeautifulSoup) -> Dict[str, str]:
+    """
+    기업마당 상세: ul > li > span.s_title + div.txt 구조 (th/td 외 레이아웃).
+    """
+    out: Dict[str, str] = {}
+    for li in soup.select("ul li"):
+        st = li.select_one("span.s_title")
+        if not st:
+            continue
+        label = st.get_text(" ", strip=True)
+        box = li.select_one("div.txt")
+        val = box.get_text(" ", strip=True) if box else ""
+        if not label or not val:
+            continue
+        out[label] = val
+    return out
+
+
+def _period_from_label_map(label_map: Dict[str, str]) -> str:
+    """라벨 맵에서 접수·신청 관련 첫 비어 있지 않은 값."""
+    for keys in _APPLICATION_PERIOD_LABEL_ORDER:
+        for lab, txt in label_map.items():
+            if any(k in lab for k in keys) and txt.strip():
+                return re.sub(r"\s+", " ", txt).strip()
+    return ""
+
+
+def _grep_application_period_from_html(html: str) -> str:
+    """
+    본문/스크립트에서 기간 문자열 후보 (JSON 키·한글 라벨 근처).
+    """
+    if not html:
+        return ""
+    mde = re.search(r'"reqstBeginEndDe"\s*:\s*"([^"]+)"', html)
+    if mde:
+        g = mde.group(1).strip()
+        if g and not g.startswith("http"):
+            return g
+    m1 = re.search(r'"pbancBgngYmd"\s*:\s*"([^"]*)"', html)
+    m2 = re.search(r'"pbancEndYmd"\s*:\s*"([^"]*)"', html)
+    if m1 and m2:
+        a, b = m1.group(1).strip(), m2.group(1).strip()
+        if a and b:
+            return f"{a} ~ {b}"
+    b1 = re.search(r'"bizPrdBgngYmd"\s*:\s*"([^"]*)"', html)
+    b2 = re.search(r'"bizPrdEndYmd"\s*:\s*"([^"]*)"', html)
+    if b1 and b2:
+        a, b = b1.group(1).strip(), b2.group(1).strip()
+        if a and b:
+            return f"{a} ~ {b}"
+    # 한글 라벨 뒤 한 줄
+    m = re.search(
+        r"(?:접수기간|신청기간|모집기간)\s*[:：]?\s*([^\n\r<]{6,120})",
+        html,
+    )
+    if m:
+        return m.group(1).strip()
+    # span.day 스타일 (본문 영역 우선)
+    m = re.search(
+        r'<span[^>]*class="[^"]*day[^"]*"[^>]*>\s*(\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}\s*[~～\-–]\s*\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2})\s*</span>',
+        html,
+        re.I,
+    )
+    if m:
+        return m.group(1).strip().replace("～", "~")
+    return ""
 
 
 def _extract_labeled_th_td(soup: BeautifulSoup, labels: Tuple[str, ...]) -> str:
@@ -255,7 +338,9 @@ def _extract_organization_legacy(soup: BeautifulSoup, raw_text: str) -> str:
     return ""
 
 
-def _parse_detail_soup(soup: BeautifulSoup, page_url: str) -> Dict[str, Any]:
+def _parse_detail_soup(
+    soup: BeautifulSoup, page_url: str, html: str = ""
+) -> Dict[str, Any]:
     title = ""
     for sel in ["h3.view-title", "h4.subject", ".board-view-title", "td.title"]:
         t = soup.select_one(sel)
@@ -274,14 +359,28 @@ def _parse_detail_soup(soup: BeautifulSoup, page_url: str) -> Dict[str, Any]:
     organization = _extract_organization_legacy(soup, raw)
     if not organization and executing_agency:
         organization = executing_agency
-    period, status_td = _extract_period_status_from_detail_table(soup)
+    period_th, status_td = _extract_period_status_from_detail_table(soup)
+    if period_th:
+        period_th = re.sub(r"\s+", " ", period_th).strip()
+    label_map = _extract_period_from_s_title_list(soup)
+    period_from_labels = _period_from_label_map(label_map)
+    period_grep = _grep_application_period_from_html(html) if html else ""
+
+    # 우선: s_title 블록 → th/td → HTML/JSON 정규식
+    application_period = period_from_labels or period_th or period_grep
+    if application_period:
+        application_period = re.sub(r"\s+", " ", application_period).strip()
+
     return {
         "title": title,
         "body": body,
         "organization": organization,
         "ministry": ministry,
         "executing_agency": executing_agency,
-        "period": period,
+        "period": application_period,
+        "period_th_table": period_th,
+        "period_label_map": label_map,
+        "period_html_grep": period_grep,
         "status": status_td,
         "url": page_url,
     }
@@ -302,11 +401,13 @@ def _row_to_standard(
 
     title = str(row.get("title") or "").strip()
     org = str(row.get("organization") or "").strip()
+    list_date = str(row.get("date") or "").strip()
     ministry = ""
     executing_agency = ""
     desc = ""
-    sd, ed = "", ""
     st = normalize_status(str(row.get("status") or ""))
+    application_period = ""
+    period_label_map: Dict[str, str] = {}
 
     if detail:
         if detail.get("title"):
@@ -318,18 +419,28 @@ def _row_to_standard(
         if detail.get("executing_agency"):
             executing_agency = str(detail["executing_agency"]).strip()
         desc = str(detail.get("body") or "").strip()
-        period = str(detail.get("period") or "").strip()
-        if period:
-            sd, ed = parse_period_from_item(
-                {"period": period, "start_date": sd, "end_date": ed}
-            )
+        application_period = str(detail.get("period") or "").strip()
+        period_label_map = dict(detail.get("period_label_map") or {})
         if detail.get("status"):
             st = normalize_status(str(detail["status"]))
         if detail.get("url"):
             list_url = str(detail["url"]).strip() or list_url
 
-    if not desc and row.get("date"):
-        desc = str(row.get("date") or "").strip()
+    if not desc and list_date:
+        desc = list_date
+
+    merged_for_dates: Dict[str, Any] = {
+        "title": title,
+        "description": desc,
+        "body": desc,
+        "date": list_date,
+        "period": application_period,
+    }
+    for k, v in period_label_map.items():
+        merged_for_dates[k] = v
+    dates = parse_bizinfo_dates(merged_for_dates)
+    sd = dates["start_date"]
+    ed = dates["end_date"]
 
     return {
         "source": "bizinfo",
@@ -340,6 +451,9 @@ def _row_to_standard(
         "executing_agency": executing_agency,
         "url": list_url,
         "description": desc,
+        "date": list_date,
+        "period": application_period,
+        "raw_period": application_period,
         "start_date": sd,
         "end_date": ed,
         "status": st,
@@ -492,6 +606,102 @@ def run(
     }
 
 
+def run_enrich_detail_from_file(
+    in_path: Path,
+    out_path: Optional[Path] = None,
+    *,
+    verify_ssl: bool = True,
+    delay_sec: float = 0.12,
+    max_items: Optional[int] = None,
+    skip_if_has_end: bool = True,
+) -> Dict[str, Any]:
+    """
+    기존 bizinfo JSON에 상세 페이지를 다시 요청해 period / start_date / end_date 보강.
+    """
+    if sys.platform == "win32":
+        for stream in (sys.stdout, sys.stderr):
+            try:
+                stream.reconfigure(encoding="utf-8")
+            except Exception:
+                pass
+
+    out_path = out_path or in_path
+    if not in_path.exists():
+        print(f"[enrich] 파일 없음: {in_path}", flush=True)
+        return {"error": "missing", "updated": 0}
+
+    raw = json.loads(in_path.read_text(encoding="utf-8"))
+    if not isinstance(raw, list):
+        print("[enrich] JSON은 배열이어야 합니다.", flush=True)
+        return {"error": "bad_json", "updated": 0}
+
+    session = build_session(verify=verify_ssl)
+    session.headers.update(HEADERS)
+
+    updated = 0
+    fetch_count = 0
+    n = len(raw)
+    for i, row in enumerate(raw):
+        if not isinstance(row, dict):
+            continue
+        url = str(row.get("url") or "").strip()
+        if not url:
+            continue
+        if skip_if_has_end and str(row.get("end_date") or "").strip():
+            continue
+        if max_items is not None and fetch_count >= max_items:
+            break
+
+        try:
+            detail = fetch_detail(url, session)
+        except Exception as exc:
+            print(f"[enrich] fetch 실패: {url[:80]} {exc!s}", flush=True)
+            time.sleep(delay_sec)
+            continue
+
+        fetch_count += 1
+        if not detail:
+            time.sleep(delay_sec)
+            continue
+
+        title = str(row.get("title") or "")
+        org = str(row.get("organization") or "")
+        list_date = str(row.get("date") or "").strip()
+        desc = str(detail.get("body") or row.get("description") or "").strip()
+        application_period = str(detail.get("period") or "").strip()
+        period_label_map = dict(detail.get("period_label_map") or {})
+
+        merged_for_dates: Dict[str, Any] = {
+            "title": str(detail.get("title") or title),
+            "description": desc,
+            "body": desc,
+            "date": list_date,
+            "period": application_period,
+        }
+        for k, v in period_label_map.items():
+            merged_for_dates[k] = v
+        dates = parse_bizinfo_dates(merged_for_dates)
+
+        row["title"] = str(detail.get("title") or title).strip() or title
+        row["organization"] = str(detail.get("organization") or org).strip() or org
+        row["description"] = desc
+        row["period"] = application_period
+        row["raw_period"] = application_period
+        row["start_date"] = dates["start_date"]
+        row["end_date"] = dates["end_date"]
+        if detail.get("status"):
+            row["status"] = normalize_status(str(detail["status"]))
+        updated += 1
+        time.sleep(delay_sec)
+
+    out_path.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(
+        f"[enrich] items={n} detail_fetches={fetch_count} updated={updated} saved={out_path}",
+        flush=True,
+    )
+    return {"total": n, "detail_fetches": fetch_count, "updated": updated, "out_path": str(out_path)}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="기업마당 전체 목록 수집")
     parser.add_argument(
@@ -511,12 +721,46 @@ def main() -> int:
         help="목록만 수집 (--with-detail 보다 우선)",
     )
     parser.add_argument(
+        "--enrich-detail",
+        action="store_true",
+        help="기존 JSON(기본: data/bizinfo/json/bizinfo_all.json)에 상세만 재요청해 접수기간·날짜 보강",
+    )
+    parser.add_argument(
+        "--enrich-in",
+        type=Path,
+        default=None,
+        help="--enrich-detail 입력 JSON (기본: bizinfo_all.json)",
+    )
+    parser.add_argument(
+        "--enrich-max",
+        type=int,
+        default=None,
+        help="--enrich-detail 최대 처리 건수 (테스트용)",
+    )
+    parser.add_argument(
+        "--enrich-force-all",
+        action="store_true",
+        help="end_date가 있어도 상세 재요청",
+    )
+    parser.add_argument(
         "--no-verify-ssl",
         action="store_true",
         help="SSL 검증 끄기",
     )
     parser.add_argument("--out", type=Path, default=None, help="출력 JSON 경로")
     args = parser.parse_args()
+
+    if args.enrich_detail:
+        inp = args.enrich_in or OUT_JSON
+        outp = args.out if args.out else inp
+        run_enrich_detail_from_file(
+            inp,
+            outp,
+            verify_ssl=not args.no_verify_ssl,
+            max_items=args.enrich_max,
+            skip_if_has_end=not args.enrich_force_all,
+        )
+        return 0
 
     if args.no_detail:
         no_detail = True

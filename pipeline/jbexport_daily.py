@@ -31,6 +31,10 @@ DETAIL_BASE = f"{JBEXPORT_BASE}/other/spWork/spWorkSupportBusiness/detail1.do"
 MENU_UUID = "402880867c8174de017c819251e70009"
 
 LIST_LENGTH = 10
+# 목록 API: 첫 요청은 큰 length로 시도 후, 필요 시 start 증가하며 전부 수집
+LIST_FIRST_LENGTH = 1000
+LIST_PAGE_LENGTH = 100
+MAX_LIST_BATCHES = 200
 MAX_PAGES = 100
 TIMEOUT = 30
 OPEN_STATUSES = {"접수중", "공고중"}
@@ -83,11 +87,28 @@ def new_json_path() -> Path:
 # 목록 응답에서 rows 꺼내기
 # =========================================================
 def rows_from_json(payload: Any) -> List[Any]:
-    if isinstance(payload, dict):
-        data = payload.get("data")
+    """DataTables 응답: data / aaData / rows 등."""
+    if not isinstance(payload, dict):
+        return []
+    for key in ("data", "aaData", "rows", "resultList"):
+        data = payload.get(key)
         if isinstance(data, list):
             return data
     return []
+
+
+def records_total_from_json(payload: Any) -> Optional[int]:
+    if not isinstance(payload, dict):
+        return None
+    for k in ("recordsTotal", "recordsFiltered", "iTotalRecords", "total"):
+        v = payload.get(k)
+        if v is None:
+            continue
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 # =========================================================
@@ -354,22 +375,29 @@ def extract_announcement(row: Any) -> Optional[Dict[str, Any]]:
 # =========================================================
 # 전체 공고 수집
 # =========================================================
-def fetch_all_announcements() -> List[Dict[str, Any]]:
-    log("[수집 시작] JBEXPORT 전체 공고 수집")
+def fetch_all_announcements() -> Tuple[List[Dict[str, Any]], int]:
+    log("[수집 시작] JBEXPORT 전체 공고 수집 (목록 페이지네이션)")
 
     all_items: List[Dict[str, Any]] = []
     seen_urls = set()
 
     start = 0
+    draw = 1
+    length = LIST_FIRST_LENGTH
+    records_total: Optional[int] = None
+    cumulative_row_count = 0
+    batch_idx = 0
 
-    for page in range(1, MAX_PAGES + 1):
-        payload = {
+    while batch_idx < MAX_LIST_BATCHES:
+        payload: Dict[str, Any] = {
             "start": start,
-            "length": LIST_LENGTH,
-            "draw": page,
+            "length": length,
+            "draw": draw,
         }
-
-        log(f"[LIST] page={page} start={start} length={LIST_LENGTH}")
+        log(
+            "[jbexport-list] POST payload to list API: "
+            + json.dumps(payload, ensure_ascii=False)
+        )
 
         try:
             res = requests.post(
@@ -384,10 +412,19 @@ def fetch_all_announcements() -> List[Dict[str, Any]]:
             break
 
         rows = rows_from_json(data)
-        log(f"[LIST] rows={len(rows)}")
+        rt_batch = records_total_from_json(data)
+        if records_total is None and rt_batch is not None:
+            records_total = rt_batch
 
         if not rows:
             break
+
+        cumulative_row_count += len(rows)
+        log(
+            f"[jbexport-list] batch start={start} length={length} "
+            f"rows_this_batch={len(rows)} "
+            f"cumulative={cumulative_row_count} recordsTotal={records_total}"
+        )
 
         for row in rows:
             item = extract_announcement(row)
@@ -401,11 +438,30 @@ def fetch_all_announcements() -> List[Dict[str, Any]]:
             seen_urls.add(url)
             all_items.append(item)
 
-        if len(rows) < LIST_LENGTH:
+        batch_idx += 1
+
+        if records_total is not None and cumulative_row_count >= records_total:
             break
 
-        start += LIST_LENGTH
+        start += len(rows)
+        draw += 1
+        if length == LIST_FIRST_LENGTH:
+            length = LIST_PAGE_LENGTH
 
+    titles = [
+        str(x.get("공고제목") or x.get("title") or "") for x in all_items
+    ]
+    if titles:
+        log(f"[jbexport-list] first 5 titles: {titles[:5]}")
+        log(f"[jbexport-list] last 5 titles: {titles[-5:]}")
+        if len(titles) >= 10:
+            n = len(titles)
+            idxs = [round(i * (n - 1) / 9) for i in range(10)]
+            log(
+                "[jbexport-list] sample titles (10 across full set): "
+                + str([titles[i] for i in idxs])
+            )
+    log(f"[jbexport-list] final collected: {len(all_items)}")
     log(f"[수집 완료] 전체 공고 {len(all_items)}건")
     _st_filled = sum(
         1 for x in all_items if str(x.get("status") or x.get("상태") or "").strip()
@@ -414,7 +470,7 @@ def fetch_all_announcements() -> List[Dict[str, Any]]:
         f"[jbexport-detail] 상세 메타 적용 건수={len(all_items)} (FETCH_DETAIL_META={_FETCH_DETAIL_META}), "
         f"상태 비어있지 않음={_st_filled}"
     )
-    return all_items
+    return all_items, cumulative_row_count
 
 
 # =========================================================
@@ -430,6 +486,81 @@ def filter_open_announcements(results: List[Dict[str, Any]]) -> List[Dict[str, A
 
     log(f"[필터] 진행중 공고 {len(filtered)}건")
     return filtered
+
+
+def log_filter_stage_diagnosis(
+    list_api_raw_rows: int,
+    all_items: List[Dict[str, Any]],
+    open_items: List[Dict[str, Any]],
+) -> None:
+    """
+    Diagnostic only: counts and sample drops. Does not change filtering behavior.
+    Date rules match pipeline/make_mail.py (is_active / is_new / is_ending_soon).
+    """
+    from pipeline.make_mail import is_active, is_ending_soon, is_new
+
+    log("[filter-diag] === filtering stage (diagnostic) ===")
+    log(f"[filter-diag] 1) total collected rows (list API, raw): {list_api_raw_rows}")
+    log(f"[filter-diag] 2) JBEXPORT rows (after extract + URL dedupe): {len(all_items)}")
+    log(
+        f"[filter-diag] 3) after OPEN_STATUSES filter {OPEN_STATUSES}: {len(open_items)}"
+    )
+
+    n_active = sum(1 for x in all_items if is_active(x))
+    n_new = sum(1 for x in all_items if is_new(x))
+    n_end = sum(1 for x in all_items if is_ending_soon(x))
+    log(
+        "[filter-diag] 4) date flags on ALL collected items (make_mail date rules): "
+        f"is_active={n_active} is_new={n_new} is_ending_soon={n_end}"
+    )
+
+    not_in_open = [
+        x for x in all_items if str(x.get("상태") or "").strip() not in OPEN_STATUSES
+    ]
+    open_not_active = [
+        x
+        for x in all_items
+        if str(x.get("상태") or "").strip() in OPEN_STATUSES and not is_active(x)
+    ]
+
+    sample: List[Tuple[Dict[str, Any], str]] = []
+    for item in not_in_open:
+        st = str(item.get("상태") or "").strip()
+        sample.append(
+            (
+                item,
+                f"excluded by OPEN_STATUSES: status={st!r} (need one of {OPEN_STATUSES})",
+            )
+        )
+        if len(sample) >= 10:
+            break
+    if len(sample) < 10:
+        for item in open_not_active:
+            ed = item.get("end_date")
+            sample.append(
+                (
+                    item,
+                    f"status in OPEN_STATUSES but is_active=False: end_date={ed!r}",
+                )
+            )
+            if len(sample) >= 10:
+                break
+
+    log("[filter-diag] sample dropped / excluded (up to 10, reasons):")
+    for i, (item, reason) in enumerate(sample[:10], 1):
+        title = str(item.get("공고제목") or item.get("title") or "")[:80]
+        url = str(item.get("상세URL") or "")[:120]
+        st = str(item.get("상태") or "").strip()
+        log(
+            f"[filter-diag]   [{i}] title={title!r} status={st!r} url={url!r} -> {reason}"
+        )
+
+    log(
+        "[filter-diag] summary: "
+        f"not_in_OPEN_STATUSES={len(not_in_open)} "
+        f"OPEN_but_not_is_active={len(open_not_active)}"
+    )
+    log("[filter-diag] === end diagnostic ===")
 
 
 # =========================================================
@@ -828,8 +959,9 @@ def _load_snapshot_today() -> List[Dict[str, Any]]:
 def run_daily() -> Dict[str, Any]:
     prev_snapshot = _load_snapshot_today()
 
-    all_items = fetch_all_announcements()
+    all_items, list_api_raw_rows = fetch_all_announcements()
     open_items = filter_open_announcements(all_items)
+    log_filter_stage_diagnosis(list_api_raw_rows, all_items, open_items)
 
     today_path = save_today_json(open_items)
 
