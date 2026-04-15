@@ -6,6 +6,7 @@ pipeline/make_mail.py
 
 import json
 import re
+import sqlite3
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ today = datetime.today().date()
 
 ALL_FILE = Path("data/all_sites.json")
 NEW_FILE = Path("data/new.json")
+DB_FILE = Path("db/biz.db")
 OUT_FILE = Path("data/mail/mail_body.txt")
 
 # 전체 접수중 섹션 가독성 (기관당 / 전체 상한)
@@ -32,6 +34,56 @@ def load_json(path: Path) -> list:
     if isinstance(data, dict):
         return data.get("items", [])
     return data if isinstance(data, list) else []
+
+
+def load_active_bizinfo_from_db(db_path: Path) -> list:
+    """
+    bizinfo는 all_sites.json이 아닌 DB에서 직접 조회:
+      source='bizinfo' AND end_date >= date('now')
+    """
+    if not db_path.exists():
+        return []
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT
+                title,
+                organization,
+                source,
+                start_date,
+                end_date,
+                status,
+                url,
+                description
+            FROM biz_projects
+            WHERE source='bizinfo'
+              AND end_date IS NOT NULL
+              AND TRIM(end_date) != ''
+              AND end_date >= date('now')
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+
+    out = []
+    for r in rows:
+        d = dict(r)
+        out.append(
+            {
+                "title": d.get("title") or "",
+                "organization": d.get("organization") or "",
+                "source": d.get("source") or "bizinfo",
+                "_source": d.get("source") or "bizinfo",
+                "start_date": d.get("start_date") or "",
+                "end_date": d.get("end_date") or "",
+                "status": d.get("status") or "",
+                "url": d.get("url") or "",
+                "description": d.get("description") or "",
+            }
+        )
+    return out
 
 
 def get_field(item: dict, *keys: str) -> str:
@@ -340,16 +392,37 @@ def is_relevant_bizinfo(item: dict) -> bool:
 
 
 def main():
-    all_items = load_json(ALL_FILE)
+    all_items_raw = load_json(ALL_FILE)
     new_items_raw = load_json(NEW_FILE)
+    # JSON 기반에서는 bizinfo 제외(jbexport/기타 유지)
+    json_non_bizinfo = [
+        x for x in all_items_raw
+        if isinstance(x, dict) and str(x.get("source") or "").strip().lower() != "bizinfo"
+    ]
+    # bizinfo active는 DB에서 직접 조회
+    db_bizinfo_active = load_active_bizinfo_from_db(DB_FILE)
+    # 최종 all_items = JSON 기반(비-bizinfo) + DB 기반 bizinfo
+    all_items = json_non_bizinfo + db_bizinfo_active
 
     active_items = [x for x in all_items if is_active(x)]
     ending_items = [x for x in all_items if is_ending_soon(x)]
     new_items = [x for x in new_items_raw if is_new(x)]
 
-    print(f"[mail] all_items: {len(all_items)}")
+    jb_active = sum(
+        1 for x in active_items
+        if isinstance(x, dict) and str(x.get("source") or "").strip().lower() == "jbexport"
+    )
+    biz_active = sum(
+        1 for x in active_items
+        if isinstance(x, dict) and str(x.get("source") or "").strip().lower() == "bizinfo"
+    )
+
+    print(f"[mail] all_items(raw_json): {len(all_items_raw)}")
+    print(f"[mail] all_items(merged): {len(all_items)}")
     print(f"[mail] new_items_raw: {len(new_items_raw)}")
     print(f"[mail] active: {len(active_items)}")
+    print(f"[mail] jbexport_active: {jb_active}")
+    print(f"[mail] bizinfo_active(db): {biz_active}")
     print(f"[mail] new: {len(new_items)}")
     print(f"[mail] ending soon: {len(ending_items)}")
 
