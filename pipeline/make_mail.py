@@ -91,8 +91,8 @@ def get_field(item: dict, *keys: str) -> str:
         "org_name":   ["org_name", "org", "agency", "organization", "기관", "기관명"],
         "title":      ["title", "사업명", "공고명", "제목"],
         "url":        ["url", "link", "detail_url", "href"],
-        "start_date": ["start_date", "start", "접수시작일", "공고일", "posted_at", "기간", "period"],
-        "end_date":   ["end_date", "end", "deadline", "마감일", "접수마감일", "기간", "period"],
+        "start_date": ["start_date", "start", "receipt_start", "접수시작일", "공고일", "posted_at", "기간", "period"],
+        "end_date":   ["end_date", "end", "receipt_end", "deadline", "마감일", "접수마감일", "기간", "period"],
     }
     expanded = []
     for k in keys:
@@ -180,17 +180,24 @@ def is_ending_soon(item: dict) -> bool:
 
 def build_active_section(items: list, cap: int = 60) -> str:
     lines: list[str] = []
+    for i, x in enumerate(items[:cap], start=1):
+        if not isinstance(x, dict):
+            continue
+        title = get_field(x, "title") or "(제목 없음)"
+        org = get_field(x, "organization", "org_name", "agency") or "-"
+        url = get_field(x, "url", "detail_url") or "-"
+        src = (get_field(x, "source", "_source") or "").upper()
+        src = src if src else "UNKNOWN"
+        start = get_field(x, "start_date")
+        end = get_field(x, "end_date")
+        period = f"{start} ~ {end}" if start and end else (end or start or "-")
 
-    for x in items[:cap]:
-        title = x.get("title", "")
-        url = x.get("url", "")
-        src = x.get("_source", "")
-
-        lines.append(f"[{src}] {title}")
-        lines.append(f"링크: {url}")
+        lines.append(f"{i}. [{src}] {title}")
+        lines.append(f"   기관: {org}")
+        lines.append(f"   기간: {period}")
+        lines.append(f"   링크: {url}")
         lines.append("")
-
-    return "\n".join(lines)
+    return "\n".join(lines).rstrip()
 
 
 def _item_dedupe_key(item: dict) -> str:
@@ -427,26 +434,20 @@ def main():
     print(f"[mail] ending soon: {len(ending_items)}")
 
     body = ""
-
+    sep = "-" * 40
     body += "전북지원사업 메일자동알림서비스입니다.\n\n"
 
-    body += "🔥 신규 공고\n"
-    if new_items:
-        body += build_active_section(new_items)
-    else:
-        body += "해당 공고 없음\n"
+    body += f"🔥 신규 공고 ({len(new_items)}건)\n"
+    body += build_active_section(new_items) if new_items else "해당 공고 없음\n"
+    body += f"\n{sep}\n\n"
 
-    body += "\n⚠ 마감 임박\n"
-    if ending_items:
-        body += build_active_section(ending_items)
-    else:
-        body += "해당 공고 없음\n"
+    body += f"⚠ 마감 임박 공고 ({len(ending_items)}건)\n"
+    body += build_active_section(ending_items) if ending_items else "해당 공고 없음\n"
+    body += f"\n{sep}\n\n"
 
-    body += "\n📌 전체 접수중\n"
-    if active_items:
-        body += build_active_section(active_items, cap=SEC_ALL_MAX_ITEMS)
-    else:
-        body += "해당 공고 없음\n"
+    active_limited = active_items[:SEC_ALL_MAX_ITEMS]
+    body += f"📌 전체 접수중 공고 ({len(active_items)}건)\n"
+    body += build_active_section(active_limited, cap=SEC_ALL_MAX_ITEMS) if active_items else "해당 공고 없음\n"
 
     OUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     OUT_FILE.write_text(body, encoding="utf-8")
