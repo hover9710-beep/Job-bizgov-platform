@@ -5,23 +5,25 @@ Run the full pipeline in order (project root = cwd for each subprocess).
 1) JBEXPORT: connectors/connectors_jbexport/jbexport_proxy.py (Flask — background for pipeline duration)
 2) BIZINFO: connectors/connector_bizinfo.py
 3) filter_recommend
-4) merge_sources (data/all_sites.json)
+4) merge_sources → data/merged/all_sites.json (+ history)
+4b) diff_new → data/merged/new.json
 5) make_mail (data/mail/mail_body.txt)
+5b) make_kakao (data/kakao/kakao_body.txt)
 6) mailer --dry-run
 7) mailer (real send)
 """
 from __future__ import annotations
 
+from pathlib import Path
 from dotenv import load_dotenv
 import os
-load_dotenv()
+ROOT = Path(__file__).resolve().parent
+load_dotenv(ROOT / ".env")
 
 import subprocess
 import sys
 import time
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
 PY = sys.executable
 
 PROXY_SCRIPT = ROOT / "connectors" / "connectors_jbexport" / "jbexport_proxy.py"
@@ -93,8 +95,16 @@ def main() -> int:
                 [PY, str(ROOT / "pipeline" / "merge_sources.py")],
             ),
             (
+                "4b) Diff new (merged/new.json)",
+                [PY, str(ROOT / "pipeline" / "diff_new.py")],
+            ),
+            (
                 "5) Make mail body",
                 [PY, str(ROOT / "pipeline" / "make_mail.py")],
+            ),
+            (
+                "5b) Make Kakao body",
+                [PY, str(ROOT / "pipeline" / "make_kakao.py")],
             ),
             (
                 "6) Mailer (dry-run)",
