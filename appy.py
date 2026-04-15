@@ -1,3 +1,5 @@
+
+import json
 import os
 import re
 import sqlite3
@@ -10,6 +12,7 @@ from flask import (
     Flask,
     flash,
     g,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -33,12 +36,118 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 from pipeline.compare import compare_new
+from pipeline.flask_ui_audit import (
+    audit_ui_enabled,
+    log_detail_consistency,
+    log_source_mismatch_and_parser,
+)
+from pipeline.presenter import normalize_display_item
+from pipeline.ui_list import prepare_db_rows_for_ui, prepare_json_items_for_ui, sqlite_row_to_item
 
 DB_PATH = BASE_DIR / "db" / "biz.db"
 REPORTS_DIR = BASE_DIR / "reports"
 PIPELINE_SCRIPT = BASE_DIR / "pipeline" / "run_pipeline.py"
 
 LOG_TAIL_CHARS = 6000
+
+MERGED_NEW_JSON = BASE_DIR / "data" / "merged" / "new.json"
+ALL_JB_JSON = BASE_DIR / "data" / "all_jb" / "all_jb.json"
+
+
+def load_all_items() -> List[dict]:
+    """data/all_jb/all_jb.json 에서 공고 목록 로드."""
+    try:
+        if not ALL_JB_JSON.exists():
+            return []
+        raw = json.loads(ALL_JB_JSON.read_text(encoding="utf-8"))
+        if isinstance(raw, list):
+            return [x for x in raw if isinstance(x, dict)]
+        return []
+    except Exception:
+        return []
+
+
+def extract_spseq(item: dict) -> str:
+    """spSeq 필드 또는 URL 쿼리에서 추출."""
+    for k in ("spSeq", "SP_SEQ", "sp_seq"):
+        v = item.get(k)
+        if v is not None and str(v).strip():
+            return str(v).strip()
+    for ukey in ("url", "detail_url", "detailUrl", "상세URL"):
+        u = str(item.get(ukey) or "").strip()
+        if not u:
+            continue
+        m = re.search(r"[?&]spSeq=([^&\s#]+)", u, re.I)
+        if m:
+            return m.group(1).strip()
+    return ""
+
+
+def filter_jbexport_items(items: List[dict]) -> List[dict]:
+    """canonical 기준 jbexport만(URL 우선)."""
+    from pipeline.project_quality import canonical_notice_source
+
+    out: List[dict] = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        if canonical_notice_source(it) == "jbexport":
+            out.append(it)
+    return out
+
+
+def _jbexport_period_str(item: dict) -> str:
+    rs = str(item.get("receipt_start") or "").strip()
+    re_ = str(item.get("receipt_end") or "").strip()
+    if rs or re_:
+        if rs and re_:
+            return f"{rs} ~ {re_}"
+        return rs or re_
+    sd = str(item.get("start_date") or "").strip()
+    ed = str(item.get("end_date") or "").strip()
+    if sd or ed:
+        if sd and ed:
+            return f"{sd} ~ {ed}"
+        return sd or ed
+    return ""
+
+
+def _jbexport_status_str(item: dict) -> str:
+    for k in ("status", "display_status", "raw_status"):
+        v = item.get(k)
+        if v is not None and str(v).strip():
+            return str(v).strip()
+    return "확인 필요"
+
+
+def _jbexport_title_str(item: dict) -> str:
+    t = str(item.get("title") or "").strip()
+    if t:
+        return t
+    return str(item.get("공고제목") or "").strip()
+
+
+def build_jbexport_api_rows(items: List[dict]) -> List[dict]:
+    """jbexport_daily 목록 API가 기대하는 키(spSeq, title, period, status 등)로 변환."""
+    rows: List[dict] = []
+    for it in items:
+        sp = extract_spseq(it)
+        title = _jbexport_title_str(it)
+        st = _jbexport_status_str(it)
+        per = _jbexport_period_str(it)
+        rows.append(
+            {
+                "spSeq": sp,
+                "SP_SEQ": sp,
+                "js_title": title,
+                "title": title,
+                "STS_TXT": st,
+                "status": st,
+                "period": per,
+                "PERIOD": per,
+            }
+        )
+    return rows
 
 
 def get_db():
@@ -85,6 +194,21 @@ def _init_db():
     col_names = {str(c[1]) for c in cur.execute("PRAGMA table_info(biz_projects)").fetchall()}
     if "executing_agency" not in col_names:
         cur.execute("ALTER TABLE biz_projects ADD COLUMN executing_agency TEXT")
+    for _jbcol in (
+        "receipt_start",
+        "receipt_end",
+        "biz_start",
+        "biz_end",
+        "raw_status",
+        "attachments_json",
+    ):
+        col_names = {
+            str(c[1]) for c in cur.execute("PRAGMA table_info(biz_projects)").fetchall()
+        }
+        if _jbcol not in col_names:
+            cur.execute(
+                f"ALTER TABLE biz_projects ADD COLUMN {_jbcol} TEXT"
+            )
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS companies (
@@ -123,13 +247,70 @@ def close_db(_error):
         conn.close()
 
 
+def _prepare_detail_row_for_template(row: sqlite3.Row) -> dict:
+    """목록과 동일 sqlite_row_to_item 경로 + description·첨부 보강."""
+    d = sqlite_row_to_item(row)
+    desc = d.get("description")
+    d["description"] = "" if desc is None else str(desc)
+    aj = d.get("attachments_json")
+    if aj is not None and str(aj).strip():
+        try:
+            parsed = json.loads(str(aj))
+            if isinstance(parsed, list):
+                d["attachments"] = parsed
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+    return d
+
+
+@app.route("/api/jbexport/list", methods=["POST"])
+def api_jbexport_list():
+    """JBEXPORT 목록 (DataTables 형식). jbexport_daily.py POST 호환."""
+    draw = 1
+    try:
+        body = request.get_json(silent=True) or {}
+        draw = int(body.get("draw", 1))
+        start = max(0, int(body.get("start", 0)))
+        length = int(body.get("length", 10))
+        if length <= 0:
+            length = 10
+        if length > 10000:
+            length = 10000
+
+        items = load_all_items()
+        jb = filter_jbexport_items(items)
+        rows = build_jbexport_api_rows(jb)
+        total = len(rows)
+        page = rows[start : start + length]
+        return jsonify(
+            {
+                "draw": draw,
+                "recordsTotal": total,
+                "recordsFiltered": total,
+                "data": page,
+            }
+        )
+    except Exception as e:
+        return jsonify(
+            {
+                "draw": draw,
+                "recordsTotal": 0,
+                "recordsFiltered": 0,
+                "data": [],
+                "error": str(e),
+            }
+        )
+
+
 @app.route("/")
 def index():
     status = (request.args.get("status") or "").strip()
     query = (request.args.get("q") or "").strip()
 
     sql = """
-        SELECT id, title, organization, start_date, end_date, status, url, description, ai_result, pdf_path
+        SELECT id, title, organization, start_date, end_date, status, url, description, ai_result, pdf_path,
+               ministry, executing_agency, source,
+               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json
         FROM biz_projects
         WHERE 1=1
     """
@@ -144,10 +325,21 @@ def index():
         like_q = f"%{query}%"
         params.extend([like_q, like_q, like_q])
 
-    sql += " ORDER BY id DESC"
-
     rows = get_db().execute(sql, params).fetchall()
-    return render_template("index.html", rows=rows, status=status, q=query)
+    rows_ui = prepare_db_rows_for_ui(rows)
+    if audit_ui_enabled():
+        log_source_mismatch_and_parser(rows_ui[:10], label="GET / (목록 10)")
+        db = get_db()
+        for r in rows_ui[:5]:
+            rid = r.get("id")
+            if rid is not None:
+                log_detail_consistency(
+                    db,
+                    int(rid),
+                    prepare_row=_prepare_detail_row_for_template,
+                    normalize_item=normalize_display_item,
+                )
+    return render_template("index.html", rows=rows_ui, status=status, q=query)
 
 
 @app.route("/company", methods=["GET", "POST"])
@@ -183,20 +375,25 @@ def company():
 def projects_list():
     rows = get_db().execute(
         """
-        SELECT id, title, organization, start_date, end_date, status, url
+        SELECT id, title, organization, start_date, end_date, status, url, description,
+               ministry, executing_agency, source,
+               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json
         FROM biz_projects
-        ORDER BY id DESC
         """
     ).fetchall()
-    return render_template("projects.html", rows=rows)
+    rows_ui = prepare_db_rows_for_ui(rows)
+    if audit_ui_enabled():
+        log_source_mismatch_and_parser(rows_ui[:10], label="GET /projects (목록 10)")
+    return render_template("projects.html", rows=rows_ui)
 
 
 @app.route("/project/<int:pid>")
 def project_detail(pid):
     row = get_db().execute(
         """
-        SELECT id, title, organization, ministry, executing_agency, start_date, end_date,
-               status, url, description, ai_result, pdf_path
+        SELECT id, title, organization, ministry, executing_agency, source, start_date, end_date,
+               status, url, description, ai_result, pdf_path,
+               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json
         FROM biz_projects
         WHERE id = ?
         """,
@@ -208,9 +405,17 @@ def project_detail(pid):
         return redirect(url_for("projects_list"))
 
     ai_summary = row["ai_result"] if row["ai_result"] is not None else ""
+    row_ui = normalize_display_item(_prepare_detail_row_for_template(row))
+    if audit_ui_enabled():
+        log_detail_consistency(
+            get_db(),
+            pid,
+            prepare_row=_prepare_detail_row_for_template,
+            normalize_item=normalize_display_item,
+        )
     return render_template(
         "project_detail.html",
-        row=row,
+        row=row_ui,
         ai_summary=ai_summary,
     )
 
@@ -219,7 +424,9 @@ def project_detail(pid):
 def detail(pid):
     row = get_db().execute(
         """
-        SELECT id, title, organization, start_date, end_date, status, url, description, ai_result, pdf_path
+        SELECT id, title, organization, ministry, executing_agency, source, start_date, end_date,
+               status, url, description, ai_result, pdf_path,
+               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json
         FROM biz_projects
         WHERE id = ?
         """,
@@ -230,9 +437,17 @@ def detail(pid):
         flash("해당 공고를 찾을 수 없습니다.", "warning")
         return redirect(url_for("index"))
 
+    row_ui = normalize_display_item(_prepare_detail_row_for_template(row))
+    if audit_ui_enabled():
+        log_detail_consistency(
+            get_db(),
+            pid,
+            prepare_row=_prepare_detail_row_for_template,
+            normalize_item=normalize_display_item,
+        )
     return render_template(
         "detail.html",
-        row=row,
+        row=row_ui,
         back_href=url_for("index"),
     )
 
@@ -778,18 +993,36 @@ def run_pipeline_route():
     )
 
 
-@app.route("/new")
+@app.route("/new", strict_slashes=False)
 def new_announcements():
-    """today.json vs yesterday.json 제목 기준 신규 공고 목록."""
+    """data/merged/new.json 기준 신규 공고 (순번·규칙 요약·첨부)."""
+    path = MERGED_NEW_JSON
+    if not path.exists():
+        return render_template("new_projects.html", rows=[], count=0, err=None)
+
     try:
-        items = compare_new()
-        err = None
-    except Exception as exc:
-        items = []
-        err = str(exc)
-    return render_template("new.html", items=items, count=len(items), err=err)
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError, TypeError) as exc:
+        return render_template(
+            "new_projects.html",
+            rows=[],
+            count=0,
+            err=f"new.json 읽기 실패: {exc}",
+        )
+
+    if isinstance(data, dict) and "items" in data:
+        raw_items = data["items"]
+    else:
+        raw_items = data if isinstance(data, list) else []
+
+    valid = [x for x in raw_items if isinstance(x, dict)]
+    rows = prepare_json_items_for_ui(valid)
+
+    return render_template(
+        "new_projects.html", rows=rows, count=len(rows), err=None
+    )
 
 
 if __name__ == "__main__":
-    _init_db()
-    app.run(debug=True)
+    app.run(host="127.0.0.1", port=5000, debug=True)

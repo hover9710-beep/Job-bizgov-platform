@@ -107,6 +107,16 @@ def _menu_uuid_from_url(url: str) -> str:
         return ""
 
 
+def _sanitize_notice_title(raw: Any) -> str:
+    """spSeq 플레이스홀더는 제목으로 쓰지 않음."""
+    t = str(raw or "").strip()
+    if not t:
+        return ""
+    if re.match(r"(?is)^\s*spSeq\s*=", t):
+        return ""
+    return re.sub(r"\s+", " ", t).strip()[:300]
+
+
 @app.after_request
 def _cors(resp: Response) -> Response:
     resp.headers["Access-Control-Allow-Origin"] = "*"
@@ -685,7 +695,7 @@ def parse_jbexport_detail(session: requests.Session, detail_url: str) -> Dict[st
     title = ""
     m_title = re.search(r"<title[^>]*>([\s\S]*?)</title>", html, flags=re.I)
     if m_title:
-        title = re.sub(r"\s+", " ", m_title.group(1)).strip()
+            title = _sanitize_notice_title(m_title.group(1))
     period = _extract_after_keyword(re.sub(r"<[^>]+>", " ", html), "접수기간")
     status = "접수중" if re.search(r"접수중|신청\s*중", html) else ("접수마감" if re.search(r"마감|종료", html) else "")
     return {
@@ -1242,7 +1252,7 @@ def jbexport_list_detail_candidates(
                 re.I,
             )
         )
-        title = str(row.get("js_title") or row.get("TITLE") or row.get("title") or "")[:300]
+        title = _sanitize_notice_title(row.get("js_title") or row.get("TITLE") or row.get("title") or "")
         out.append(
             {
                 "spSeq": sp,
@@ -1383,7 +1393,7 @@ def parse_and_download(detail_url: str) -> Dict[str, Any]:
         title = ""
         m_title = re.search(r"<title[^>]*>([\s\S]*?)</title>", html, flags=re.I)
         if m_title:
-            title = re.sub(r"\s+", " ", m_title.group(1)).strip()
+            title = _sanitize_notice_title(m_title.group(1))
 
         files_out: list[dict[str, Any]] = []
         for rec in records:

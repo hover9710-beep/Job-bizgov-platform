@@ -11,9 +11,11 @@ load_dotenv()
 
 import argparse
 import json
+import re
 import smtplib
 import sys
 from email.message import EmailMessage
+from email.header import Header
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.policy import SMTP as SMTP_POLICY
@@ -25,6 +27,15 @@ ROOT = Path(__file__).resolve().parent
 RECOMMENDED_JSON = ROOT / "data" / "filtered" / "recommended.json"
 LIST_PREVIEW_MAX = 20
 MAIL_BODY_FILE = Path("data/mail/mail_body.txt")
+
+
+def _build_mime_text(content: str) -> MIMEText:
+    """본문 문자열을 UTF-8 MIMEText로 생성 (HTML 감지 시 html subtype)."""
+    text = str(content or "")
+    is_html = bool(re.search(r"<(?:html|body|div|p|br|table|span|a)\b", text, re.I))
+    if is_html:
+        return MIMEText(text, "html", "utf-8")
+    return MIMEText(text, "plain", "utf-8")
 
 
 def _utf8_stdio() -> None:
@@ -104,10 +115,10 @@ def send_gmail_plain(
     smtp_port: int,
 ) -> None:
     msg = MIMEMultipart()
-    msg["Subject"] = subject
+    msg["Subject"] = str(Header(str(subject), "utf-8"))
     msg["From"] = smtp_user
     msg["To"] = mail_to
-    msg.attach(MIMEText(body, "plain", "utf-8"))
+    msg.attach(_build_mime_text(body))
 
     with smtplib.SMTP(
         smtp_server,
@@ -128,13 +139,13 @@ def send_gmail_plain(
 
 def send_email(to_email, subject, content, file_path):
     """레거시: Gmail SSL + 첨부. 환경 변수가 있으면 발신 계정에 반영."""
-    msg = EmailMessage()
+    msg = MIMEMultipart()
     user = os.getenv("SMTP_USER") or os.getenv("GMAIL_USER") or "hover9710@gmail.com"
     pwd = os.getenv("SMTP_PASS") or os.getenv("GMAIL_APP_PASSWORD") or ""
     msg["From"] = user
     msg["To"] = str(to_email)
-    msg["Subject"] = str(subject)
-    msg.set_content(str(content), charset="utf-8")
+    msg["Subject"] = str(Header(str(subject), "utf-8"))
+    msg.attach(_build_mime_text(str(content)))
 
     if file_path and os.path.exists(file_path):
         with open(file_path, "rb") as f:
@@ -149,7 +160,7 @@ def send_email(to_email, subject, content, file_path):
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, local_hostname="localhost") as smtp:
         smtp.login(user, pwd)
-        smtp.send_message(msg)
+        smtp.sendmail(user, [str(to_email)], msg.as_string())
 
     print("이메일 발송 완료:", to_email)
 
