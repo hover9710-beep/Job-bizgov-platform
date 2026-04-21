@@ -379,6 +379,7 @@ def projects_list():
                ministry, executing_agency, source,
                receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json
         FROM biz_projects
+        ORDER BY COALESCE(end_date, '9999-12-31') DESC
         """
     ).fetchall()
     rows_ui = prepare_db_rows_for_ui(rows)
