@@ -325,3 +325,29 @@ def parse_bizinfo_receipt_dates_for_display(item: dict) -> dict:
         "receipt_start": item.get("receipt_start") or item.get("start_date", ""),
         "receipt_end": item.get("receipt_end") or item.get("end_date", ""),
     }
+
+
+def parse_date_range(dates: List[str]) -> Tuple[str, str]:
+    """
+    날짜 리스트를 받아 (start, end) 튜플 반환.
+
+    정책
+    - 유효한 YYYY-MM-DD (또는 YYYYMMDD / 구분자 있는 표기) 만 사용.
+    - 0개: ("", "")
+    - 1개: (해당 값, 해당 값)  ← 단일 일자 공고(접수=마감 같은 날) 케이스 보존
+    - 2개 이상: (min, max)      ← 등록일·마감일 순서 뒤바뀜 자동 교정
+
+    connector 계열에서 "추출된 날짜 개수가 2~3개" 인 소스(kstartup 등) 통일용.
+    소스별 라벨 매칭이 필요한 bizinfo 같은 경우에는 parse_bizinfo_dates 사용.
+    """
+    cleaned: List[str] = []
+    for raw in dates or []:
+        iso = _sanitize_iso(str(raw).strip()) or normalize_one_date(raw)
+        iso = _sanitize_iso(iso)
+        if iso and iso not in cleaned:
+            cleaned.append(iso)
+    if not cleaned:
+        return "", ""
+    if len(cleaned) == 1:
+        return cleaned[0], cleaned[0]
+    return min(cleaned), max(cleaned)

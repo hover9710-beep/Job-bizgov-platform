@@ -1,9 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-import re, time
+import re, sys, time
+from pathlib import Path
 from typing import Any, Dict, List
 import requests
 from bs4 import BeautifulSoup
+
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+from pipeline.bizinfo_dates import parse_date_range
 
 BASE_URL   = "https://www.k-startup.go.kr"
 LIST_URL   = f"{BASE_URL}/web/contents/bizpbanc-ongoing.do"
@@ -36,8 +42,7 @@ def fetch_list_page(page: int = 1) -> List[Dict[str, Any]]:
         all_text = li.get_text(" ", strip=True)
         date_matches = re.findall(r'(\d{4})[.\-](\d{2})[.\-](\d{2})', all_text)
         dates = [f"{m[0]}-{m[1]}-{m[2]}" for m in date_matches]
-        receipt_start = dates[0] if len(dates) >= 1 else ""
-        receipt_end = dates[-1] if len(dates) >= 2 else ""
+        receipt_start, receipt_end = parse_date_range(dates)
         org_tag = li.select_one(".organ, .agency, .org")
         org = org_tag.get_text(strip=True) if org_tag else "창업진흥원"
         items.append({
