@@ -46,3 +46,15 @@ def send_kakao_message(message):
 
 if __name__ == "__main__":
     send_kakao_message("카카오 테스트 메시지")
+
+
+def send_kakao_memo(text: str, web_url: str = "", mobile_web_url: str = "") -> None:
+    send_kakao_message(text)
+
+
+def build_recommend_kakao_text(company_name: str, company_id: str, items: list) -> str:
+    lines = [f"[맞춤 추천] {company_name} 기준 상위 {len(items)}건"]
+    for i, item in enumerate(items[:5], 1):
+        title = item.get("title") or item.get("공고제목") or ""
+        lines.append(f"{i}. {title[:30]}")
+    return "\n".join(lines)

@@ -105,3 +105,12 @@ def normalize_description(item: Dict[str, Any]) -> str:
     if c is not None and str(c).strip():
         return str(c).strip()
     return ""
+
+
+def canonical_notice_source(source: str) -> str:
+    mapping = {
+        "bizinfo": "bizinfo",
+        "jbexport": "jbexport",
+        "kstartup": "kstartup",
+    }
+    return mapping.get(str(source or "").lower(), str(source or ""))

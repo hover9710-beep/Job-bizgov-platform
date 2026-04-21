@@ -314,3 +314,14 @@ def first_raw_period_preview(item: Dict[str, Any]) -> str:
         if v:
             return v[:120]
     return ""
+
+
+def parse_bizinfo_biz_dates_for_display(item: dict) -> dict:
+    return {"biz_start": item.get("biz_start", ""), "biz_end": item.get("biz_end", "")}
+
+
+def parse_bizinfo_receipt_dates_for_display(item: dict) -> dict:
+    return {
+        "receipt_start": item.get("receipt_start") or item.get("start_date", ""),
+        "receipt_end": item.get("receipt_end") or item.get("end_date", ""),
+    }

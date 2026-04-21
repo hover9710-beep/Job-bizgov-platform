@@ -193,6 +193,7 @@ def extract_receipt_period(item: dict) -> tuple[str, str]:
 
     if src == "bizinfo":
         pr = parse_bizinfo_receipt_dates_for_display(item)
+        if isinstance(pr, (list, tuple)): pr = dict(enumerate(pr))
         sd, ed = (pr.get("start_date") or "").strip(), (pr.get("end_date") or "").strip()
         if sd and ed:
             return sd, ed
@@ -424,6 +425,8 @@ def build_ai_summary_from_display(item: dict) -> str:
 
 
 def normalize_display_item(item: dict) -> dict:
+    if isinstance(item, (list, tuple)):
+        item = {i: v for i, v in enumerate(item)}
     work = dict(item)
     orig_source = str(item.get("source") or "").strip()
     snap0 = str(item.get("_db_source_snapshot") or orig_source).strip().lower()
@@ -494,4 +497,4 @@ def normalize_display_item(item: dict) -> dict:
 
 
 def normalize_display_items(items: list[dict]) -> list[dict]:
-    return [normalize_display_item(dict(x)) for x in items if isinstance(x, dict)]
+    return [normalize_display_item(dict(x) if not isinstance(x, dict) else x) for x in items]
