@@ -64,6 +64,7 @@ OUT_PATH = OUT_DIR / "all_jb.json"
 JBEXPORT_NEW_JSON = DATA_DIR / "jbexport_new.json"
 # 전체 수집 커넥터 출력 (우선)
 BIZINFO_ALL_JSON = DATA_DIR / "bizinfo" / "json" / "bizinfo_all.json"
+KSTARTUP_ALL_JSON = DATA_DIR / "kstartup" / "kstartup_all.json"
 # 레거시 자동 커넥터 경로 (있으면 추가 병합)
 BIZINFO_LEGACY_JSON = (
     ROOT_DIR
@@ -187,7 +188,7 @@ def _normalize_item(
     )
 
     src = (source or "").strip().lower()
-    if src not in ("jbexport", "bizinfo"):
+    if src not in ("jbexport", "bizinfo", "kstartup"):
         src = "jbexport"
 
     ministry = _pick(item, ("ministry",))
@@ -236,16 +237,20 @@ def collect_json_files() -> List[Path]:
 
 
 def _source_for_path(path: Path) -> str:
-    """파일 경로로 수집 출처(jbexport | bizinfo) 판별."""
+    """파일 경로로 수집 출처(jbexport | bizinfo | kstartup) 판별."""
     norm = str(path).replace("\\", "/")
     low = norm.lower()
     if "bizinfo_all.json" in low and "bizinfo" in low:
         return "bizinfo"
+    if "kstartup" in low or "k-startup" in low or "k_startup" in low:
+        return "kstartup"
     try:
         if BIZINFO_ALL_JSON.exists() and path.resolve() == BIZINFO_ALL_JSON.resolve():
             return "bizinfo"
         if BIZINFO_LEGACY_JSON.exists() and path.resolve() == BIZINFO_LEGACY_JSON.resolve():
             return "bizinfo"
+        if KSTARTUP_ALL_JSON.exists() and path.resolve() == KSTARTUP_ALL_JSON.resolve():
+            return "kstartup"
     except OSError:
         pass
     if "www_bizinfo_go_kr" in norm and norm.endswith(".json"):
@@ -260,7 +265,7 @@ def _dedup_key_title_source(item: Dict[str, str]) -> str:
     # 제목이 비어 있으면 URL로 식별(동일 출처 내 중복만 제거)
     identity = title or url or ""
     source = str(item.get("source") or "jbexport").strip().lower()
-    if source not in ("jbexport", "bizinfo"):
+    if source not in ("jbexport", "bizinfo", "kstartup"):
         source = "jbexport"
     return f"{identity}\x00{source}"
 
@@ -312,6 +317,7 @@ def merge_jb_json() -> Path:
 
     jbexport_n = sum(1 for x in merged if x.get("source") == "jbexport")
     bizinfo_n = sum(1 for x in merged if x.get("source") == "bizinfo")
+    kstartup_n = sum(1 for x in merged if x.get("source") == "kstartup")
 
     print(f"[merge_jb] total items: {len(merged)}")
     sample = merged[0] if merged else {}
@@ -326,7 +332,10 @@ def merge_jb_json() -> Path:
         print(f"[merge_jb] copied: {OUT_PATH} -> {root_all_jb}")
     except OSError as e:
         print(f"[merge_jb] copy to {root_all_jb} failed: {e}")
-    print(f"[merge_jb] jbexport: {jbexport_n}건, bizinfo: {bizinfo_n}건, merged 총: {len(merged)}건")
+    print(
+        f"[merge_jb] jbexport: {jbexport_n}건, bizinfo: {bizinfo_n}건, "
+        f"kstartup: {kstartup_n}건, merged 총: {len(merged)}건"
+    )
     print(
         f"[merge_jb] 중복 제거: {duplicates_removed}건 "
         f"(기준: title+source, 동일 출처·동일 제목·동일 식별자)"

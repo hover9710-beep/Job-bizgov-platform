@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-import re, sys, time
+import json, re, sys, time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 import requests
@@ -17,6 +18,9 @@ DETAIL_URL = f"{BASE_URL}/web/contents/bizpbanc-view.do"
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0"}
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
+
+OUT_DIR  = _ROOT / "data" / "kstartup"
+OUT_PATH = OUT_DIR / "kstartup_all.json"
 
 def fetch_list_page(page: int = 1) -> List[Dict[str, Any]]:
     try:
@@ -97,17 +101,53 @@ def fetch_all(max_pages: int = 30) -> List[Dict[str, Any]]:
     print(f"[K-Startup] 총 {len(all_items)}건")
     return all_items
 
-def run() -> List[Dict[str, Any]]:
+def _normalize_for_pipeline(item: Dict[str, Any]) -> Dict[str, Any]:
+    """파이프라인(merge_jb → update_db)이 기대하는 표준 필드로 변환."""
+    collected_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return {
+        "title": item.get("title", ""),
+        "organization": item.get("org", "") or "창업진흥원",
+        "ministry": "중소벤처기업부",
+        "executing_agency": item.get("org", "") or "창업진흥원",
+        "source": "kstartup",
+        "site": "k-startup",
+        "start_date": item.get("receipt_start", ""),
+        "end_date": item.get("receipt_end", ""),
+        "status": "진행",
+        "url": item.get("url", ""),
+        "description": item.get("description", ""),
+        "attachments": item.get("attachments", []),
+        "pbancSn": item.get("pbancSn", ""),
+        "collected_at": collected_at,
+    }
+
+
+def save_json(items: List[Dict[str, Any]], out_path: Path = OUT_PATH) -> Path:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    normalized = [_normalize_for_pipeline(it) for it in items]
+    out_path.write_text(
+        json.dumps(normalized, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    print(f"[K-Startup] saved: {out_path} ({len(normalized)}건)", flush=True)
+    return out_path
+
+
+def run(with_detail: bool = False) -> List[Dict[str, Any]]:
+    """목록 전체 수집 → JSON 저장. with_detail=True 면 상세(attachments)까지 수집."""
     items = fetch_all()
-    for item in items:
-        time.sleep(0.3)
-        detail = fetch_detail(item["pbancSn"])
-        for k in ("receipt_start","receipt_end","biz_start","biz_end","description","attachments"):
-            if detail.get(k):
-                item[k] = detail[k]
+    if with_detail:
+        for item in items:
+            time.sleep(0.3)
+            detail = fetch_detail(item["pbancSn"])
+            for k in ("receipt_start", "receipt_end", "biz_start", "biz_end",
+                      "description", "attachments"):
+                if detail.get(k):
+                    item[k] = detail[k]
+    save_json(items)
     return items
 
+
 if __name__ == "__main__":
-    sample = fetch_list_page(1)
-    for s in sample[:3]:
-        print(s)
+    # 파이프라인 진입점: 전체 수집 후 kstartup_all.json 저장
+    run(with_detail=False)

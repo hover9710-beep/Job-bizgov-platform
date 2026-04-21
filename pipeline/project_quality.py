@@ -6,7 +6,7 @@ import re
 from typing import Any, Dict, Optional, Tuple
 
 KNOWN_SOURCES = frozenset(
-    {"jbexport", "bizinfo", "jbba", "jbtp", "kotra", "unknown"}
+    {"jbexport", "bizinfo", "kstartup", "jbba", "jbtp", "kotra", "unknown"}
 )
 
 
@@ -30,6 +30,8 @@ def infer_source(
         return "jbexport"
     if "bizinfo.go.kr" in u or re.search(r"\bbizinfo\b", blob):
         return "bizinfo"
+    if "k-startup.go.kr" in u or "kstartup" in blob or "k-startup" in blob:
+        return "kstartup"
     if "jbba" in blob:
         return "jbba"
     if "jbtp" in blob:
@@ -37,9 +39,11 @@ def infer_source(
     if "kotra" in blob:
         return "kotra"
 
-    # URL이 없을 때 organization/title로 출처 추정 (기업마당·전북수출 등)
+    # URL이 없을 때 organization/title로 출처 추정 (기업마당·전북수출·창업진흥원 등)
     if "기업마당" in o or "기업마당" in t:
         return "bizinfo"
+    if "창업진흥원" in o or "창업진흥원" in t or "k-startup" in t.lower():
+        return "kstartup"
     if (
         "전북수출" in o
         or "수출통합지원" in o
