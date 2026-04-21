@@ -327,6 +327,107 @@ def parse_bizinfo_receipt_dates_for_display(item: dict) -> dict:
     }
 
 
+# 접수기간(reception) 전용 키 집합. 사업기간 키는 일부러 제외해야 혼선이 없음.
+_RECEIPT_PAIRED_KEYS: Tuple[Tuple[str, str], ...] = (
+    ("pbancBgngYmd", "pbancEndYmd"),
+)
+_RECEIPT_PERIOD_KEYS: Tuple[str, ...] = (
+    "reqstBeginEndDe",
+    "rcptPd",
+    "rcpt_period",
+    "reception_period",
+    "apply_period",
+    "applyPeriod",
+    "receiptPeriod",
+    "접수기간",
+    "신청기간",
+    "모집기간",
+)
+
+# 사업기간(support/biz period) 전용 키 집합.
+_BIZ_PAIRED_KEYS: Tuple[Tuple[str, str], ...] = (
+    ("bizPrdBgngYmd", "bizPrdEndYmd"),
+)
+_BIZ_PERIOD_KEYS: Tuple[str, ...] = (
+    "support_period",
+    "biz_period",
+    "bizPeriod",
+    "사업기간",
+    "지원기간",
+    "운영기간",
+)
+
+
+def _parse_scoped_dates(
+    item: Dict[str, Any],
+    paired_keys: Tuple[Tuple[str, str], ...],
+    period_keys: Tuple[str, ...],
+) -> Dict[str, str]:
+    """키 범위를 한정한 bizinfo 날짜 파서. 범위 내에서 못 찾으면 빈 dict 반환."""
+    sd, ed = "", ""
+    for sk, ek in paired_keys:
+        a = normalize_one_date(_get(item, sk))
+        b = normalize_one_date(_get(item, ek))
+        if a or b:
+            sd, ed = a or sd, b or ed
+            if sd and ed:
+                return _dates_result(sd, ed)
+    for k in period_keys:
+        blob = _get(item, k)
+        if not blob:
+            continue
+        ps, pe = extract_date_range(blob)
+        if ps:
+            sd = sd or ps
+        if pe:
+            ed = ed or pe
+        if sd and ed:
+            return _dates_result(sd, ed)
+    if sd or ed:
+        return _dates_result(sd, ed)
+    return {"start_date": "", "end_date": ""}
+
+
+def parse_bizinfo_receipt_dates(item: Dict[str, Any]) -> Dict[str, str]:
+    """
+    접수기간(reception period) 파서.
+    먼저 접수 전용 키만 탐색하고, 비면 generic parse_bizinfo_dates 로 폴백.
+    반환: {"start_date": "YYYY-MM-DD" or "", "end_date": "YYYY-MM-DD" or ""}
+    """
+    pre = (
+        str(item.get("receipt_start") or "").strip(),
+        str(item.get("receipt_end") or "").strip(),
+    )
+    if pre[0] or pre[1]:
+        sd = normalize_one_date(pre[0]) or pre[0]
+        ed = normalize_one_date(pre[1]) or pre[1]
+        if sd or ed:
+            return _dates_result(sd, ed)
+
+    scoped = _parse_scoped_dates(item, _RECEIPT_PAIRED_KEYS, _RECEIPT_PERIOD_KEYS)
+    if scoped["start_date"] or scoped["end_date"]:
+        return scoped
+    return parse_bizinfo_dates(item)
+
+
+def parse_bizinfo_biz_dates(item: Dict[str, Any]) -> Dict[str, str]:
+    """
+    사업기간(support period) 파서.
+    사업 전용 키 범위만 탐색. 접수기간과 분리되어야 하므로 generic 폴백 없음.
+    반환: {"start_date": "...", "end_date": "..."} (없으면 빈 문자열)
+    """
+    pre = (
+        str(item.get("biz_start") or "").strip(),
+        str(item.get("biz_end") or "").strip(),
+    )
+    if pre[0] or pre[1]:
+        sd = normalize_one_date(pre[0]) or pre[0]
+        ed = normalize_one_date(pre[1]) or pre[1]
+        if sd or ed:
+            return _dates_result(sd, ed)
+    return _parse_scoped_dates(item, _BIZ_PAIRED_KEYS, _BIZ_PERIOD_KEYS)
+
+
 def parse_date_range(dates: List[str]) -> Tuple[str, str]:
     """
     날짜 리스트를 받아 (start, end) 튜플 반환.
