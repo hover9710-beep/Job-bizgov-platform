@@ -308,53 +308,9 @@ def build_section(title: str, icon: str, items: list,
     return "\n".join(lines)
 
 
-def normalize_status(text: str) -> str:
-    if not text:
-        return ""
-    return str(text).strip().replace(" ", "")
-
-
-ACTIVE_KEYWORDS = [
-    "접수중",
-    "공고중",
-    "접수",
-    "진행중",
-    "신청가능",
-    "모집중",
-    "사업공고",
-    "상시",
-    "공고",
-]
-
-CLOSED_KEYWORDS = [
-    "마감",
-    "종료",
-    "완료",
-    "접수마감",
-    "선정완료",
-]
-
-
-def is_active_by_status(item: dict) -> bool:
-    status = normalize_status(
-        item.get("status")
-        or item.get("state")
-        or item.get("progress_status")
-        or item.get("condition")
-        or ""
-    )
-
-    if not status:
-        return True
-
-    if any(k in status for k in CLOSED_KEYWORDS):
-        return False
-
-    if any(k in status for k in ACTIVE_KEYWORDS):
-        return True
-
-    # 기본은 포함
-    return True
+# status 기반 필터(normalize_status / is_active_by_status / ACTIVE_KEYWORDS / CLOSED_KEYWORDS)는
+# pipeline/normalize_project.infer_status() 로 단일화되면서 제거됨.
+# 메일 필터는 pipeline/mail_view.py 가 infer_status() 결과로 분류한다.
 
 
 INCLUDE_BIZINFO_KEYWORDS = [

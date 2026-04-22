@@ -12,7 +12,7 @@ if str(_ROOT) not in sys.path:
 
 from pipeline.jbexport_enrich import _parse_meta_from_html, fetch_jbexport_detail_html
 from pipeline.presenter import extract_biz_period, extract_receipt_period, normalize_display_item
-from pipeline.ui_list import sqlite_row_to_item
+from pipeline.ui_view import sqlite_row_to_item
 
 JB_SAMPLE_LIMIT = 20
 BIZ_SAMPLE_LIMIT = 20

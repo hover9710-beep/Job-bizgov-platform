@@ -827,7 +827,7 @@ def merge_detail_into_item(item: dict, detail_data: Dict[str, Any]) -> dict:
     """
     상세 파싱 결과를 item에 병합. 기존 값이 있으면 빈 칸만 보강.
     raw_status: 비어 있을 때만 상세 진행상태.
-    display_status는 presenter가 접수기간으로 계산 — 여기서 덮어쓰지 않음.
+    display_status 는 단일 진입점 infer_status() 가 결정 — 여기서는 덮어쓰지 않음.
     """
     out = dict(item)
     url = _item_detail_url(out)

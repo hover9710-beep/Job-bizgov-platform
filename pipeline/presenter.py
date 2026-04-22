@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-표시 dict — 상태·목록 시작/종료일은 receipt_start/receipt_end만.
-사업기간(display_biz_*)은 상세 보조 표시 전용, 상태·정렬에 미사용.
-접수일이 둘 다 없을 때만 display_status=확인 필요(시작만·종료만은 규칙에 따라 공고중/접수중/마감).
+표시 dict — 날짜/기관/첨부 등 '표시용' 포맷팅 전담 레이어.
+
+상태(display_status)는 이 모듈에서 계산하지 않는다.
+단일 진입점: pipeline.normalize_project.infer_status().
+presenter 는 그 결과를 그대로 전달할 뿐, 독자적인 status 로직을 갖지 않는다.
 """
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ from pipeline.bizinfo_dates import (
     parse_bizinfo_biz_dates_for_display,
     parse_bizinfo_receipt_dates_for_display,
 )
+from pipeline.normalize_project import infer_status
 from pipeline.project_quality import canonical_notice_source
 from pipeline.jbexport_display import format_jbexport_biz_period, format_jbexport_receipt_period
 
@@ -284,51 +287,6 @@ def receipt_parser_label(item: dict) -> str:
     return "generic"
 
 
-def _compute_display_status(item: dict, ds: str, de: str) -> str:
-    """Bizinfo는 receipt 양 끝이 확정될 때만 공고/접수/마감, 아니면 확인 필요."""
-    if persisted_source_key(item) == "bizinfo":
-        if not ds or not de or ds == "-" or de == "-":
-            return "확인 필요"
-        return compute_display_status_from_receipt(ds, de)
-    return compute_display_status_from_receipt(ds, de)
-
-
-def compute_display_status_from_receipt(
-    ds: str,
-    de: str,
-    today: Optional[date] = None,
-) -> str:
-    """
-    접수 시작·종료(receipt)만 사용. 사업기간·원문 status는 사용하지 않음.
-    - 둘 다 있음: 공고중 / 접수중 / 마감
-    - 시작만: 공고중 또는 접수중
-    - 종료만: 접수중 또는 마감
-    - 둘 다 없음: 확인 필요
-    """
-    today = today or date.today()
-    start = _receipt_value_to_date(ds if ds and ds != "-" else None)
-    end = _receipt_value_to_date(de if de and de != "-" else None)
-
-    if start and end:
-        if today < start:
-            return "공고중"
-        if start <= today <= end:
-            return "접수중"
-        return "마감"
-
-    if start and not end:
-        if today < start:
-            return "공고중"
-        return "접수중"
-
-    if not start and end:
-        if today <= end:
-            return "접수중"
-        return "마감"
-
-    return "확인 필요"
-
-
 def compute_is_ending_soon_receipt(
     display_status: str,
     ds: str,
@@ -455,9 +413,14 @@ def normalize_display_item(item: dict) -> dict:
     display_receipt_start, display_receipt_end = extract_receipt_period(work)
     display_biz_start, display_biz_end = extract_biz_period(work)
     display_registered_at = extract_registered_at(work)
-    display_status = _compute_display_status(
-        work, display_receipt_start, display_receipt_end
-    )
+
+    # status 는 presenter 가 계산하지 않는다 — 단일 진입점(infer_status) 위임.
+    period_text = str(work.get("period_text") or "").strip()
+    sd_for_status = str(work.get("start_date") or "").strip()
+    ed_for_status = str(work.get("end_date") or "").strip()
+    today_iso = date.today().isoformat()
+    display_status = infer_status(period_text, sd_for_status, ed_for_status, today_iso)
+
     is_ending_soon = compute_is_ending_soon_receipt(
         display_status, display_receipt_start, display_receipt_end
     )

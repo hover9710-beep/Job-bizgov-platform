@@ -12,8 +12,8 @@ DB row → UI 전용 가공 레이어.
   - 정렬(status / deadline / title / source / newest) + 다중 필터 제공
   - 각 단계마다 카운트·샘플 디버그 로그
 
-기존 pipeline/ui_list.py (presenter 기반 복잡 파이프라인)와는 별도로,
-메일 뷰 논리와 짝을 이루는 "가벼운 UI 뷰" 계층.
+메일 뷰(pipeline/mail_view.py)와 짝을 이루는 "UI 뷰" 계층 — status 단일 진입점은
+pipeline/normalize_project.infer_status() 이며 presenter 의 display_* 포맷팅과 합류한다.
 """
 from __future__ import annotations
 
@@ -109,7 +109,7 @@ def _today_str() -> str:
 def sqlite_row_to_item(row: Any) -> Dict[str, Any]:
     """
     DB row 또는 일반 dict → UI 표시용 dict.
-    ui_list.sqlite_row_to_item 과 호환 (appy.py 기존 호출부 보호).
+    appy.py 호환 (dict·sqlite3.Row 모두 허용).
     """
     d = dict(row) if not isinstance(row, dict) else dict(row)
     aj = d.get("attachments_json")
@@ -297,22 +297,19 @@ def prepare_db_rows_for_ui(
 ) -> List[Dict[str, Any]]:
     """
     DB rows(sqlite.Row 또는 dict) → 정렬된 UI dict 리스트.
-    appy.py 의 기존 `pipeline.ui_list.prepare_db_rows_for_ui` 와 이름이 같아 드롭-인 교체 가능.
+    appy.py 가 직접 호출하는 공개 API. UI 라우트에서 바로 사용.
 
     처리 순서
       1) sqlite_row_to_item 으로 기본 dict 화
       2) presenter.normalize_display_items 로 display_receipt_*/display_biz_* 생성
-      3) to_ui_item 재실행해 infer_status 기반 display_status 를 덮어씀
-         (presenter 의 status 로직은 receipt 기반, 본 뷰는 period_text 까지 고려)
+         (display_status 는 presenter 내부에서 infer_status 로 위임됨)
+      3) 호출자 지정 today 기준 infer_status 재평가 — 일일 리빌드 안전망
       4) 정렬 + display_idx 부여
     """
     t = today or _today_str()
     dicts = [dict(r) if not isinstance(r, dict) else r for r in rows]
-    # 1) 기본 dict
     items: List[Dict[str, Any]] = [sqlite_row_to_item(r) for r in dicts]
-    # 2) presenter 로 display_* 세팅 (display_status 는 receipt 기반으로 들어감)
     items = normalize_display_items(items)
-    # 3) period_text + infer_status 로 display_status 덮어쓰기
     for it in items:
         period_text = str(it.get("period_text") or "").strip()
         sd = str(it.get("start_date") or "").strip()
