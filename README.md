@@ -20,6 +20,9 @@ python pipeline/make_mail.py
 
 병합·크롤은 기존 파이프라인(`merge_sources`, `jbexport_daily`, 커넥터 등)에 맞춰 실행합니다.
 
+## 데이터 스키마
+- [ROW Schema v1](pipeline/ROW_SCHEMA.md) — row 표준계약서 (필드 정의 / status 규칙 / 금지사항)
+
 ## 출력 파일
 
 | 경로 | 설명 |
