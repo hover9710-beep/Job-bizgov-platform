@@ -16,3 +16,6 @@ debug_detail.html
 
 # local scratch
 x.py
+
+# temp/debug scripts (moved out of root)
+scripts/debug/
