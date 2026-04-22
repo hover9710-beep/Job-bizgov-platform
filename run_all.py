@@ -8,7 +8,9 @@ Run the full pipeline in order (project root = cwd for each subprocess).
 4) merge_sources → data/merged/all_sites.json (+ history)
 4b) diff_new → data/merged/new.json
 5) make_mail (data/mail/mail_body.txt)
+5a) kakao token refresh (scripts/kakao_token_refresh.py)
 5b) make_kakao (data/kakao/kakao_body.txt)
+5c) kakao_notify (data/kakao/kakao_body.txt → Kakao Memo API)
 6) mailer --dry-run
 7) mailer (real send)
 
@@ -211,9 +213,20 @@ def main() -> int:
         mail_steps: list[tuple[str, list[str]]] = [
             # mail_view: DB → period_text + infer_status 기반 본문 생성 (새 뷰 계층).
             ("5) Make mail body (mail_view)", [PY, "-m", "pipeline.mail_view"]),
+            # 카카오 access_token 은 24h 만료 — refresh 가능한 환경이면 매일 갱신.
+            ("5a) Kakao token refresh", [PY, str(ROOT / "scripts" / "kakao_token_refresh.py")]),
             ("5b) Make Kakao body", [PY, str(ROOT / "pipeline" / "make_kakao.py")]),
+            # 카카오 발송 — 실패해도 메일 발송은 계속 진행 (아래 non-fatal 처리).
+            ("5c) Kakao notify (send)", [PY, str(ROOT / "kakao_notify.py")]),
             ("6) Mailer (dry-run)", [PY, str(ROOT / "mailer.py"), "--dry-run"]),
         ]
+
+        # 카카오 관련 단계는 실패해도 메일 발송을 멈추지 않는다 (best-effort).
+        NON_FATAL_STEPS = {
+            "5a) Kakao token refresh",
+            "5b) Make Kakao body",
+            "5c) Kakao notify (send)",
+        }
 
         # --test 가 아니면, 중간 스텝 하나라도 실패하면 즉시 리턴.
         # --test 면, 모든 스텝을 실행하되 실패해도 발송 단계까지 진행.
@@ -228,6 +241,9 @@ def main() -> int:
                 msg = f"[run_all] FAILED: {title} (exit {rc})"
                 print(msg, flush=True)
                 failures.append((title, rc))
+                if title in NON_FATAL_STEPS:
+                    print(f"[run_all] non-fatal: {title} 실패, 계속 진행", flush=True)
+                    continue
                 if not args.test:
                     return rc
 

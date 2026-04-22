@@ -6,6 +6,7 @@ Kakao OAuth access_token 갱신 (refresh_token 사용).
 필요 환경 변수(예):
   KAKAO_REST_API_KEY 또는 KAKAO_CLIENT_ID
   KAKAO_REFRESH_TOKEN
+  KAKAO_CLIENT_SECRET  (선택 — 카카오 앱에서 'client_secret 활성' 설정 시 필수)
 """
 from __future__ import annotations
 
@@ -49,13 +50,18 @@ def main() -> int:
         print("[kakao_token_refresh] requests 미설치", flush=True)
         return 1
 
+    payload = {
+        "grant_type": "refresh_token",
+        "client_id": client_id,
+        "refresh_token": refresh,
+    }
+    client_secret = (os.getenv("KAKAO_CLIENT_SECRET") or "").strip()
+    if client_secret:
+        payload["client_secret"] = client_secret
+
     resp = requests.post(
         "https://kauth.kakao.com/oauth/token",
-        data={
-            "grant_type": "refresh_token",
-            "client_id": client_id,
-            "refresh_token": refresh,
-        },
+        data=payload,
         timeout=30,
     )
     if resp.status_code != 200:
