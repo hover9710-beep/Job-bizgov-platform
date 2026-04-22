@@ -42,7 +42,11 @@ from pipeline.flask_ui_audit import (
     log_source_mismatch_and_parser,
 )
 from pipeline.presenter import normalize_display_item
-from pipeline.ui_list import prepare_db_rows_for_ui, prepare_json_items_for_ui, sqlite_row_to_item
+from pipeline.ui_view import (
+    prepare_db_rows_for_ui,
+    prepare_json_items_for_ui,
+    sqlite_row_to_item,
+)
 
 DB_PATH = BASE_DIR / "db" / "biz.db"
 REPORTS_DIR = BASE_DIR / "reports"

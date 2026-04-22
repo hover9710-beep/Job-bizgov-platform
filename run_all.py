@@ -209,7 +209,8 @@ def main() -> int:
             ))
 
         mail_steps: list[tuple[str, list[str]]] = [
-            ("5) Make mail body", [PY, str(ROOT / "pipeline" / "make_mail.py")]),
+            # mail_view: DB → period_text + infer_status 기반 본문 생성 (새 뷰 계층).
+            ("5) Make mail body (mail_view)", [PY, "-m", "pipeline.mail_view"]),
             ("5b) Make Kakao body", [PY, str(ROOT / "pipeline" / "make_kakao.py")]),
             ("6) Mailer (dry-run)", [PY, str(ROOT / "mailer.py"), "--dry-run"]),
         ]
