@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS biz_projects (
     ai_result TEXT,
     pdf_path TEXT,
     collected_at TEXT,
+    period_text TEXT DEFAULT '',
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 )
@@ -70,6 +71,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
         "collected_at",
         "ministry",
         "executing_agency",
+        "period_text",
     ):
         _ensure_column(conn, "biz_projects", col)
     _ensure_column(conn, "projects", "source")
@@ -77,6 +79,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "projects", "collected_at")
     _ensure_column(conn, "projects", "ministry")
     _ensure_column(conn, "projects", "executing_agency")
+    _ensure_column(conn, "projects", "period_text")
     conn.execute(
         """
         UPDATE biz_projects
@@ -167,6 +170,26 @@ def _prepare_row(item: Dict[str, Any]) -> Tuple[Dict[str, Any], str, str]:
     collected_at = str(item.get("collected_at") or "").strip()
     if not collected_at:
         collected_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # period_text: 접수/신청/모집/사업/공고/기간 라벨 원문 (가공 X)
+    period_text = ""
+    for key in (
+        "period_text",
+        "접수기간",
+        "신청기간",
+        "모집기간",
+        "사업기간",
+        "공고기간",
+        "기간",
+        "period",
+        "raw_period",
+    ):
+        v = item.get(key)
+        if v is None:
+            continue
+        s = str(v).strip()
+        if s:
+            period_text = s
+            break
     row = {
         "title": title,
         "organization": organization,
@@ -180,6 +203,7 @@ def _prepare_row(item: Dict[str, Any]) -> Tuple[Dict[str, Any], str, str]:
         "description": description,
         "source": source,
         "collected_at": collected_at,
+        "period_text": period_text,
     }
     return row, title, url
 
@@ -222,9 +246,10 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
             INSERT INTO biz_projects (
                 title, organization, ministry, executing_agency, source,
                 start_date, end_date, status, url, description, site,
-                ai_result, pdf_path, collected_at, created_at, updated_at
+                ai_result, pdf_path, collected_at, period_text,
+                created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """,
             (
                 row["title"],
@@ -241,6 +266,7 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
                 ai_result if ai_result is not None else None,
                 pdf_path if pdf_path is not None else None,
                 row["collected_at"],
+                row["period_text"],
             ),
         )
         return
@@ -260,7 +286,7 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
         SET title = ?, organization = ?, ministry = ?, executing_agency = ?,
             source = ?, start_date = ?, end_date = ?, status = ?, url = ?,
             description = ?, site = ?, ai_result = ?, pdf_path = ?,
-            collected_at = ?, updated_at = CURRENT_TIMESTAMP
+            collected_at = ?, period_text = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
         """,
         (
@@ -278,6 +304,7 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
             new_ai,
             new_pdf,
             row["collected_at"],
+            row["period_text"],
             eid,
         ),
     )

@@ -50,9 +50,9 @@ def validate_item(item: Dict[str, Any]) -> bool:
 
 
 def _ensure_canonical_fields(item: Dict[str, Any]) -> Dict[str, Any]:
-    """title, organization, status, start_date, end_date, url — 없으면 빈 str."""
+    """title, organization, status, start_date, end_date, url, period_text — 없으면 빈 str."""
     out = dict(item)
-    for k in ("title", "organization", "status", "start_date", "end_date", "url"):
+    for k in ("title", "organization", "status", "start_date", "end_date", "url", "period_text"):
         out[k] = str(out.get(k) or "").strip()
     return out
 
@@ -195,6 +195,21 @@ def _normalize_item(
     executing_agency = _pick(item, ("executing_agency",))
     site = _pick(item, ("site",))
     collected_at = _pick(item, ("collected_at",))
+    # period_text: 소스별 라벨 우선순위 (접수기간 > 신청기간 > 모집기간 > 사업기간 > 공고기간 > 기간)
+    period_text = _pick(
+        item,
+        (
+            "period_text",
+            "접수기간",
+            "신청기간",
+            "모집기간",
+            "사업기간",
+            "공고기간",
+            "기간",
+            "period",
+            "raw_period",
+        ),
+    )
 
     return {
         "title": title,
@@ -209,6 +224,7 @@ def _normalize_item(
         "executing_agency": executing_agency,
         "site": site,
         "collected_at": collected_at,
+        "period_text": period_text,
     }
 
 

@@ -60,6 +60,7 @@ def fetch_list_page(page: int = 1) -> List[Dict[str, Any]]:
             "receipt_end": receipt_end,
             "biz_start": "", "biz_end": "",
             "description": "", "attachments": [],
+            "period_text": all_text,
         })
     return items
 
@@ -118,6 +119,7 @@ def _normalize_for_pipeline(item: Dict[str, Any]) -> Dict[str, Any]:
         "description": item.get("description", ""),
         "attachments": item.get("attachments", []),
         "pbancSn": item.get("pbancSn", ""),
+        "period_text": item.get("period_text", ""),
         "collected_at": collected_at,
     }
 

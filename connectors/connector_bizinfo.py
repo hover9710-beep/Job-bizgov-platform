@@ -441,6 +441,7 @@ def _row_to_standard(
     dates = parse_bizinfo_dates(merged_for_dates)
     sd = dates["start_date"]
     ed = dates["end_date"]
+    period_text = dates.get("period_text") or application_period
 
     return {
         "source": "bizinfo",
@@ -454,6 +455,7 @@ def _row_to_standard(
         "date": list_date,
         "period": application_period,
         "raw_period": application_period,
+        "period_text": period_text,
         "start_date": sd,
         "end_date": ed,
         "status": st,
@@ -687,6 +689,7 @@ def run_enrich_detail_from_file(
         row["description"] = desc
         row["period"] = application_period
         row["raw_period"] = application_period
+        row["period_text"] = dates.get("period_text") or application_period
         row["start_date"] = dates["start_date"]
         row["end_date"] = dates["end_date"]
         if detail.get("status"):

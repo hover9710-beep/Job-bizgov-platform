@@ -214,7 +214,7 @@ def _get(item: Dict[str, Any], key: str) -> str:
     return str(v).strip()
 
 
-def _dates_result(sd: str, ed: str) -> Dict[str, str]:
+def _dates_result(sd: str, ed: str, period_text: str = "") -> Dict[str, str]:
     a, b = _sanitize_iso(sd), _sanitize_iso(ed)
     if a and b:
         try:
@@ -222,14 +222,43 @@ def _dates_result(sd: str, ed: str) -> Dict[str, str]:
                 a, b = b, a
         except ValueError:
             pass
-    return {"start_date": a, "end_date": b}
+    return {"start_date": a, "end_date": b, "period_text": period_text or ""}
+
+
+# period_text 우선순위 (접수기간 > 신청기간 > 모집기간 > 사업기간 > 공고기간 > 기간).
+# 가공하지 않고 첫 매칭 라벨의 raw 텍스트를 그대로 저장하기 위한 순서.
+_PERIOD_TEXT_LABEL_ORDER: Tuple[str, ...] = (
+    "접수기간",
+    "신청기간",
+    "모집기간",
+    "사업기간",
+    "공고기간",
+    "기간",
+)
+
+
+def _pick_period_text(item: Dict[str, Any]) -> str:
+    """우선순위 라벨로 매칭된 첫 번째 raw 텍스트. 없으면 빈 문자열."""
+    for label in _PERIOD_TEXT_LABEL_ORDER:
+        v = item.get(label)
+        if v is None:
+            continue
+        s = str(v).strip()
+        if s:
+            return s
+    return ""
 
 
 def parse_bizinfo_dates(item: Dict[str, Any]) -> Dict[str, str]:
     """
     Return:
-      { "start_date": "YYYY-MM-DD" or "", "end_date": "YYYY-MM-DD" or "" }
+      {
+        "start_date": "YYYY-MM-DD" or "",
+        "end_date":   "YYYY-MM-DD" or "",
+        "period_text": raw label text or "",
+      }
     """
+    period_text = _pick_period_text(item)
     sd, ed = "", ""
 
     # Paired structured YMD (API-style)
@@ -243,7 +272,7 @@ def parse_bizinfo_dates(item: Dict[str, Any]) -> Dict[str, str]:
         if a or b:
             sd, ed = a or sd, b or ed
             if sd or ed:
-                return _dates_result(sd, ed)
+                return _dates_result(sd, ed, period_text)
 
     # Unpaired start/end columns
     for k in _START_KEYS:
@@ -257,7 +286,7 @@ def parse_bizinfo_dates(item: Dict[str, Any]) -> Dict[str, str]:
             ed = v
             break
     if sd and ed:
-        return _dates_result(sd, ed)
+        return _dates_result(sd, ed, period_text)
 
     # Period-like blobs (single field may contain range)
     for k in _BIZINFO_PERIOD_KEYS:
@@ -270,7 +299,7 @@ def parse_bizinfo_dates(item: Dict[str, Any]) -> Dict[str, str]:
         if pe:
             ed = ed or pe
         if sd and ed:
-            return _dates_result(sd, ed)
+            return _dates_result(sd, ed, period_text)
 
     # List column "date" (often 등록일/게시일): one value → start_date only unless range
     list_date = _get(item, "date")
@@ -304,7 +333,7 @@ def parse_bizinfo_dates(item: Dict[str, Any]) -> Dict[str, str]:
         if pe:
             ed = ed or pe
 
-    return _dates_result(sd, ed)
+    return _dates_result(sd, ed, period_text)
 
 
 def first_raw_period_preview(item: Dict[str, Any]) -> str:
