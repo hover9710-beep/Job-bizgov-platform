@@ -31,6 +31,7 @@ if str(_ROOT) not in sys.path:
 from pipeline.normalize_project import infer_status
 from pipeline.project_quality import canonical_notice_source
 from pipeline.presenter import normalize_display_items
+from pipeline.mail_view import display_url as _mail_display_url
 
 DB_PATH = _ROOT / "db" / "biz.db"
 
@@ -110,6 +111,8 @@ def sqlite_row_to_item(row: Any) -> Dict[str, Any]:
     """
     DB row 또는 일반 dict → UI 표시용 dict.
     appy.py 호환 (dict·sqlite3.Row 모두 허용).
+    url 은 mail_view.display_url() 규칙으로 치환 (kstartup 상세 → 목록 페이지).
+    원본은 `raw_url` 로 보존.
     """
     d = dict(row) if not isinstance(row, dict) else dict(row)
     aj = d.get("attachments_json")
@@ -130,13 +133,28 @@ def sqlite_row_to_item(row: Any) -> Dict[str, Any]:
         if snap
         else (canonical_notice_source(d) or "unknown").upper()
     )
+    _apply_display_url(d)
     return d
+
+
+def _apply_display_url(it: Dict[str, Any]) -> None:
+    """
+    UI 표시 URL 치환.
+      - kstartup 상세(`bizpbanc-view.do?pbancSn=...`) 는 JS 렌더링에 의존해
+        대부분 환경에서 빈 화면이 되므로 `bizpbanc-ongoing.do` 목록 페이지로 대체.
+      - 원본 URL 은 `raw_url` 에 보존하여 DB/디버깅 용도로 유지.
+      - mail_view.display_url() 과 동일 규칙 — 메일/UI 링크 표기를 통일.
+    """
+    raw = str(it.get("url") or "").strip()
+    it.setdefault("raw_url", raw)
+    it["url"] = _mail_display_url(it)
 
 
 def to_ui_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, Any]:
     """
     DB row → UI dict. 빈값 허용.
     display_status 는 infer_status()로 결정, DB의 status 는 raw_status 로 보존.
+    url 은 mail_view.display_url() 규칙으로 치환 (kstartup → 목록 페이지).
     """
     t = today or _today_str()
     d = sqlite_row_to_item(row)
@@ -150,6 +168,7 @@ def to_ui_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, An
     d["raw_status"] = str(d.get("status") or "").strip()
     d["display_status"] = infer_status(period_text, sd, ed, t)
     d["source_badge"] = (d.get("_db_source_snapshot") or "").lower() or "unknown"
+    _apply_display_url(d)
     return d
 
 
@@ -317,6 +336,7 @@ def prepare_db_rows_for_ui(
         it["raw_status"] = str(it.get("status") or "").strip()
         it["display_status"] = infer_status(period_text, sd, ed, t)
         it.setdefault("source_badge", (it.get("_db_source_snapshot") or "").lower() or "unknown")
+        _apply_display_url(it)
     # 4) 정렬
     items = sort_items(items, key=sort)
     for i, it in enumerate(items, start=1):

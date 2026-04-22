@@ -28,7 +28,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from pipeline.bizinfo_dates import extract_date_range_in_line
+from pipeline.bizinfo_dates import extract_date_range as extract_date_range_in_line
 
 JBEXPORT_BASE = "https://www.jbexport.or.kr"
 DEFAULT_ORG = "전북수출통합지원시스템"
@@ -845,13 +845,12 @@ def merge_detail_into_item(item: dict, detail_data: Dict[str, Any]) -> dict:
     if not isinstance(atts, list):
         atts = []
 
-    if title and _is_empty(out.get("title")) and _is_empty(out.get("공고제목")):
-        out["title"] = title
-        out["공고제목"] = title
-    elif title:
-        if _is_empty(out.get("title")):
+    if title:
+        old_t = out.get("title")
+        old_kt = out.get("공고제목")
+        if _is_empty(old_t) or _title_is_junk(old_t):
             out["title"] = title
-        if _is_empty(out.get("공고제목")):
+        if _is_empty(old_kt) or _title_is_junk(old_kt):
             out["공고제목"] = title
 
     if org and _is_empty(out.get("organization")) and _is_empty(out.get("기관")):
@@ -1043,6 +1042,31 @@ def _pick_str(newv: Any, oldv: Any) -> str:
     return str(oldv or "").strip()
 
 
+def _title_is_junk(title: str) -> bool:
+    """title 이 spSeq=해시 형태 / 빈 문자열이면 True."""
+    t = str(title or "").strip()
+    if not t:
+        return True
+    # spSeq= 로 시작하거나 spSeq= 만 포함된 해시성 문자열
+    if t.lower().startswith("spseq="):
+        return True
+    if "spseq=" in t.lower() and len(t) < 60:
+        return True
+    return False
+
+
+def _merge_title(item_title: Any, enriched_title: Any) -> str:
+    """
+    기존 title 이 정상이면 유지, junk(spSeq=... / 빈값) 면 enriched 로 덮어씀.
+    enriched 도 junk 면 기존 값 유지.
+    """
+    old = str(item_title or "").strip()
+    new = str(enriched_title or "").strip()
+    if _title_is_junk(old) and new and not _title_is_junk(new):
+        return new
+    return old
+
+
 def _merge_row_for_db(item: dict, enriched: dict) -> Tuple[Any, ...]:
     rs = _pick_str(enriched.get("receipt_start"), item.get("receipt_start"))
     re_ = _pick_str(enriched.get("receipt_end"), item.get("receipt_end"))
@@ -1061,7 +1085,8 @@ def _merge_row_for_db(item: dict, enriched: dict) -> Tuple[Any, ...]:
     aj = json.dumps(atts, ensure_ascii=False) if atts else ""
     sd = _pick_str(enriched.get("start_date"), item.get("start_date"))
     ed = _pick_str(enriched.get("end_date"), item.get("end_date"))
-    return (rs, re_, bs, be, desc, raw, aj, sd, ed)
+    title = _merge_title(item.get("title"), enriched.get("title"))
+    return (rs, re_, bs, be, desc, raw, aj, sd, ed, title)
 
 
 def enrich_jbexport_database(
@@ -1155,12 +1180,15 @@ def enrich_jbexport_database(
             )
             sample_n += 1
 
-        rs, re_, bs, be, desc, raw, aj, sd, ed = _merge_row_for_db(item, enriched)
+        rs, re_, bs, be, desc, raw, aj, sd, ed, title = _merge_row_for_db(
+            item, enriched
+        )
         eid = int(item["id"])
         try:
             conn.execute(
                 """
                 UPDATE biz_projects SET
+                    title = ?,
                     receipt_start = ?,
                     receipt_end = ?,
                     biz_start = ?,
@@ -1173,7 +1201,7 @@ def enrich_jbexport_database(
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
-                (rs, re_, bs, be, desc, raw, aj, sd, ed, eid),
+                (title, rs, re_, bs, be, desc, raw, aj, sd, ed, eid),
             )
             updated += 1
         except Exception as e:
