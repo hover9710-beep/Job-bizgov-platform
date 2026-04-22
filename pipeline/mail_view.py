@@ -17,6 +17,8 @@ UI 가공(정렬·디버그·빈값 허용)과는 별도 모듈.
 from __future__ import annotations
 
 import argparse
+import calendar
+import re
 import sqlite3
 import sys
 from datetime import date, datetime, timedelta
@@ -40,6 +42,79 @@ ENDING_LIMIT = 40
 ACTIVE_LIMIT = 60
 
 SECTION_SEP = "-" * 40
+
+# 섹션별 소스 다양성 보장: 각 소스가 섹션 내 최소 이 건수는 차지하도록 쿼터 확보.
+SOURCE_MIN_QUOTA = 5
+# 메일 표시용 URL 치환 (직접 링크가 JS 렌더링에 의존해 빈 화면이 되는 소스는 목록 페이지로).
+_KSTARTUP_FALLBACK_URL = "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do"
+
+
+# ---------------------------------------------------------------------------
+# 날짜 정규화 (jbexport 의 한국어 기간 문자열 → ISO)
+# ---------------------------------------------------------------------------
+
+_RE_ISO_DAY = re.compile(r"(\d{4})[-./](\d{1,2})[-./](\d{1,2})")
+_RE_ISO_MONTH = re.compile(r"(\d{4})[-./](\d{1,2})")
+_RE_KOR_YM = re.compile(r"(\d{4})\s*년\s*(\d{1,2})\s*월(?:\s*(\d{1,2})\s*일)?")
+_RE_KOR_MONTH_ONLY = re.compile(r"(?<!\d)(\d{1,2})\s*월")
+
+
+def _end_of_month(y: int, m: int) -> int:
+    try:
+        return calendar.monthrange(y, m)[1]
+    except ValueError:
+        return 28
+
+
+def normalize_date(raw: str, kind: str = "end", *, year_hint: Optional[int] = None) -> str:
+    """
+    자유 형식 날짜 문자열 → 'YYYY-MM-DD' (kind='start' 이면 월초, 'end' 면 월말).
+    파싱 불가하면 "" 반환. 연도 없는 '12월' 은 year_hint(기본 올해) 로 보강.
+    """
+    if not raw:
+        return ""
+    s = str(raw).strip()
+    if not s:
+        return ""
+
+    # 1) 일단위 ISO/점/슬래시
+    m = _RE_ISO_DAY.search(s)
+    if m:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if 1 <= mo <= 12 and 1 <= d <= 31:
+            return f"{y:04d}-{mo:02d}-{d:02d}"
+
+    # 2) 한국어 'YYYY년 M월 [D일]'
+    m = _RE_KOR_YM.search(s)
+    if m:
+        y, mo = int(m.group(1)), int(m.group(2))
+        d_str = m.group(3)
+        if 1 <= mo <= 12:
+            if d_str:
+                d = int(d_str)
+                if 1 <= d <= 31:
+                    return f"{y:04d}-{mo:02d}-{d:02d}"
+            d = 1 if kind == "start" else _end_of_month(y, mo)
+            return f"{y:04d}-{mo:02d}-{d:02d}"
+
+    # 3) 월단위 ISO 'YYYY-MM', '2026. 11.', '2026/11'
+    m = _RE_ISO_MONTH.search(s)
+    if m:
+        y, mo = int(m.group(1)), int(m.group(2))
+        if 1 <= mo <= 12:
+            d = 1 if kind == "start" else _end_of_month(y, mo)
+            return f"{y:04d}-{mo:02d}-{d:02d}"
+
+    # 4) '12월' 같이 연도 없는 한국어 월 — year_hint 보강
+    m = _RE_KOR_MONTH_ONLY.search(s)
+    if m:
+        mo = int(m.group(1))
+        if 1 <= mo <= 12:
+            y = year_hint if year_hint is not None else date.today().year
+            d = 1 if kind == "start" else _end_of_month(y, mo)
+            return f"{y:04d}-{mo:02d}-{d:02d}"
+
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -88,11 +163,20 @@ def _today_str() -> str:
 
 
 def to_mail_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, Any]:
-    """DB row → 메일에서 쓰는 최소 필드 dict. infer_status()로 상태 단일화."""
+    """DB row → 메일에서 쓰는 최소 필드 dict. infer_status()로 상태 단일화.
+
+    start_date/end_date 는 jbexport 의 한국어 기간 문자열('2026년 11월', '2026. 1.')도
+    ISO로 정규화. infer_status, 섹션 필터, 정렬 모두 같은 기준으로 돌게 된다.
+    원본은 raw_start_date/raw_end_date 에 보존.
+    """
     t = today or _today_str()
     period_text = str(row.get("period_text") or "").strip()
-    start_date = str(row.get("start_date") or "").strip()
-    end_date = str(row.get("end_date") or "").strip()
+    raw_start = str(row.get("start_date") or "").strip()
+    raw_end = str(row.get("end_date") or "").strip()
+
+    start_date = normalize_date(raw_start, kind="start")
+    end_date = normalize_date(raw_end, kind="end")
+
     return {
         "id": row.get("id"),
         "title": str(row.get("title") or "").strip(),
@@ -100,6 +184,8 @@ def to_mail_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, 
         "source": str(row.get("source") or "").strip().lower() or "unknown",
         "start_date": start_date,
         "end_date": end_date,
+        "raw_start_date": raw_start,
+        "raw_end_date": raw_end,
         "period_text": period_text,
         "url": str(row.get("url") or "").strip(),
         "description": str(row.get("description") or "").strip(),
@@ -190,6 +276,70 @@ def _dedupe_by_url_title(items: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]
     return out
 
 
+def display_url(it: Dict[str, Any]) -> str:
+    """메일/카카오 표시용 URL.
+
+    kstartup 상세 URL(`bizpbanc-view.do?pbancSn=...`) 은 JS 렌더링에 의존해
+    직접 링크로는 빈 화면이 되기 때문에 접수중 공고 목록 페이지로 치환한다.
+    (원본 URL 은 DB 에 그대로 보존)
+    """
+    src = (it.get("source") or "").lower()
+    url = (it.get("url") or "").strip()
+    if src == "kstartup":
+        return _KSTARTUP_FALLBACK_URL
+    return url
+
+
+def _take_with_source_quota(
+    items: List[Dict[str, Any]],
+    limit: int,
+    min_per_source: int = SOURCE_MIN_QUOTA,
+) -> List[Dict[str, Any]]:
+    """
+    상위 limit 건을 뽑되, 각 소스가 최소 min_per_source 건씩 포함되도록 쿼터 보장.
+    items 는 이미 원하는 순서로 정렬되어 있어야 함(예: end_date 임박 순).
+    """
+    if limit <= 0 or not items:
+        return []
+
+    by_src: Dict[str, List[Dict[str, Any]]] = {}
+    for it in items:
+        by_src.setdefault(it.get("source") or "unknown", []).append(it)
+
+    picked: List[Dict[str, Any]] = []
+    seen_ids: set = set()
+
+    for src, bucket in by_src.items():
+        for it in bucket[:min_per_source]:
+            key = id(it)
+            if key in seen_ids:
+                continue
+            seen_ids.add(key)
+            picked.append(it)
+            if len(picked) >= limit:
+                break
+        if len(picked) >= limit:
+            break
+
+    if len(picked) < limit:
+        for it in items:
+            key = id(it)
+            if key in seen_ids:
+                continue
+            seen_ids.add(key)
+            picked.append(it)
+            if len(picked) >= limit:
+                break
+
+    picked.sort(
+        key=lambda x: (
+            0 if x.get("end_date") else 1,
+            x.get("end_date") or "9999-12-31",
+        )
+    )
+    return picked[:limit]
+
+
 def format_section(
     title: str,
     icon: str,
@@ -198,20 +348,32 @@ def format_section(
     show_dday: bool = False,
     today: Optional[str] = None,
 ) -> str:
-    """한 섹션 본문. 비어 있으면 '해당 공고 없음'."""
+    """한 섹션 본문. 비어 있으면 '해당 공고 없음'.
+
+    - 중복 제거 후 소스별 최소 쿼터(SOURCE_MIN_QUOTA)로 다양성 보장
+    - URL 은 display_url() 로 치환 (kstartup 상세 → 목록 페이지)
+    """
     lines: List[str] = [f"{icon} {title} ({len(items)}건)"]
     if not items:
         lines.append("  해당 공고 없음")
         return "\n".join(lines)
 
     items = _dedupe_by_url_title(items)
+    picked = _take_with_source_quota(items, limit=limit)
+
+    # 섹션 소스 구성 디버그 로그
+    from collections import Counter
+
+    counts = Counter((x.get("source") or "unknown") for x in picked)
+    print(f"[mail_view] section={title!r} picked={len(picked)} by_source={dict(counts)}", flush=True)
+
     t = _parse_iso(today or _today_str())
 
-    for i, it in enumerate(items[:limit], start=1):
+    for i, it in enumerate(picked, start=1):
         src = (it.get("source") or "unknown").upper()
         ttl = it.get("title") or "(제목없음)"
         org = it.get("organization") or "-"
-        url = it.get("url") or "-"
+        url = display_url(it) or "-"
         period = _fmt_period(it)
 
         dday_txt = ""
@@ -227,7 +389,7 @@ def format_section(
         lines.append(f"   링크: {url}")
         lines.append("")
 
-    leftover = len(items) - limit
+    leftover = len(items) - len(picked)
     if leftover > 0:
         lines.append(f"… 외 {leftover}건 (전체 목록은 사이트에서 확인)")
     return "\n".join(lines).rstrip()
