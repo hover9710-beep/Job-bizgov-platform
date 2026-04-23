@@ -1160,6 +1160,13 @@ def _title_is_junk(title: str) -> bool:
         return True
     if "spseq=" in low and len(t) < 60:
         return True
+    # URL 파라미터·해시 조각이 제목으로 잘못 들어온 경우
+    if re.search(r"[0-9a-f]{8,}", t, re.I):
+        return True
+    if "=" in t:
+        compact = re.sub(r"\s+", "", t)
+        if re.fullmatch(r"[A-Za-z0-9=]+", compact):
+            return True
     if low in _TITLE_JUNK_EXACT:
         return True
     if len(t) <= 2:

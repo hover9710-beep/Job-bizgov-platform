@@ -8,9 +8,10 @@ data/all_jb/all_jb.json → db/biz.db 의 biz_projects upsert
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 if sys.platform == "win32":
     for stream in (sys.stdout, sys.stderr):
@@ -27,6 +28,7 @@ if str(_PIPELINE_DIR) not in sys.path:
     sys.path.insert(0, str(_PIPELINE_DIR))
 
 from mirror_projects import mirror_biz_projects_to_projects
+from normalize_project import infer_status
 from project_quality import (
     infer_source,
     normalize_description,
@@ -145,6 +147,25 @@ def _load_items() -> List[Dict[str, Any]]:
     return [x for x in data if isinstance(x, dict)]
 
 
+def _jbexport_style_junk_title(title: str) -> bool:
+    """jbexport_enrich._title_is_junk 와 동일 기준(쿼리스트링·해시형 제목). upsert 시 DB 제목 보존용."""
+    t = str(title or "").strip()
+    if not t:
+        return True
+    low = t.lower()
+    if low.startswith("spseq="):
+        return True
+    if "spseq=" in low and len(t) < 60:
+        return True
+    if re.search(r"[0-9a-f]{8,}", t, re.I):
+        return True
+    if "=" in t:
+        compact = re.sub(r"\s+", "", t)
+        if re.fullmatch(r"[A-Za-z0-9=]+", compact):
+            return True
+    return False
+
+
 def _prepare_row(item: Dict[str, Any]) -> Tuple[Dict[str, Any], str, str]:
     """파이프라인 필드 정규화. source는 항상 비어 있지 않음."""
     title = str(item.get("title") or "").strip()
@@ -192,6 +213,8 @@ def _prepare_row(item: Dict[str, Any]) -> Tuple[Dict[str, Any], str, str]:
         if s:
             period_text = s
             break
+    if status == "확인 필요":
+        status = infer_status(period_text, sd, ed, date.today().isoformat())
     row = {
         "title": title,
         "organization": organization,
@@ -243,6 +266,19 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
 
     ai_result = item.get("ai_result")
     pdf_path = item.get("pdf_path")
+
+    if eid is not None:
+        cur_title = conn.execute(
+            "SELECT title FROM biz_projects WHERE id = ?", (eid,)
+        ).fetchone()
+        old_title = str((cur_title or ("",))[0] or "").strip()
+        if (
+            old_title
+            and _jbexport_style_junk_title(row["title"])
+            and not _jbexport_style_junk_title(old_title)
+        ):
+            row["title"] = old_title
+            title = old_title
 
     if eid is None:
         conn.execute(
@@ -372,6 +408,24 @@ def _backfill_canonical_urls(conn: sqlite3.Connection) -> Dict[str, int]:
     return {"updated": updated, "deleted": deleted, "groups": dup_groups}
 
 
+def _backfill_infer_status(conn: sqlite3.Connection) -> None:
+    """status 가 비었거나 '확인 필요'인 행을 기간·날짜로 재추론."""
+    today = date.today().isoformat()
+    rows = conn.execute(
+        """
+        SELECT id, period_text, start_date, end_date
+        FROM biz_projects
+        WHERE status IS NULL OR TRIM(status) = '' OR TRIM(status) = '확인 필요'
+        """
+    ).fetchall()
+    for rid, pt, sd, ed in rows:
+        st = infer_status(str(pt or ""), str(sd or ""), str(ed or ""), today)
+        conn.execute(
+            "UPDATE biz_projects SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (st, int(rid)),
+        )
+
+
 def _backfill_infer_source(conn: sqlite3.Connection) -> None:
     """기존 행 URL·site 기준 source 재추론 (NULL·빈값 금지)."""
     conn.execute(
@@ -446,6 +500,7 @@ def update_db() -> None:
             )
         for item in items:
             _upsert_one(conn, item)
+        _backfill_infer_status(conn)
         _backfill_infer_source(conn)
 
         m = mirror_biz_projects_to_projects(conn)
