@@ -16,6 +16,12 @@
         .filterbar a { padding: 3px 10px; border-radius: 999px; border: 1px solid #cbd5e1; color: #1f2937; text-decoration: none; font-size: 13px; background: #f8fafc; }
         .filterbar a:hover { background: #e2e8f0; }
         .filterbar a.active { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+        .status-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid transparent; }
+        .status-open    { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+        .status-closed  { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+        .status-unknown { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+        .source-tag { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 12px; background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; }
+        td.date-col { white-space: nowrap; color: #374151; font-variant-numeric: tabular-nums; }
     </style>
 </head>
 <body>
@@ -73,14 +79,25 @@
             <th>제목</th>
             <th>기관</th>
             <th>상태</th>
+            <th>시작일</th>
+            <th>마감일</th>
+            <th>소스</th>
             <th>URL</th>
         </tr>
         {% for item in items %}
+        {# display_status 는 infer_status() 결과. DB raw status 는 폴백용. #}
+        {% set st = item.get('display_status') or item.get('status') or item.get('상태') or '' %}
+        {% set st_cls = 'status-open' if st == '접수중'
+                         else ('status-closed' if st == '마감'
+                               else 'status-unknown') %}
         <tr>
             <td>{{ loop.index }}</td>
             <td>{{ item.get('title') or item.get('공고제목') or '' }}</td>
             <td>{{ item.get('organization') or item.get('기관') or '' }}</td>
-            <td>{{ item.get('status') or item.get('상태') or '' }}</td>
+            <td><span class="status-badge {{ st_cls }}">{{ st or '-' }}</span></td>
+            <td class="date-col">{{ item.get('start_date') or '-' }}</td>
+            <td class="date-col">{{ item.get('end_date') or '-' }}</td>
+            <td><span class="source-tag">{{ (item.get('source') or item.get('source_badge') or '-')|lower }}</span></td>
             <td>{% set u = item.get('url') or item.get('상세URL') or '' %}<a href="{{ u }}" target="_blank">{{ u[:80] }}{% if u|length > 80 %}…{% endif %}</a></td>
         </tr>
         {% endfor %}
