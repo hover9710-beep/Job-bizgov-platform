@@ -43,10 +43,29 @@ ACTIVE_LIMIT = 60
 
 SECTION_SEP = "-" * 40
 
-# 섹션별 소스 다양성 보장: 각 소스가 섹션 내 최소 이 건수는 차지하도록 쿼터 확보.
+# 섹션별 소스 다양성 보장: 과거 단일 혼합섹션 구조에서 사용. 현재(소스별 구조)에서는
+# 기본값을 그대로 두지만 소스 블록 내부에서는 비활성화된다.
 SOURCE_MIN_QUOTA = 5
 # 메일 표시용 URL 치환 (직접 링크가 JS 렌더링에 의존해 빈 화면이 되는 소스는 목록 페이지로).
 _KSTARTUP_FALLBACK_URL = "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do"
+
+# ---------------------------------------------------------------------------
+# 소스별 메일 구조 (2026-04 개편)
+# ---------------------------------------------------------------------------
+# 메일 본문은 소스 먼저(jbexport → bizinfo → kstartup), 그 안에서
+# 신규 / 마감임박 / 접수중 3 서브섹션을 렌더한다.
+SOURCE_ORDER: List[str] = ["jbexport", "bizinfo", "kstartup"]
+SOURCE_LABELS: Dict[str, str] = {
+    "jbexport": "1. 전북수출통합시스템 (JBEXPORT)",
+    "bizinfo": "2. 기업마당 (BIZINFO)",
+    "kstartup": "3. K-Startup (KSTARTUP)",
+}
+# 소스별 서브섹션 최대 노출 건수. jbexport 는 전체(실질 상한 없음).
+SOURCE_ITEM_LIMIT: Dict[str, int] = {
+    "jbexport": 10_000,
+    "bizinfo": 20,
+    "kstartup": 20,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -365,11 +384,18 @@ def format_section(
     limit: int,
     show_dday: bool = False,
     today: Optional[str] = None,
+    *,
+    show_source_tag: bool = True,
+    apply_source_quota: bool = True,
+    debug_label: Optional[str] = None,
 ) -> str:
     """한 섹션 본문. 비어 있으면 '해당 공고 없음'.
 
-    - 중복 제거 후 소스별 최소 쿼터(SOURCE_MIN_QUOTA)로 다양성 보장
-    - URL 은 display_url() 로 치환 (kstartup 상세 → 목록 페이지)
+    - 중복 제거는 항상 적용 (url/raw_url/title+기관 기준).
+    - `apply_source_quota=True` 인 경우에만 `_take_with_source_quota` 로 소스별 쿼터 보장.
+      (혼합 섹션이던 과거 구조용. 현재 소스별 블록 내부에서는 False.)
+    - `show_source_tag=True` 인 경우에만 항목 앞에 `[JBEXPORT]` 같은 소스 태그를 붙인다.
+      (소스별 블록 내부에서는 헤더로 이미 식별되므로 False.)
     """
     lines: List[str] = [f"{icon} {title} ({len(items)}건)"]
     if not items:
@@ -377,18 +403,24 @@ def format_section(
         return "\n".join(lines)
 
     items = _dedupe_by_url_title(items)
-    picked = _take_with_source_quota(items, limit=limit)
+    if apply_source_quota:
+        picked = _take_with_source_quota(items, limit=limit)
+    else:
+        picked = items[:limit]
 
-    # 섹션 소스 구성 디버그 로그
     from collections import Counter
 
     counts = Counter((x.get("source") or "unknown") for x in picked)
-    print(f"[mail_view] section={title!r} picked={len(picked)} by_source={dict(counts)}", flush=True)
+    tag = debug_label or title
+    print(
+        f"[mail_view] section={tag!r} picked={len(picked)}/{len(items)} "
+        f"by_source={dict(counts)}",
+        flush=True,
+    )
 
     t = _parse_iso(today or _today_str())
 
     for i, it in enumerate(picked, start=1):
-        src = (it.get("source") or "unknown").upper()
         ttl = it.get("title") or "(제목없음)"
         org = it.get("organization") or "-"
         url = display_url(it) or "-"
@@ -401,7 +433,11 @@ def format_section(
                 d = (e - t).days
                 dday_txt = f" (D-{d})" if d >= 0 else f" (마감 {abs(d)}일 지남)"
 
-        lines.append(f"{i}. [{src}] {ttl}")
+        if show_source_tag:
+            src = (it.get("source") or "unknown").upper()
+            lines.append(f"{i}. [{src}] {ttl}")
+        else:
+            lines.append(f"{i}. {ttl}")
         lines.append(f"   기관: {org}")
         lines.append(f"   기간: {period}{dday_txt}")
         lines.append(f"   링크: {url}")
@@ -434,6 +470,57 @@ def _count_by_source(items: Iterable[Dict[str, Any]]) -> Dict[str, int]:
     return out
 
 
+def _end_sort_key(x: Dict[str, Any]) -> tuple:
+    """접수중/마감임박 정렬용: end_date 있으면 임박 순, 없으면 뒤."""
+    e = _parse_iso(x.get("end_date") or "")
+    return (0, e.toordinal()) if e is not None else (1, 10**9)
+
+
+def _build_source_block(
+    src: str,
+    *,
+    new_items: List[Dict[str, Any]],
+    ending_items: List[Dict[str, Any]],
+    active_items: List[Dict[str, Any]],
+    today: str,
+) -> str:
+    """단일 소스(source) 블록. 3 서브섹션(신규/마감임박/접수중) 을 붙여 반환."""
+    header = SOURCE_LABELS.get(src, src.upper())
+    limit = SOURCE_ITEM_LIMIT.get(src, 20)
+
+    src_new = [x for x in new_items if (x.get("source") or "").lower() == src]
+    src_ending = [x for x in ending_items if (x.get("source") or "").lower() == src]
+    src_active = [x for x in active_items if (x.get("source") or "").lower() == src]
+
+    sub_args = dict(
+        show_source_tag=False,
+        apply_source_quota=False,
+        today=today,
+    )
+
+    block = [
+        SECTION_SEP,
+        header,
+        SECTION_SEP,
+        "",
+        format_section(
+            "신규 공고 (최근 7일)", "🔥", src_new, limit=limit,
+            debug_label=f"{src}/new", **sub_args,
+        ),
+        "",
+        format_section(
+            "마감 임박 공고 (7일 이내)", "⚠", src_ending, limit=limit,
+            show_dday=True, debug_label=f"{src}/ending", **sub_args,
+        ),
+        "",
+        format_section(
+            "전체 접수중 공고", "📌", src_active, limit=limit,
+            debug_label=f"{src}/active", **sub_args,
+        ),
+    ]
+    return "\n".join(block).rstrip()
+
+
 def build_mail_body(
     rows: Optional[List[Dict[str, Any]]] = None,
     today: Optional[str] = None,
@@ -442,18 +529,16 @@ def build_mail_body(
     ending_days: int = 7,
 ) -> str:
     """
-    3개 섹션(신규/마감임박/접수중)을 이어 붙여 본문 문자열 반환.
-    rows 미지정 시 DB에서 직접 로드.
+    소스별(jbexport → bizinfo → kstartup) 블록 구조로 메일 본문을 생성한다.
+    각 소스 안에서 신규 / 마감임박 / 전체 접수중 3 서브섹션이 이어진다.
 
-    단계별 소스 카운트를 [stage*] 프리픽스로 로그에 남겨
-    어느 단계에서 소스가 사라지는지 추적 가능.
+    단계별 소스 카운트는 [stage*] 프리픽스로 로그에 남겨 유실 지점을 추적 가능.
     """
     t = today or _today_str()
     if rows is None:
         rows = load_db_rows()
 
-    # stage1: load_db_rows 직후 — 소스별 원본 카운트
-    print(f"[mail_view] today={t} rows={len(rows)} items(raw)={len(rows)}", flush=True)
+    print(f"[mail_view] today={t} rows={len(rows)}", flush=True)
     print(f"[mail_view][stage1 load_db_rows] by_source={_count_by_source(rows)}", flush=True)
 
     items = [to_mail_item(r, today=t) for r in rows]
@@ -468,44 +553,28 @@ def build_mail_body(
     active_items = filter_active(items, today=t)
     print(f"[mail_view][stage5 filter_active] by_source={_count_by_source(active_items)}", flush=True)
 
-    # 접수중은 end_date 임박 순 (없으면 뒤로).
-    def _end_sort_key(x: Dict[str, Any]) -> tuple:
-        e = _parse_iso(x.get("end_date") or "")
-        return (0, e.toordinal()) if e is not None else (1, 10**9)
-
     new_items.sort(key=_end_sort_key)
     ending_items.sort(key=_end_sort_key)
     active_items.sort(key=_end_sort_key)
 
     print(
-        f"[mail_view] sections: new={len(new_items)} "
+        f"[mail_view] totals: new={len(new_items)} "
         f"ending_soon={len(ending_items)} active={len(active_items)}",
         flush=True,
     )
 
-    parts: List[str] = []
-    parts.append("전북지원사업 메일자동알림서비스입니다.\n")
+    parts: List[str] = ["[전북지원사업 메일자동알림서비스]"]
 
-    parts.append(
-        format_section(
-            "신규 공고 (최근 7일)", "🔥", new_items, limit=NEW_LIMIT, today=t
+    for src in SOURCE_ORDER:
+        parts.append(
+            _build_source_block(
+                src,
+                new_items=new_items,
+                ending_items=ending_items,
+                active_items=active_items,
+                today=t,
+            )
         )
-    )
-    parts.append(SECTION_SEP)
-
-    parts.append(
-        format_section(
-            "마감 임박 공고 (7일 이내)", "⚠", ending_items, limit=ENDING_LIMIT,
-            show_dday=True, today=t,
-        )
-    )
-    parts.append(SECTION_SEP)
-
-    parts.append(
-        format_section(
-            "전체 접수중 공고", "📌", active_items, limit=ACTIVE_LIMIT, today=t
-        )
-    )
 
     body = "\n\n".join(parts).rstrip() + "\n"
     return truncate_body(body)
