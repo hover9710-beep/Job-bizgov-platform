@@ -35,9 +35,6 @@
         .status-col { text-align: center; white-space: nowrap; }
         .date-col { white-space: nowrap; text-align: center; font-variant-numeric: tabular-nums; font-size: 12px; }
         td.source-col { text-align: center; padding: 4px 4px; overflow: hidden; }
-        td.url-col    { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
-        td.url-col a  { color: #1d4ed8; text-decoration: none; }
-        td.url-col a:hover { text-decoration: underline; }
 
         .status-badge { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 600; border: 1px solid transparent; white-space: nowrap; }
         .status-open    { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
@@ -168,13 +165,12 @@
     <table class="table-main">
         <colgroup>
             <col style="width:40px">
-            <col style="width:42%">
-            <col style="width:10%">
+            <col style="width:48%">
+            <col style="width:12%">
             <col style="width:60px">
             <col style="width:90px">
             <col style="width:110px">
             <col style="width:70px">
-            <col style="width:auto">
         </colgroup>
         <thead>
         <tr>
@@ -185,7 +181,6 @@
             <th>시작일</th>
             <th>마감일</th>
             <th>소스</th>
-            <th>URL</th>
         </tr>
         </thead>
         <tbody>
@@ -195,7 +190,6 @@
         {% set st_cls = 'status-open' if st == '접수중'
                          else ('status-closed' if st == '마감'
                                else 'status-unknown') %}
-        {% set u = item.get('url') or item.get('상세URL') or '' %}
         {% set src_key = (item.get('source') or item.get('source_badge') or '')|lower %}
         {% set src_label = item.get('source_label')
                             or (source_labels|default({})).get(src_key)
@@ -203,13 +197,13 @@
         <tr>
             <td class="num-col">{{ loop.index }}</td>
             <td class="title-col" title="{{ item.title }}">
-                {% if item.url %}
-                    <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer" class="title-link">
-                        {{ item.title }}
-                    </a>
-                {% else %}
-                    {{ item.title }}
-                {% endif %}
+              {% if item.url %}
+                <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer" class="title-link">
+                  {{ item.title }}
+                </a>
+              {% else %}
+                {{ item.title }}
+              {% endif %}
             </td>
             <td class="org-col" title="{{ item.organization or '-' }}">
                 {{ item.organization or '-' }}
@@ -223,7 +217,6 @@
                 {% endif %}
             </td>
             <td class="source-col"><span class="source-tag">{{ src_label }}</span></td>
-            <td class="url-col" title="{{ u }}"><a href="{{ u }}" target="_blank" rel="noopener">{{ u }}</a></td>
         </tr>
         {% endfor %}
         </tbody>
