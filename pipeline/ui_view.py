@@ -31,7 +31,10 @@ if str(_ROOT) not in sys.path:
 from pipeline.normalize_project import infer_status
 from pipeline.project_quality import canonical_notice_source
 from pipeline.presenter import normalize_display_items
-from pipeline.mail_view import display_url as _mail_display_url
+
+# kstartup 상세 URL(JS 렌더링 의존) 열림 실패 대비 — 보조 목록 페이지 URL.
+# 메일뷰와 동일 상수를 사용해 표기 일관성 유지 (덮어쓰지 않고 병행 표시).
+_KSTARTUP_LIST_URL = "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do"
 
 DB_PATH = _ROOT / "db" / "biz.db"
 
@@ -111,8 +114,8 @@ def sqlite_row_to_item(row: Any) -> Dict[str, Any]:
     """
     DB row 또는 일반 dict → UI 표시용 dict.
     appy.py 호환 (dict·sqlite3.Row 모두 허용).
-    url 은 mail_view.display_url() 규칙으로 치환 (kstartup 상세 → 목록 페이지).
-    원본은 `raw_url` 로 보존.
+    url 은 원본 그대로 유지. kstartup 은 `list_url` 보조 필드가 추가되어
+    템플릿에서 상세+목록 두 링크를 나란히 표시할 수 있다.
     """
     d = dict(row) if not isinstance(row, dict) else dict(row)
     aj = d.get("attachments_json")
@@ -139,22 +142,25 @@ def sqlite_row_to_item(row: Any) -> Dict[str, Any]:
 
 def _apply_display_url(it: Dict[str, Any]) -> None:
     """
-    UI 표시 URL 치환.
-      - kstartup 상세(`bizpbanc-view.do?pbancSn=...`) 는 JS 렌더링에 의존해
-        대부분 환경에서 빈 화면이 되므로 `bizpbanc-ongoing.do` 목록 페이지로 대체.
-      - 원본 URL 은 `raw_url` 에 보존하여 DB/디버깅 용도로 유지.
-      - mail_view.display_url() 과 동일 규칙 — 메일/UI 링크 표기를 통일.
+    UI 표시 URL 처리.
+      - 원본 `url` 은 그대로 유지 (브라우저에서 JS 정상 렌더링되는 경우가 많음).
+      - kstartup 은 보조 `list_url`(공고 목록 페이지) 을 함께 내려 템플릿에서
+        상세 링크와 나란히 노출 → 상세 렌더 실패에도 사용자가 목록 페이지로
+        접근 가능. (메일뷰 `to_mail_item()` 과 동일 규칙)
+      - 비-kstartup 은 `list_url=""` 로 설정해 템플릿 분기를 단순화.
     """
-    raw = str(it.get("url") or "").strip()
-    it.setdefault("raw_url", raw)
-    it["url"] = _mail_display_url(it)
+    src = (it.get("source") or "").lower()
+    if src == "kstartup":
+        it["list_url"] = _KSTARTUP_LIST_URL
+    else:
+        it.setdefault("list_url", "")
 
 
 def to_ui_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, Any]:
     """
     DB row → UI dict. 빈값 허용.
     display_status 는 infer_status()로 결정, DB의 status 는 raw_status 로 보존.
-    url 은 mail_view.display_url() 규칙으로 치환 (kstartup → 목록 페이지).
+    url 은 원본을 그대로 유지하고, kstartup 은 `list_url` 보조 필드를 추가.
     """
     t = today or _today_str()
     d = sqlite_row_to_item(row)

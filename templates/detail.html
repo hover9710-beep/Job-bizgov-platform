@@ -14,6 +14,12 @@
     <p><strong>시작일:</strong> {{ row["start_date"] }}</p>
     <p><strong>종료일:</strong> {{ row["end_date"] }}</p>
     <p><strong>URL:</strong> <a href="{{ row['url'] }}" target="_blank">{{ row["url"] }}</a></p>
+    {% if row.get("list_url") %}
+    <p style="margin-top:-6px;">
+        <small style="color:#8b5a2b;">※ K-Startup 상세는 JS 렌더링 필요 —</small>
+        <a href="{{ row['list_url'] }}" target="_blank">목록 페이지에서 보기</a>
+    </p>
+    {% endif %}
 
     <h3>설명</h3>
     <pre>{{ row["description"] or "" }}</pre>

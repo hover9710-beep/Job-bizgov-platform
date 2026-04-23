@@ -168,6 +168,9 @@ def to_mail_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, 
     start_date/end_date 는 jbexport 의 한국어 기간 문자열('2026년 11월', '2026. 1.')도
     ISO로 정규화. infer_status, 섹션 필터, 정렬 모두 같은 기준으로 돌게 된다.
     원본은 raw_start_date/raw_end_date 에 보존.
+
+    kstartup 은 상세 URL(JS 렌더링 의존) 옆에 보조 `list_url`(목록 페이지)을
+    함께 내보낸다. 메일 렌더러는 두 URL 을 모두 표시한다.
     """
     t = today or _today_str()
     period_text = str(row.get("period_text") or "").strip()
@@ -177,11 +180,12 @@ def to_mail_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, 
     start_date = normalize_date(raw_start, kind="start")
     end_date = normalize_date(raw_end, kind="end")
 
-    return {
+    src = str(row.get("source") or "").strip().lower() or "unknown"
+    item: Dict[str, Any] = {
         "id": row.get("id"),
         "title": str(row.get("title") or "").strip(),
         "organization": str(row.get("organization") or "").strip(),
-        "source": str(row.get("source") or "").strip().lower() or "unknown",
+        "source": src,
         "start_date": start_date,
         "end_date": end_date,
         "raw_start_date": raw_start,
@@ -190,7 +194,11 @@ def to_mail_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, 
         "url": str(row.get("url") or "").strip(),
         "description": str(row.get("description") or "").strip(),
         "status": infer_status(period_text, start_date, end_date, t),
+        "list_url": "",
     }
+    if src == "kstartup":
+        item["list_url"] = _KSTARTUP_FALLBACK_URL
+    return item
 
 
 def _parse_iso(s: str) -> Optional[date]:
@@ -277,17 +285,13 @@ def _dedupe_by_url_title(items: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]
 
 
 def display_url(it: Dict[str, Any]) -> str:
-    """메일/카카오 표시용 URL.
+    """메일/카카오 표시용 **원본** URL 을 그대로 반환.
 
-    kstartup 상세 URL(`bizpbanc-view.do?pbancSn=...`) 은 JS 렌더링에 의존해
-    직접 링크로는 빈 화면이 되기 때문에 접수중 공고 목록 페이지로 치환한다.
-    (원본 URL 은 DB 에 그대로 보존)
+    kstartup 상세 URL(`bizpbanc-view.do?pbancSn=...`) 도 JS 렌더링 환경(브라우저)
+    에서는 정상 열리기 때문에 덮어쓰지 않는다. 열림 실패를 대비해 목록 페이지
+    URL 은 `list_url` 필드로 별도 제공 → `format_section()` 이 2줄로 함께 표시.
     """
-    src = (it.get("source") or "").lower()
-    url = (it.get("url") or "").strip()
-    if src == "kstartup":
-        return _KSTARTUP_FALLBACK_URL
-    return url
+    return (it.get("url") or "").strip()
 
 
 def _take_with_source_quota(
@@ -374,6 +378,7 @@ def format_section(
         ttl = it.get("title") or "(제목없음)"
         org = it.get("organization") or "-"
         url = display_url(it) or "-"
+        list_url = (it.get("list_url") or "").strip()
         period = _fmt_period(it)
 
         dday_txt = ""
@@ -387,6 +392,8 @@ def format_section(
         lines.append(f"   기관: {org}")
         lines.append(f"   기간: {period}{dday_txt}")
         lines.append(f"   링크: {url}")
+        if list_url and list_url != url:
+            lines.append(f"   목록: {list_url}")
         lines.append("")
 
     leftover = len(items) - len(picked)
