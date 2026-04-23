@@ -10,6 +10,7 @@ DB row → 메일 전용 가공 레이어.
   - infer_status()로 상태를 단일화 (접수중 / 마감 / 확인 필요)
   - 메일 3섹션 필터 제공: 신규공고 / 마감임박 / 접수중
   - 본문이 너무 길면 상한까지 안전 절단
+  - build_mail_body()는 HTML(마감 임박 D-3·신규 공고)을 생성하며 mailer 가 MIME html 로 발송
 
 UI 가공(정렬·디버그·빈값 허용)과는 별도 모듈.
 실행 시 data/mail/mail_body.txt 파일로 바로 본문 저장.
@@ -18,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import calendar
+import html
 import re
 import sqlite3
 import sys
@@ -452,6 +454,83 @@ def format_section(
 
 
 # ---------------------------------------------------------------------------
+# HTML 메일 (mailer._build_mime_text 가 <div 등으로 html 서브타입 자동 선택)
+# ---------------------------------------------------------------------------
+
+URGENT_MAIL_DAYS = 3
+
+
+def _mail_deadline_badge(it: Dict[str, Any], today_iso: str) -> str:
+    """마감 임박 섹션용 D-n 문구."""
+    t = _parse_iso(today_iso)
+    e = _parse_iso(it.get("end_date") or "")
+    if t is None or e is None:
+        return ""
+    d = (e - t).days
+    if d < 0:
+        return "마감됨"
+    if d == 0:
+        return "D-Day"
+    return f"D-{d}"
+
+
+def render_mail_html(
+    new_items: List[Dict[str, Any]],
+    urgent_items: List[Dict[str, Any]],
+) -> str:
+    """클릭형 링크·마감임박 강조 HTML 본문."""
+
+    def esc(s: Any) -> str:
+        return html.escape(str(s if s is not None else ""), quote=False)
+
+    def esc_attr(s: Any) -> str:
+        return html.escape(str(s if s is not None else ""), quote=True)
+
+    out = ""
+    out += """
+<div style="font-family:Arial, sans-serif;">
+  <h2 style="margin-bottom:10px;">📌 지원사업 알림</h2>
+"""
+    if urgent_items:
+        out += """<h3 style="color:#b91c1c;">🔥 마감 임박</h3>"""
+        for i in urgent_items:
+            href = esc_attr(i.get("url") or "")
+            out += f"""
+<div style="margin-bottom:14px; padding:10px; border:1px solid #fee2e2; border-radius:6px;">
+  <a href="{href}" style="font-size:15px; font-weight:bold; color:#111827; text-decoration:none;">{esc(i.get("title") or "-")}</a><br>
+  <span style="font-size:12px; color:#6b7280;">{esc(i.get("organization") or "-")} | {esc(i.get("start_date") or "-")} ~ {esc(i.get("end_date") or "-")}</span><br>
+  <span style="font-size:12px; color:#b91c1c; font-weight:bold;">{esc(i.get("deadline_badge") or "")}</span>
+</div>"""
+
+    out += """<h3 style="margin-top:20px;">🆕 신규 공고</h3>"""
+    for i in new_items:
+        href = esc_attr(i.get("url") or "")
+        out += f"""
+<div style="margin-bottom:12px; padding:8px; border-bottom:1px solid #e5e7eb;">
+  <a href="{href}" style="font-size:15px; font-weight:bold; color:#111827; text-decoration:none;">{esc(i.get("title") or "-")}</a><br>
+  <span style="font-size:12px; color:#6b7280;">{esc(i.get("organization") or "-")} | {esc(i.get("start_date") or "-")} ~ {esc(i.get("end_date") or "-")}</span><br>
+  <span style="font-size:12px; color:#16a34a;">{esc(i.get("display_status") or "")}</span>
+</div>"""
+
+    out += """
+  <hr style="margin-top:20px;">
+  <div style="font-size:11px; color:#9ca3af;">본 메일은 JB BizGov Tracker 자동 발송입니다.</div>
+</div>"""
+    return out
+
+
+def _enrich_for_html_template(it: Dict[str, Any], today_iso: str) -> Dict[str, Any]:
+    """템플릿 전용 필드만 붙인 얕은 복사 (URL은 display_url 유지)."""
+    u = display_url(it) or ""
+    return {
+        **it,
+        "url": u,
+        "deadline_badge": _mail_deadline_badge(it, today_iso),
+        "display_status": str(it.get("status") or ""),
+    }
+
+
+# ---------------------------------------------------------------------------
 # 본문 빌더 + 안전 절단
 # ---------------------------------------------------------------------------
 
@@ -555,30 +634,33 @@ def build_mail_body(
     active_items = filter_active(items, today=t)
     print(f"[mail_view][stage5 filter_active] by_source={_count_by_source(active_items)}", flush=True)
 
-    new_items.sort(key=_end_sort_key)
-    ending_items.sort(key=_end_sort_key)
-    active_items.sort(key=_end_sort_key)
-
+    urgent_items = filter_ending_soon(items, days=URGENT_MAIL_DAYS, today=t)
     print(
-        f"[mail_view] totals: new={len(new_items)} "
-        f"ending_soon={len(ending_items)} active={len(active_items)}",
+        f"[mail_view][stage4b filter_ending_soon D-{URGENT_MAIL_DAYS}] "
+        f"by_source={_count_by_source(urgent_items)}",
         flush=True,
     )
 
-    parts: List[str] = ["[전북지원사업 메일자동알림서비스]"]
+    ending_items.sort(key=_end_sort_key)
+    active_items.sort(key=_end_sort_key)
 
-    for src in SOURCE_ORDER:
-        parts.append(
-            _build_source_block(
-                src,
-                new_items=new_items,
-                ending_items=ending_items,
-                active_items=active_items,
-                today=t,
-            )
-        )
+    new_items = _dedupe_by_url_title(new_items)
+    urgent_items = _dedupe_by_url_title(urgent_items)
+    new_items.sort(key=_end_sort_key)
+    urgent_items.sort(key=_end_sort_key)
+    new_items = new_items[:NEW_LIMIT]
+    urgent_items = urgent_items[:ENDING_LIMIT]
 
-    body = "\n\n".join(parts).rstrip() + "\n"
+    print(
+        f"[mail_view] totals: new={len(new_items)} "
+        f"ending_soon={len(ending_items)} active={len(active_items)} "
+        f"urgent_html={len(urgent_items)}",
+        flush=True,
+    )
+
+    new_e = [_enrich_for_html_template(x, t) for x in new_items]
+    urgent_e = [_enrich_for_html_template(x, t) for x in urgent_items]
+    body = render_mail_html(new_e, urgent_e)
     return truncate_body(body)
 
 
