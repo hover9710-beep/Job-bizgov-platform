@@ -30,10 +30,10 @@
         table.table-main th { background: #f1f5f9; text-align: left; font-weight: 600; color: #374151; white-space: nowrap; }
 
         td.num-col    { text-align: center; color: #6b7280; }
-        td.title-col  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        td.org-col    { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #374151; }
-        td.status-col { text-align: center; padding: 4px 2px; overflow: hidden; }
-        td.date-col   { white-space: nowrap; color: #374151; font-variant-numeric: tabular-nums; text-align: center; }
+        .title-col { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .org-col { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; font-size: 12px; }
+        .status-col { text-align: center; white-space: nowrap; }
+        .date-col { white-space: nowrap; text-align: center; font-variant-numeric: tabular-nums; font-size: 12px; }
         td.source-col { text-align: center; padding: 4px 4px; overflow: hidden; }
         td.url-col    { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
         td.url-col a  { color: #1d4ed8; text-decoration: none; }
@@ -75,21 +75,9 @@
         .title-link:hover { color: #1d4ed8; text-decoration: underline; }
 
         /* --- 마감일 배지 (D-3 / D-7 / 마감) --- */
-        .deadline-badge {
-            display: inline-block;
-            margin-left: 4px;
-            padding: 1px 6px;
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: 700;
-            border: 1px solid transparent;
-            white-space: nowrap;
-            vertical-align: middle;
-        }
-        td.date-col.deadline-danger { background: #fef2f2; color: #991b1b; font-weight: 600; }
-        td.date-col.deadline-danger .deadline-badge { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
-        td.date-col.deadline-warn   { background: #fffbeb; color: #92400e; font-weight: 600; }
-        td.date-col.deadline-warn   .deadline-badge { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+        .deadline-badge { display: inline-block; margin-left: 4px; font-weight: 700; font-size: 11px; padding: 2px 5px; border-radius: 6px; line-height: 1.2; }
+        .deadline-danger { background: #fee2e2; color: #b91c1c; }
+        .deadline-warn { background: #fef3c7; color: #b45309; }
 
         /* --- 반응형: 좁은 화면에서 요약 카드 열 수 조정 --- */
         @media (max-width: 900px) {
@@ -178,17 +166,15 @@
     <p><strong>신규 {{ count }}건</strong></p>
 
     <table class="table-main">
-        {# 고정 컬럼 너비: table-layout:fixed 기준 권위(authoritative) 지정.
-           제목 35% / 기관 15% / URL 나머지 auto, 그 외는 px. #}
         <colgroup>
-            <col style="width: 40px;">
-            <col style="width: 35%;">
-            <col style="width: 15%;">
-            <col style="width: 60px;">
-            <col style="width: 90px;">
-            <col style="width: 90px;">
-            <col style="width: 70px;">
-            <col>
+            <col style="width:40px">
+            <col style="width:42%">
+            <col style="width:10%">
+            <col style="width:60px">
+            <col style="width:90px">
+            <col style="width:110px">
+            <col style="width:70px">
+            <col style="width:auto">
         </colgroup>
         <thead>
         <tr>
@@ -209,29 +195,32 @@
         {% set st_cls = 'status-open' if st == '접수중'
                          else ('status-closed' if st == '마감'
                                else 'status-unknown') %}
-        {% set title_txt = item.get('title') or item.get('공고제목') or '' %}
-        {% set org_txt   = item.get('organization') or item.get('기관') or '' %}
         {% set u = item.get('url') or item.get('상세URL') or '' %}
         {% set src_key = (item.get('source') or item.get('source_badge') or '')|lower %}
         {% set src_label = item.get('source_label')
                             or (source_labels|default({})).get(src_key)
                             or src_key or '-' %}
-        {% set dl_badge = item.get('deadline_badge') or '' %}
-        {% set dl_class = item.get('deadline_class') or '' %}
         <tr>
             <td class="num-col">{{ loop.index }}</td>
-            <td class="title-col" title="{{ title_txt }}">
-                {% if u %}
-                    <a class="title-link" href="{{ u }}" target="_blank" rel="noopener">{{ title_txt }}</a>
+            <td class="title-col" title="{{ item.title }}">
+                {% if item.url %}
+                    <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer" class="title-link">
+                        {{ item.title }}
+                    </a>
                 {% else %}
-                    {{ title_txt }}
+                    {{ item.title }}
                 {% endif %}
             </td>
-            <td class="org-col" title="{{ org_txt }}">{{ org_txt }}</td>
+            <td class="org-col" title="{{ item.organization or '-' }}">
+                {{ item.organization or '-' }}
+            </td>
             <td class="status-col"><span class="status-badge {{ st_cls }}">{{ st or '-' }}</span></td>
             <td class="date-col">{{ item.get('start_date') or '-' }}</td>
-            <td class="date-col {{ dl_class }}">
-                {{ item.get('end_date') or '-' }}{% if dl_badge %}<span class="deadline-badge">{{ dl_badge }}</span>{% endif %}
+            <td class="date-col {{ item.deadline_class }}">
+                {{ item.end_date or '-' }}
+                {% if item.deadline_badge %}
+                    <span class="deadline-badge">{{ item.deadline_badge }}</span>
+                {% endif %}
             </td>
             <td class="source-col"><span class="source-tag">{{ src_label }}</span></td>
             <td class="url-col" title="{{ u }}"><a href="{{ u }}" target="_blank" rel="noopener">{{ u }}</a></td>
