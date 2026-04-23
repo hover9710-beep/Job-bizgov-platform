@@ -33,6 +33,7 @@ from project_quality import (
     normalize_status,
     parse_period_from_item,
 )
+from url_utils import canonical_url
 
 DB_PATH = ROOT_DIR / "db" / "biz.db"
 ALL_JSON_PATH = ROOT_DIR / "data" / "all_jb" / "all_jb.json"
@@ -151,7 +152,8 @@ def _prepare_row(item: Dict[str, Any]) -> Tuple[Dict[str, Any], str, str]:
     ministry = str(item.get("ministry") or "").strip()
     executing_agency = str(item.get("executing_agency") or "").strip()
     site = str(item.get("site") or "").strip()
-    url = str(item.get("url") or "").strip()
+    # 쿼리 파라미터 순서만 다른 동일 URL 이 중복 INSERT 되지 않도록 canonical 화.
+    url = canonical_url(str(item.get("url") or "").strip())
     sd, ed = parse_period_from_item(item)
     if not sd:
         sd = str(item.get("start_date") or "").strip()
@@ -212,6 +214,8 @@ def _find_existing_id(
     conn: sqlite3.Connection, url: str, title: str, organization: str
 ) -> Optional[int]:
     if url:
+        # incoming `url` 은 `_prepare_row` 에서 canonical 처리됨.
+        # DB 행들도 `_backfill_canonical_urls` 로 canonical 화 되어 있으면 정확 일치로 충분.
         r = conn.execute("SELECT id FROM biz_projects WHERE url = ?", (url,)).fetchone()
         if r:
             return int(r[0])
@@ -310,6 +314,64 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
     )
 
 
+def _backfill_canonical_urls(conn: sqlite3.Connection) -> Dict[str, int]:
+    """
+    기존 행의 `url` 을 canonical 형태로 정규화하고, 같은 canonical URL 을 가진
+    중복 그룹은 가장 작은 id 하나만 남기고 삭제한다.
+
+    반환: {'updated': n, 'deleted': m, 'groups': g}
+      - updated: url 문자열이 바뀐 행 수
+      - deleted: 중복으로 제거된 행 수
+      - groups: 중복 그룹 수
+
+    주의: projects 미러 테이블은 이후 `mirror_biz_projects_to_projects` 에서
+    재생성되므로 여기선 biz_projects 만 손대도 된다.
+    """
+    rows = conn.execute(
+        "SELECT id, url FROM biz_projects WHERE url IS NOT NULL AND TRIM(url) != ''"
+    ).fetchall()
+
+    groups: Dict[str, List[Tuple[int, str]]] = {}
+    for rid, url in rows:
+        cu = canonical_url(str(url or ""))
+        if not cu:
+            continue
+        groups.setdefault(cu, []).append((int(rid), str(url or "")))
+
+    updated = 0
+    deleted = 0
+    dup_groups = 0
+
+    for cu, members in groups.items():
+        members.sort(key=lambda x: x[0])
+        keep_id, keep_url = members[0]
+
+        # 1) 중복 행 먼저 삭제 (UNIQUE(url) 제약 때문에 UPDATE 전에 삭제해야 함).
+        if len(members) >= 2:
+            dup_groups += 1
+            dup_ids = [m[0] for m in members[1:]]
+            conn.executemany(
+                "DELETE FROM biz_projects WHERE id = ?",
+                [(did,) for did in dup_ids],
+            )
+            deleted += len(dup_ids)
+            print(
+                f"[backfill_canonical_urls] dedup: keep id={keep_id} "
+                f"delete ids={dup_ids} canonical={cu[:120]}",
+                flush=True,
+            )
+
+        # 2) 보존 행의 url 이 canonical 과 다르면 교체.
+        if keep_url != cu:
+            conn.execute(
+                "UPDATE biz_projects SET url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (cu, keep_id),
+            )
+            updated += 1
+
+    return {"updated": updated, "deleted": deleted, "groups": dup_groups}
+
+
 def _backfill_infer_source(conn: sqlite3.Connection) -> None:
     """기존 행 URL·site 기준 source 재추론 (NULL·빈값 금지)."""
     conn.execute(
@@ -373,6 +435,15 @@ def update_db() -> None:
     conn = sqlite3.connect(DB_PATH)
     try:
         _init_db(conn)
+        # 기존 행의 URL을 canonical 로 정규화 + 파라미터 순서만 다른 중복 제거.
+        # upsert 가 exact url 매치에 의존하므로 이 작업이 먼저 돌아야 이번 배치에서
+        # 같은 공고가 "다시" 신규 INSERT 되는 사고를 막을 수 있다.
+        cu = _backfill_canonical_urls(conn)
+        if cu["deleted"] or cu["updated"]:
+            print(
+                f"[update_db] canonical URL backfill: "
+                f"updated={cu['updated']} deleted={cu['deleted']} groups={cu['groups']}"
+            )
         for item in items:
             _upsert_one(conn, item)
         _backfill_infer_source(conn)

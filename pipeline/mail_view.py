@@ -30,6 +30,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from pipeline.normalize_project import infer_status
+from pipeline.url_utils import canonical_url
 
 DB_PATH = _ROOT / "db" / "biz.db"
 OUT_FILE = _ROOT / "data" / "mail" / "mail_body.txt"
@@ -295,17 +296,18 @@ def _fmt_period(it: Dict[str, Any]) -> str:
 def _dedupe_by_url_title(items: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """URL 기준 중복 제거.
 
-    kstartup 처럼 표시 URL 을 목록 페이지로 통일해 `url` 이 모두 동일한 소스는
-    `raw_url` (원본 상세 URL) 로 중복을 식별한다. 그래도 없으면 title+기관.
+    - kstartup 처럼 표시 URL 을 목록 페이지로 통일해 `url` 이 모두 동일한 소스는
+      `raw_url` (원본 상세 URL) 로 중복을 식별한다.
+    - 선택한 URL 은 `canonical_url()` 로 정규화해서 비교한다. 쿼리 파라미터 순서만
+      다른 사실상 동일한 상세 URL 이 중복으로 살아남지 않게 한다.
+    - 모든 URL 후보가 비어 있으면 title+기관 조합으로 fallback.
     """
     seen: set = set()
     out: List[Dict[str, Any]] = []
     for it in items:
-        key = (
-            it.get("raw_url")
-            or it.get("url")
-            or f"{it.get('title')}|{it.get('organization')}"
-        )
+        raw = it.get("raw_url") or it.get("url") or ""
+        canon = canonical_url(raw) if raw else ""
+        key = canon or f"{it.get('title')}|{it.get('organization')}"
         if key in seen:
             continue
         seen.add(key)
