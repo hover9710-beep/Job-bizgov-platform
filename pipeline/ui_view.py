@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -41,6 +41,17 @@ DB_PATH = _ROOT / "db" / "biz.db"
 # 정렬 우선순위: 접수중(0) > 확인 필요(1) > 마감(2)
 _STATUS_ORDER = {"접수중": 0, "확인 필요": 1, "마감": 2}
 _SOURCE_ORDER = {"jbexport": 0, "bizinfo": 1, "kstartup": 2}
+
+# UI 표기용 소스 한글 라벨. appy.SOURCE_LABELS 와 동기화 유지.
+SOURCE_LABELS = {
+    "jbexport": "전북수출",
+    "bizinfo": "기업마당",
+    "kstartup": "K-Startup",
+}
+
+# 마감임박 배지 임계값(일 단위). D-3 이하는 danger(빨강), D-7 이하는 warn(주황).
+_DEADLINE_DANGER_DAYS = 3
+_DEADLINE_WARN_DAYS = 7
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +201,64 @@ def _parse_iso(s: str) -> Optional[date]:
         return None
 
 
+def _source_label(source_key: str) -> str:
+    """소스 키(소문자) → 한글 라벨. 미지정/미매핑은 원문 그대로."""
+    key = (source_key or "").strip().lower()
+    return SOURCE_LABELS.get(key, source_key or "")
+
+
+def _compute_deadline_badge(
+    display_status: str,
+    end_date_s: str,
+    today: date,
+) -> Tuple[str, str]:
+    """
+    (deadline_badge, deadline_class) 계산.
+
+    규칙
+      - display_status == '마감' → ('마감', 'deadline-danger')
+      - end_date 미지정 → ('', '')
+      - 오늘 기준 잔여일 d:
+          d <  0            → ('마감', 'deadline-danger')  # 방어적 처리
+          d <= DANGER(3)    → ('D-{d}', 'deadline-danger')
+          d <= WARN(7)      → ('D-{d}', 'deadline-warn')
+          그 외             → ('', '')
+    """
+    if display_status == "마감":
+        return ("마감", "deadline-danger")
+    ed = _parse_iso(end_date_s or "")
+    if ed is None:
+        return ("", "")
+    d = (ed - today).days
+    if d < 0:
+        return ("마감", "deadline-danger")
+    if d <= _DEADLINE_DANGER_DAYS:
+        return (f"D-{d}", "deadline-danger")
+    if d <= _DEADLINE_WARN_DAYS:
+        return (f"D-{d}", "deadline-warn")
+    return ("", "")
+
+
+def _apply_ui_labels(it: Dict[str, Any], today: date) -> None:
+    """
+    UI 표시 전용 파생 필드 주입 (프레젠테이션 레이어 한정).
+      - source_label    : 소스 키 → 한글 라벨
+      - deadline_badge  : 'D-3' / 'D-7' / '마감' / ''
+      - deadline_class  : CSS 클래스 ('deadline-danger' / 'deadline-warn' / '')
+
+    status 및 url 은 건드리지 않는다 (각각 infer_status / _apply_display_url 담당).
+    """
+    src_key = (it.get("_db_source_snapshot") or it.get("source") or "").strip().lower()
+    it["source_label"] = _source_label(src_key)
+    badge, cls = _compute_deadline_badge(
+        display_status=str(it.get("display_status") or "").strip(),
+        end_date_s=str(it.get("end_date") or "").strip(),
+        today=today,
+    )
+    it["deadline_badge"] = badge
+    it["deadline_class"] = cls
+
+
 def _sort_key_status(it: Dict[str, Any]) -> Tuple:
     st = _STATUS_ORDER.get(it.get("display_status") or "", 9)
     src = _SOURCE_ORDER.get((it.get("source_badge") or "").lower(), 9)
@@ -331,6 +400,7 @@ def prepare_db_rows_for_ui(
       4) 정렬 + display_idx 부여
     """
     t = today or _today_str()
+    t_date = datetime.strptime(t[:10], "%Y-%m-%d").date() if len(t) >= 10 else date.today()
     dicts = [dict(r) if not isinstance(r, dict) else r for r in rows]
     items: List[Dict[str, Any]] = [sqlite_row_to_item(r) for r in dicts]
     items = normalize_display_items(items)
@@ -342,6 +412,7 @@ def prepare_db_rows_for_ui(
         it["display_status"] = infer_status(period_text, sd, ed, t)
         it.setdefault("source_badge", (it.get("_db_source_snapshot") or "").lower() or "unknown")
         _apply_display_url(it)
+        _apply_ui_labels(it, t_date)
     # 4) 정렬
     items = sort_items(items, key=sort)
     for i, it in enumerate(items, start=1):

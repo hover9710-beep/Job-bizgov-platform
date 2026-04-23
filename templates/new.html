@@ -44,6 +44,61 @@
         .status-closed  { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
         .status-unknown { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
         .source-tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; white-space: nowrap; }
+
+        /* --- 요약 카드 그리드 (상단 대시보드) --- */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin: 8px 0 16px;
+        }
+        .summary-card {
+            background: #fff;
+            border: 1px solid #dbe4ee;
+            border-radius: 10px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+        .summary-card-urgent {
+            background: #fff7ed;
+            border-color: #fed7aa;
+        }
+        .summary-label { font-size: 12px; color: #6b7280; font-weight: 500; }
+        .summary-value { font-size: 22px; color: #111827; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+        .summary-card-urgent .summary-value { color: #c2410c; }
+
+        /* --- 제목 링크 --- */
+        .title-link { color: #111827; text-decoration: none; }
+        .title-link:hover { color: #1d4ed8; text-decoration: underline; }
+
+        /* --- 마감일 배지 (D-3 / D-7 / 마감) --- */
+        .deadline-badge {
+            display: inline-block;
+            margin-left: 4px;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            border: 1px solid transparent;
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+        td.date-col.deadline-danger { background: #fef2f2; color: #991b1b; font-weight: 600; }
+        td.date-col.deadline-danger .deadline-badge { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+        td.date-col.deadline-warn   { background: #fffbeb; color: #92400e; font-weight: 600; }
+        td.date-col.deadline-warn   .deadline-badge { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+
+        /* --- 반응형: 좁은 화면에서 요약 카드 열 수 조정 --- */
+        @media (max-width: 900px) {
+            .summary-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (max-width: 600px) {
+            .summary-grid { grid-template-columns: repeat(2, 1fr); }
+            .summary-value { font-size: 18px; }
+        }
     </style>
 </head>
 <body>
@@ -86,6 +141,33 @@
                class="{% if cur_source|lower == 'kstartup' %}active{% endif %}">K-Startup</a>
         </div>
     </div>
+
+    {# 요약 대시보드 — appy.index()._compute_ui_summary() 결과.
+       필터가 적용된 후의 결과 집합 기준 카운트. urgent = 접수중 & 오늘~D+3. #}
+    {% set s = summary|default({'total': count, 'open': 0, 'closed': 0, 'unknown': 0, 'urgent': 0}) %}
+    <div class="summary-grid">
+        <div class="summary-card">
+            <span class="summary-label">전체</span>
+            <span class="summary-value">{{ s.total }}</span>
+        </div>
+        <div class="summary-card">
+            <span class="summary-label">접수중</span>
+            <span class="summary-value">{{ s.open }}</span>
+        </div>
+        <div class="summary-card">
+            <span class="summary-label">마감</span>
+            <span class="summary-value">{{ s.closed }}</span>
+        </div>
+        <div class="summary-card">
+            <span class="summary-label">확인 필요</span>
+            <span class="summary-value">{{ s.unknown }}</span>
+        </div>
+        <div class="summary-card summary-card-urgent">
+            <span class="summary-label">마감임박 (≤ D-3)</span>
+            <span class="summary-value">{{ s.urgent }}</span>
+        </div>
+    </div>
+
     <p>
         <code>data/today.json</code> 대비 <code>data/yesterday.json</code>에 없는 제목만 표시합니다.
     </p>
@@ -130,15 +212,29 @@
         {% set title_txt = item.get('title') or item.get('공고제목') or '' %}
         {% set org_txt   = item.get('organization') or item.get('기관') or '' %}
         {% set u = item.get('url') or item.get('상세URL') or '' %}
+        {% set src_key = (item.get('source') or item.get('source_badge') or '')|lower %}
+        {% set src_label = item.get('source_label')
+                            or (source_labels|default({})).get(src_key)
+                            or src_key or '-' %}
+        {% set dl_badge = item.get('deadline_badge') or '' %}
+        {% set dl_class = item.get('deadline_class') or '' %}
         <tr>
             <td class="num-col">{{ loop.index }}</td>
-            <td class="title-col" title="{{ title_txt }}">{{ title_txt }}</td>
+            <td class="title-col" title="{{ title_txt }}">
+                {% if u %}
+                    <a class="title-link" href="{{ u }}" target="_blank" rel="noopener">{{ title_txt }}</a>
+                {% else %}
+                    {{ title_txt }}
+                {% endif %}
+            </td>
             <td class="org-col" title="{{ org_txt }}">{{ org_txt }}</td>
             <td class="status-col"><span class="status-badge {{ st_cls }}">{{ st or '-' }}</span></td>
             <td class="date-col">{{ item.get('start_date') or '-' }}</td>
-            <td class="date-col">{{ item.get('end_date') or '-' }}</td>
-            <td class="source-col"><span class="source-tag">{{ (item.get('source') or item.get('source_badge') or '-')|lower }}</span></td>
-            <td class="url-col" title="{{ u }}"><a href="{{ u }}" target="_blank">{{ u }}</a></td>
+            <td class="date-col {{ dl_class }}">
+                {{ item.get('end_date') or '-' }}{% if dl_badge %}<span class="deadline-badge">{{ dl_badge }}</span>{% endif %}
+            </td>
+            <td class="source-col"><span class="source-tag">{{ src_label }}</span></td>
+            <td class="url-col" title="{{ u }}"><a href="{{ u }}" target="_blank" rel="noopener">{{ u }}</a></td>
         </tr>
         {% endfor %}
         </tbody>

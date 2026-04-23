@@ -5,6 +5,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
@@ -57,6 +58,60 @@ LOG_TAIL_CHARS = 6000
 
 MERGED_NEW_JSON = BASE_DIR / "data" / "merged" / "new.json"
 ALL_JB_JSON = BASE_DIR / "data" / "all_jb" / "all_jb.json"
+
+# UI 표기용 소스 한글 라벨. pipeline/ui_view.SOURCE_LABELS 와 동일 매핑.
+# 템플릿 필터/요약카드에서 키 → 한글 변환시 사용.
+SOURCE_LABELS = {
+    "jbexport": "전북수출",
+    "bizinfo": "기업마당",
+    "kstartup": "K-Startup",
+}
+
+
+def _safe_parse_date(s: Any) -> Optional[date]:
+    """'YYYY-MM-DD' 접두부만 파싱. 빈값/파싱 실패는 None. 예외 던지지 않음."""
+    if not s:
+        return None
+    txt = str(s).strip()
+    if len(txt) < 10:
+        return None
+    try:
+        return datetime.strptime(txt[:10], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+
+
+def _compute_ui_summary(items: List[dict]) -> dict:
+    """
+    인덱스 카드 요약 집계.
+      - total    : 전체
+      - open     : display_status == '접수중'
+      - closed   : display_status == '마감'
+      - unknown  : 그 외(확인 필요 등)
+      - urgent   : 접수중 중 end_date 가 오늘 ~ 오늘+3일(포함) 사이
+    """
+    today = date.today()
+    limit = today + timedelta(days=3)
+    total = len(items)
+    open_n = closed_n = unknown_n = urgent_n = 0
+    for it in items:
+        st = (it.get("display_status") or "").strip()
+        if st == "접수중":
+            open_n += 1
+            ed = _safe_parse_date(it.get("end_date"))
+            if ed is not None and today <= ed <= limit:
+                urgent_n += 1
+        elif st == "마감":
+            closed_n += 1
+        else:
+            unknown_n += 1
+    return {
+        "total": total,
+        "open": open_n,
+        "closed": closed_n,
+        "unknown": unknown_n,
+        "urgent": urgent_n,
+    }
 
 
 def load_all_items() -> List[dict]:
@@ -336,6 +391,7 @@ def index():
     rows = get_db().execute(sql, params).fetchall()
     rows_ui = prepare_db_rows_for_ui(rows)
     rows_ui = filter_items(rows_ui, status=status_filter, source=source_filter)
+    summary = _compute_ui_summary(rows_ui)
     if audit_ui_enabled():
         log_source_mismatch_and_parser(rows_ui[:10], label="GET / (목록 10)")
         db = get_db()
@@ -357,6 +413,8 @@ def index():
         status=status,
         source=source,
         q=query,
+        summary=summary,
+        source_labels=SOURCE_LABELS,
     )
 
 
