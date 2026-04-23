@@ -28,7 +28,7 @@ FILES_DIR = JBEXPORT_DIR / "files"
 JSON_DIR.mkdir(parents=True, exist_ok=True)
 FILES_DIR.mkdir(parents=True, exist_ok=True)
 
-PROXY_BASE = "http://127.0.0.1:5000"
+PROXY_BASE = "http://127.0.0.1:5001"
 LIST_ENDPOINT = f"{PROXY_BASE}/api/jbexport/list"
 LIST_LENGTH = 10
 MAX_PAGES = 500

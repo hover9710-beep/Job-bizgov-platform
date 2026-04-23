@@ -23,7 +23,7 @@ from pipeline.fields_normalize import extract_period_line_from_text, parse_dates
 # =========================================================
 # 기본 설정
 # =========================================================
-PROXY_BASE = "http://127.0.0.1:5000"
+PROXY_BASE = "http://127.0.0.1:5001"
 LIST_ENDPOINT = f"{PROXY_BASE}/api/jbexport/list"
 
 JBEXPORT_BASE = "https://www.jbexport.or.kr"
