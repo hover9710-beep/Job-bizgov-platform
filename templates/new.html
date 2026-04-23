@@ -76,6 +76,84 @@
         .deadline-danger { background: #fee2e2; color: #b91c1c; }
         .deadline-warn { background: #fef3c7; color: #b45309; }
 
+        /* --- [6] 크롤링 실행 패널 --- */
+        .run-panel {
+            margin: 8px 0 16px;
+            padding: 14px 16px;
+            background: #fff;
+            border: 1px solid #dbe4ee;
+            border-radius: 10px;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+        }
+        .run-panel-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px 14px;
+            margin-bottom: 12px;
+        }
+        .run-panel-header strong { font-size: 15px; color: #111827; }
+        .run-meta { font-size: 12px; color: #6b7280; font-family: ui-monospace, monospace; }
+        .run-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            border: 1px solid transparent;
+        }
+        .run-badge-idle { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+        .run-badge-running { background: #dbeafe; color: #1d4ed8; border-color: #93c5fd; }
+        .run-badge-success { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+        .run-badge-error { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+        .run-btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .run-btn {
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            background: #f8fafc;
+            color: #1f2937;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .run-btn:hover:not(:disabled) { background: #e2e8f0; }
+        .run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .run-btn-primary { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+        .run-btn-primary:hover:not(:disabled) { background: #1e40af; }
+        .run-btn-ghost { background: #fff; }
+        .run-log-panel { margin-top: 12px; }
+        .run-log-toggle {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 8px 10px;
+            margin-bottom: 6px;
+            border: 1px dashed #cbd5e1;
+            border-radius: 8px;
+            background: #f8fafc;
+            font-size: 12px;
+            font-weight: 600;
+            color: #374151;
+            cursor: pointer;
+        }
+        .run-log-toggle:hover { background: #f1f5f9; }
+        .run-log-pre {
+            margin: 0;
+            padding: 12px;
+            max-height: 280px;
+            overflow: auto;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-size: 11px;
+            line-height: 1.45;
+            font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .run-log-panel.collapsed .run-log-pre { display: none; }
+
         /* --- 반응형: 좁은 화면에서 요약 카드 열 수 조정 --- */
         @media (max-width: 900px) {
             .summary-grid { grid-template-columns: repeat(3, 1fr); }
@@ -124,6 +202,24 @@
                class="{% if cur_source|lower == 'bizinfo' %}active{% endif %}">기업마당</a>
             <a href="{{ url_for('index', status=cur_status, source='kstartup') }}"
                class="{% if cur_source|lower == 'kstartup' %}active{% endif %}">K-Startup</a>
+        </div>
+    </div>
+
+    <div class="run-panel" id="run-panel">
+        <div class="run-panel-header">
+            <strong>크롤링 · 파이프라인 실행</strong>
+            <span id="run-status-badge" class="run-badge run-badge-idle">대기</span>
+            <span id="run-meta" class="run-meta" aria-live="polite"></span>
+        </div>
+        <div class="run-btn-row">
+            <button type="button" class="run-btn run-btn-primary" id="btn-run-all" data-mode="all">전체 새로 수집</button>
+            <button type="button" class="run-btn" id="btn-run-jb" data-mode="jbexport">전북수출만</button>
+            <button type="button" class="run-btn" id="btn-run-biz" data-mode="bizinfo">기업마당만</button>
+            <button type="button" class="run-btn run-btn-ghost" id="btn-refresh-status">상태 새로고침</button>
+        </div>
+        <div class="run-log-panel" id="run-log-wrap">
+            <button type="button" class="run-log-toggle" id="run-log-toggle" aria-expanded="true">실행 로그 접기 / 펼치기</button>
+            <pre class="run-log-pre" id="run-log-pre" aria-label="실행 로그"></pre>
         </div>
     </div>
 
@@ -222,5 +318,107 @@
         </tbody>
     </table>
     {% endif %}
+
+<script>
+(function () {
+  /* [7] 크롤링 패널 — POST /api/run, GET /api/run/status 폴링 */
+  var pollTimer = null;
+
+  function setRunButtonsDisabled(disabled) {
+    document.querySelectorAll("#run-panel .run-btn[data-mode]").forEach(function (b) {
+      b.disabled = !!disabled;
+    });
+  }
+
+  window.fetchStatus = async function fetchStatus() {
+    var badge = document.getElementById("run-status-badge");
+    var meta = document.getElementById("run-meta");
+    var pre = document.getElementById("run-log-pre");
+    try {
+      var r = await fetch("/api/run/status", { cache: "no-store" });
+      var d = await r.json();
+      meta.textContent = d.mode
+        ? "모드: " + d.mode + " / PID: " + (d.pid != null ? d.pid : "-")
+        : "";
+
+      if (d.running) {
+        badge.textContent = "실행 중";
+        badge.className = "run-badge run-badge-running";
+        setRunButtonsDisabled(true);
+        if (!pollTimer) pollTimer = setInterval(fetchStatus, 1500);
+      } else {
+        setRunButtonsDisabled(false);
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+        if (d.returncode !== null && d.returncode !== undefined) {
+          if (d.returncode === 0) {
+            badge.textContent = "완료";
+            badge.className = "run-badge run-badge-success";
+          } else {
+            badge.textContent = "오류 (코드 " + d.returncode + ")";
+            badge.className = "run-badge run-badge-error";
+          }
+        } else {
+          badge.textContent = "대기";
+          badge.className = "run-badge run-badge-idle";
+        }
+      }
+
+      if (d.log_tail && Array.isArray(d.log_tail)) {
+        pre.textContent = d.log_tail.join("\n");
+        pre.scrollTop = pre.scrollHeight;
+      }
+    } catch (e) {
+      meta.textContent = "상태 조회 실패";
+    }
+  };
+
+  window.startRun = async function startRun(mode) {
+    try {
+      var r = await fetch("/api/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: mode }),
+      });
+      if (r.status === 409) {
+        alert("이미 실행 중입니다.");
+        await fetchStatus();
+        return;
+      }
+      if (!r.ok) {
+        var j = {};
+        try { j = await r.json(); } catch (e) {}
+        alert(j.error || "실행 시작 실패");
+        await fetchStatus();
+        return;
+      }
+      await fetchStatus();
+      if (!pollTimer) pollTimer = setInterval(fetchStatus, 1500);
+    } catch (e) {
+      alert("요청 실패: " + e);
+    }
+  };
+
+  document.querySelectorAll("#run-panel .run-btn[data-mode]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      startRun(btn.getAttribute("data-mode"));
+    });
+  });
+  document.getElementById("btn-refresh-status").addEventListener("click", function () {
+    fetchStatus();
+  });
+
+  document.getElementById("run-log-toggle").addEventListener("click", function () {
+    var wrap = document.getElementById("run-log-wrap");
+    var t = document.getElementById("run-log-toggle");
+    var collapsed = wrap.classList.toggle("collapsed");
+    t.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  });
+
+  fetchStatus();
+})();
+</script>
 </body>
 </html>

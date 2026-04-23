@@ -5,6 +5,9 @@ import re
 import sqlite3
 import subprocess
 import sys
+import threading
+import time
+from collections import deque
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
@@ -35,6 +38,18 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-key")
 BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
+
+# ── UI 크롤링 실행 패널 (/api/run*) ─────────────────────────────────────────
+RUN_STATE: dict = {
+    "running": False,
+    "mode": None,
+    "started_at": None,
+    "finished_at": None,
+    "returncode": None,
+    "pid": None,
+}
+RUN_LOCK = threading.Lock()
+RUN_LOG: deque = deque(maxlen=500)
 
 from pipeline.compare import compare_new
 from pipeline.flask_ui_audit import (
@@ -110,6 +125,94 @@ def _compute_ui_summary(items: List[dict]) -> dict:
         "unknown": unknown_n,
         "urgent": urgent_n,
     }
+
+
+def _project_root() -> Path:
+    return BASE_DIR
+
+
+def _log_line(msg: str) -> None:
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"[{ts}] {msg}"
+    with RUN_LOCK:
+        RUN_LOG.append(line)
+
+
+def _run_pipeline_has_skip_options() -> bool:
+    """run_pipeline.py 가 argparse + skip 계열 옵션을 갖는지 정적 검사."""
+    script = _project_root() / "run_pipeline.py"
+    try:
+        txt = script.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    low = txt.lower()
+    return "argparse" in txt and "add_argument" in txt and "skip" in low
+
+
+def _build_command(mode: str) -> List[str]:
+    """크롤/파이프라인 실행 커맨드. mode: all | jbexport | bizinfo."""
+    root = _project_root()
+    py = sys.executable
+    if mode == "all":
+        return [py, str(root / "run_all.py")]
+    if mode in ("jbexport", "bizinfo") and _run_pipeline_has_skip_options():
+        if mode == "jbexport":
+            return [py, str(root / "run_pipeline.py"), "--skip-bizinfo"]
+        return [py, str(root / "run_pipeline.py"), "--skip-jbexport"]
+    # run_pipeline 에 skip 미지원 시 전체 스케줄(run_all)로 폴백
+    return [py, str(root / "run_all.py")]
+
+
+def _run_pipeline_background(mode: str) -> None:
+    """서브프로세스를 백그라운드 스레드에서 실행하고 RUN_LOG 에 stdout 을 적재."""
+
+    def worker() -> None:
+        cmd = _build_command(mode)
+        root = str(_project_root())
+        _log_line(f"cwd={root}")
+        _log_line("$ " + " ".join(cmd))
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+            )
+        except Exception as e:
+            _log_line(f"Popen 실패: {e}")
+            with RUN_LOCK:
+                RUN_STATE["running"] = False
+                RUN_STATE["returncode"] = -1
+                RUN_STATE["finished_at"] = datetime.now().isoformat(timespec="seconds")
+            return
+
+        with RUN_LOCK:
+            RUN_STATE["pid"] = proc.pid
+
+        try:
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                _log_line(line.rstrip("\r\n"))
+            rc = proc.wait()
+        except Exception as e:
+            _log_line(f"실행 중 오류: {e}")
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            rc = -1
+
+        with RUN_LOCK:
+            RUN_STATE["running"] = False
+            RUN_STATE["returncode"] = rc
+            RUN_STATE["finished_at"] = datetime.now().isoformat(timespec="seconds")
+        _log_line(f"종료 코드: {rc}")
+
+    threading.Thread(target=worker, daemon=True).start()
 
 
 def load_all_items() -> List[dict]:
@@ -1134,6 +1237,52 @@ def new_announcements():
         summary=summary,
         source_labels=SOURCE_LABELS,
     )
+
+
+@app.route("/api/run", methods=["POST"])
+def api_run_start():
+    """크롤링/파이프라인 실행 시작. 이미 실행 중이면 409."""
+    payload = request.get_json(silent=True) or {}
+    mode = str(payload.get("mode") or "").strip()
+    if mode not in ("all", "jbexport", "bizinfo"):
+        return jsonify({"ok": False, "error": "mode must be all|jbexport|bizinfo"}), 400
+
+    with RUN_LOCK:
+        if RUN_STATE["running"]:
+            return jsonify({"ok": False, "error": "already running"}), 409
+        RUN_LOG.clear()
+        RUN_STATE["running"] = True
+        RUN_STATE["mode"] = mode
+        RUN_STATE["started_at"] = datetime.now().isoformat(timespec="seconds")
+        RUN_STATE["finished_at"] = None
+        RUN_STATE["returncode"] = None
+        RUN_STATE["pid"] = None
+
+    _log_line(f"=== 실행 시작 mode={mode} ===")
+    _run_pipeline_background(mode)
+    return jsonify({"ok": True, "mode": mode})
+
+
+@app.route("/api/run/status", methods=["GET"])
+def api_run_status():
+    with RUN_LOCK:
+        state = {
+            "running": RUN_STATE["running"],
+            "mode": RUN_STATE["mode"],
+            "started_at": RUN_STATE["started_at"],
+            "finished_at": RUN_STATE["finished_at"],
+            "returncode": RUN_STATE["returncode"],
+            "pid": RUN_STATE["pid"],
+        }
+        tail = list(RUN_LOG)[-50:]
+    return jsonify({**state, "log_tail": tail})
+
+
+@app.route("/api/run/logs", methods=["GET"])
+def api_run_logs():
+    with RUN_LOCK:
+        lines = list(RUN_LOG)
+    return jsonify({"logs": lines})
 
 
 if __name__ == "__main__":
