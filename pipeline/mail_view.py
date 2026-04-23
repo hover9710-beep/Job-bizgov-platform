@@ -169,8 +169,9 @@ def to_mail_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, 
     ISO로 정규화. infer_status, 섹션 필터, 정렬 모두 같은 기준으로 돌게 된다.
     원본은 raw_start_date/raw_end_date 에 보존.
 
-    kstartup 은 상세 URL(JS 렌더링 의존) 옆에 보조 `list_url`(목록 페이지)을
-    함께 내보낸다. 메일 렌더러는 두 URL 을 모두 표시한다.
+    kstartup 상세(`bizpbanc-view.do?pbancSn=...`) 는 로그인·세션 없이는
+    렌더 불가이므로 `url` 을 아예 목록 페이지(`bizpbanc-ongoing.do`) 로 치환한다.
+    원본은 `raw_url` 에 보존.
     """
     t = today or _today_str()
     period_text = str(row.get("period_text") or "").strip()
@@ -181,7 +182,10 @@ def to_mail_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, 
     end_date = normalize_date(raw_end, kind="end")
 
     src = str(row.get("source") or "").strip().lower() or "unknown"
-    item: Dict[str, Any] = {
+    raw_url = str(row.get("url") or "").strip()
+    url = _KSTARTUP_FALLBACK_URL if src == "kstartup" else raw_url
+
+    return {
         "id": row.get("id"),
         "title": str(row.get("title") or "").strip(),
         "organization": str(row.get("organization") or "").strip(),
@@ -191,14 +195,11 @@ def to_mail_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, 
         "raw_start_date": raw_start,
         "raw_end_date": raw_end,
         "period_text": period_text,
-        "url": str(row.get("url") or "").strip(),
+        "url": url,
+        "raw_url": raw_url,
         "description": str(row.get("description") or "").strip(),
         "status": infer_status(period_text, start_date, end_date, t),
-        "list_url": "",
     }
-    if src == "kstartup":
-        item["list_url"] = _KSTARTUP_FALLBACK_URL
-    return item
 
 
 def _parse_iso(s: str) -> Optional[date]:
@@ -273,10 +274,19 @@ def _fmt_period(it: Dict[str, Any]) -> str:
 
 
 def _dedupe_by_url_title(items: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """URL 기준 중복 제거.
+
+    kstartup 처럼 표시 URL 을 목록 페이지로 통일해 `url` 이 모두 동일한 소스는
+    `raw_url` (원본 상세 URL) 로 중복을 식별한다. 그래도 없으면 title+기관.
+    """
     seen: set = set()
     out: List[Dict[str, Any]] = []
     for it in items:
-        key = it.get("url") or f"{it.get('title')}|{it.get('organization')}"
+        key = (
+            it.get("raw_url")
+            or it.get("url")
+            or f"{it.get('title')}|{it.get('organization')}"
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -285,13 +295,17 @@ def _dedupe_by_url_title(items: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]
 
 
 def display_url(it: Dict[str, Any]) -> str:
-    """메일/카카오 표시용 **원본** URL 을 그대로 반환.
+    """메일/카카오 표시용 URL.
 
-    kstartup 상세 URL(`bizpbanc-view.do?pbancSn=...`) 도 JS 렌더링 환경(브라우저)
-    에서는 정상 열리기 때문에 덮어쓰지 않는다. 열림 실패를 대비해 목록 페이지
-    URL 은 `list_url` 필드로 별도 제공 → `format_section()` 이 2줄로 함께 표시.
+    kstartup 은 `to_mail_item()` 단계에서 이미 목록 페이지 URL 로 치환되어 있으므로
+    여기서는 단순히 `url` 을 그대로 반환. 방어적으로 source=kstartup 인데 원본
+    상세 URL 이 들어온 케이스도 치환한다 (과거 데이터 호환).
     """
-    return (it.get("url") or "").strip()
+    url = (it.get("url") or "").strip()
+    src = (it.get("source") or "").lower()
+    if src == "kstartup" and "bizpbanc-view.do" in url:
+        return _KSTARTUP_FALLBACK_URL
+    return url
 
 
 def _take_with_source_quota(
@@ -378,7 +392,6 @@ def format_section(
         ttl = it.get("title") or "(제목없음)"
         org = it.get("organization") or "-"
         url = display_url(it) or "-"
-        list_url = (it.get("list_url") or "").strip()
         period = _fmt_period(it)
 
         dday_txt = ""
@@ -392,8 +405,6 @@ def format_section(
         lines.append(f"   기관: {org}")
         lines.append(f"   기간: {period}{dday_txt}")
         lines.append(f"   링크: {url}")
-        if list_url and list_url != url:
-            lines.append(f"   목록: {list_url}")
         lines.append("")
 
     leftover = len(items) - len(picked)

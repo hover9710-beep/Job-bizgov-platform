@@ -45,13 +45,7 @@
             <td>{{ item.get('title') or item.get('공고제목') or '' }}</td>
             <td>{{ item.get('organization') or item.get('기관') or '' }}</td>
             <td>{{ item.get('status') or item.get('상태') or '' }}</td>
-            <td>
-                {% set u = item.get('url') or item.get('상세URL') or '' %}
-                <a href="{{ u }}" target="_blank">{{ u[:80] }}{% if u|length > 80 %}…{% endif %}</a>
-                {% if item.get('list_url') %}
-                <br><small><a href="{{ item['list_url'] }}" target="_blank" style="color:#8b5a2b;">[목록]</a></small>
-                {% endif %}
-            </td>
+            <td>{% set u = item.get('url') or item.get('상세URL') or '' %}<a href="{{ u }}" target="_blank">{{ u[:80] }}{% if u|length > 80 %}…{% endif %}</a></td>
         </tr>
         {% endfor %}
     </table>

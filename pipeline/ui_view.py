@@ -114,8 +114,8 @@ def sqlite_row_to_item(row: Any) -> Dict[str, Any]:
     """
     DB row 또는 일반 dict → UI 표시용 dict.
     appy.py 호환 (dict·sqlite3.Row 모두 허용).
-    url 은 원본 그대로 유지. kstartup 은 `list_url` 보조 필드가 추가되어
-    템플릿에서 상세+목록 두 링크를 나란히 표시할 수 있다.
+    kstartup 은 `url` 을 목록 페이지(`bizpbanc-ongoing.do`)로 치환하고
+    원본은 `raw_url` 로 보존한다. 그 외 소스는 원본 그대로 유지.
     """
     d = dict(row) if not isinstance(row, dict) else dict(row)
     aj = d.get("attachments_json")
@@ -142,25 +142,24 @@ def sqlite_row_to_item(row: Any) -> Dict[str, Any]:
 
 def _apply_display_url(it: Dict[str, Any]) -> None:
     """
-    UI 표시 URL 처리.
-      - 원본 `url` 은 그대로 유지 (브라우저에서 JS 정상 렌더링되는 경우가 많음).
-      - kstartup 은 보조 `list_url`(공고 목록 페이지) 을 함께 내려 템플릿에서
-        상세 링크와 나란히 노출 → 상세 렌더 실패에도 사용자가 목록 페이지로
-        접근 가능. (메일뷰 `to_mail_item()` 과 동일 규칙)
-      - 비-kstartup 은 `list_url=""` 로 설정해 템플릿 분기를 단순화.
+    UI 표시 URL 치환.
+      - kstartup 상세(`bizpbanc-view.do?pbancSn=...`) 는 로그인/세션 없이는
+        렌더링이 불가해 사실상 항상 빈 화면이 된다. → `url` 을 목록 페이지
+        (`bizpbanc-ongoing.do`) 로 완전 치환. 원본은 `raw_url` 에 보존.
+      - 비-kstartup 소스는 원본 URL 유지.
     """
     src = (it.get("source") or "").lower()
+    raw = str(it.get("url") or "").strip()
+    it.setdefault("raw_url", raw)
     if src == "kstartup":
-        it["list_url"] = _KSTARTUP_LIST_URL
-    else:
-        it.setdefault("list_url", "")
+        it["url"] = _KSTARTUP_LIST_URL
 
 
 def to_ui_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, Any]:
     """
     DB row → UI dict. 빈값 허용.
     display_status 는 infer_status()로 결정, DB의 status 는 raw_status 로 보존.
-    url 은 원본을 그대로 유지하고, kstartup 은 `list_url` 보조 필드를 추가.
+    kstartup 의 `url` 은 목록 페이지로 치환(원본은 `raw_url`).
     """
     t = today or _today_str()
     d = sqlite_row_to_item(row)
