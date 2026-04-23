@@ -297,6 +297,8 @@ def run_post_update_and_notify(args: argparse.Namespace) -> int:
     rc = _post_merge_steps(args)
     if rc != 0 and not args.test:
         return rc
+    _section("4e) Attachment text extract")
+    _run([PY, "-m", "pipeline.attachment_text_pipeline"])
     return _run_mail_chain(args)
 
 
