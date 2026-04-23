@@ -234,5 +234,5 @@ if __name__ == "__main__":
     main()
 
 # 실행 방법:
-# 1) python jbexport_proxy.py
+# 1) 상주: python connectors/connectors_jbexport/jbexport_proxy.py (기본 :5001)
 # 2) python jbexport_daily_pipeline.py

@@ -1510,11 +1510,17 @@ def jbexport_post_work1_search(
     return j, ""
 
 
+@app.get("/")
+def jbexport_proxy_root() -> Any:
+    return jsonify({"ok": True, "service": "jbexport_proxy"}), 200
+
+
 @app.get("/health")
 def health() -> Any:
     return jsonify(
         {
             "ok": True,
+            "service": "jbexport_proxy",
             "build": PROXY_BUILD,
             "pid": os.getpid(),
             "boot": BOOT_TS,

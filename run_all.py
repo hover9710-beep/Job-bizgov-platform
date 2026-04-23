@@ -3,7 +3,7 @@
 Run the full pipeline in order (project root = cwd for each subprocess).
 
 전체(--mode all):
-  1) JBEXPORT: jbexport_proxy + pipeline/jbexport_daily.py
+  1) JBEXPORT: 상주 jbexport_proxy(:5001) + pipeline/jbexport_daily.py
   2) BIZINFO: connectors/connector_bizinfo.py
   2b) K-Startup: connectors/connector_kstartup.py
   3) filter_recommend → merge_sources → diff_new → merge_jb → update_db
@@ -24,6 +24,7 @@ import os
 import subprocess
 import sys
 import time
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
@@ -34,8 +35,15 @@ load_dotenv(ROOT / ".env")
 
 PY = sys.executable
 
-PROXY_SCRIPT = ROOT / "connectors" / "connectors_jbexport" / "jbexport_proxy.py"
 LOG_DIR = ROOT / "logs"
+
+
+def is_jbexport_proxy_alive(base_url="http://127.0.0.1:5001", timeout=2):
+    try:
+        with urllib.request.urlopen(base_url, timeout=timeout) as r:
+            return True
+    except Exception:
+        return False
 
 
 def _utf8_stdio() -> None:
@@ -148,44 +156,18 @@ def _ensure_force_mail_body() -> None:
 # ── 크롤·병합 단계 분리 ─────────────────────────────────────────────────────
 
 def run_jbexport() -> int:
-    """jbexport: 프록시 기동 → jbexport_daily 수집 → 프록시 종료."""
-    _section("1) JBEXPORT proxy + daily collection")
-    if not PROXY_SCRIPT.is_file():
-        print(f"[run_all] Missing script: {PROXY_SCRIPT}", flush=True)
+    """jbexport: 상주 프록시(:5001) 가동 여부 확인 후 jbexport_daily 수집."""
+    _section("1) JBEXPORT daily collection")
+    if not is_jbexport_proxy_alive():
+        print(
+            "[run_all] JBEXPORT proxy is not running on http://127.0.0.1:5001",
+            flush=True,
+        )
         return 1
+    print("[run_all] JBEXPORT proxy OK: http://127.0.0.1:5001", flush=True)
 
-    proxy_cmd = [PY, str(PROXY_SCRIPT)]
-    print(
-        "[run_all] Starting Flask proxy in background (required for local jbexport API).",
-        flush=True,
-    )
-    print(f"$ {' '.join(proxy_cmd)}", flush=True)
-    proc: subprocess.Popen | None = None
-    try:
-        proc = subprocess.Popen(proxy_cmd, cwd=str(ROOT))
-        time.sleep(0.2)
-        if proc.poll() is not None:
-            print(
-                f"[run_all] JBEXPORT proxy exited immediately (code {proc.returncode}).",
-                flush=True,
-            )
-            return proc.returncode if proc.returncode is not None else 1
-        time.sleep(2)
-        if proc.poll() is not None:
-            print(f"[run_all] JBEXPORT proxy stopped (code {proc.returncode}).", flush=True)
-            return proc.returncode if proc.returncode is not None else 1
-
-        _section("1b) JBEXPORT jbexport_daily.py")
-        return _run([PY, str(ROOT / "pipeline" / "jbexport_daily.py")])
-    finally:
-        if proc is not None:
-            print("\n[run_all] Stopping JBEXPORT proxy...", flush=True)
-            proc.terminate()
-            try:
-                proc.wait(timeout=8)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait(timeout=5)
+    _section("1b) JBEXPORT jbexport_daily.py")
+    return _run([PY, str(ROOT / "pipeline" / "jbexport_daily.py")])
 
 
 def run_bizinfo() -> int:
