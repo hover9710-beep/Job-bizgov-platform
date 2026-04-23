@@ -46,7 +46,6 @@ from pipeline.presenter import normalize_display_item
 from pipeline.ui_view import (
     filter_items,
     prepare_db_rows_for_ui,
-    prepare_json_items_for_ui,
     sqlite_row_to_item,
 )
 
@@ -56,7 +55,6 @@ PIPELINE_SCRIPT = BASE_DIR / "pipeline" / "run_pipeline.py"
 
 LOG_TAIL_CHARS = 6000
 
-MERGED_NEW_JSON = BASE_DIR / "data" / "merged" / "new.json"
 ALL_JB_JSON = BASE_DIR / "data" / "all_jb" / "all_jb.json"
 
 # UI 표기용 소스 한글 라벨. pipeline/ui_view.SOURCE_LABELS 와 동일 매핑.
@@ -1072,33 +1070,60 @@ def run_pipeline_route():
 
 @app.route("/new", strict_slashes=False)
 def new_announcements():
-    """data/merged/new.json 기준 신규 공고 (순번·규칙 요약·첨부)."""
-    path = MERGED_NEW_JSON
-    if not path.exists():
-        return render_template("new.html", rows=[], items=[], count=0, err=None)
+    """DB 기반 공고 목록. `/` 와 동일 로직·기본값(status=접수중).
 
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError, TypeError) as exc:
-        return render_template(
-            "new.html",
-            rows=[],
-            items=[],
-            count=0,
-            err=f"new.json 읽기 실패: {exc}",
-        )
+    예전 merged/new.json 비교 방식은 날짜·period_text 부재로 infer_status 가
+    대부분 '확인 필요'로만 나와 폐기. DB row 는 start/end/period_text 가 있어
+    상태·마감 배지가 정상 표시된다.
+    """
+    status = (request.args.get("status") or "접수중").strip()
+    source = (request.args.get("source") or "").strip()
+    query = (request.args.get("q") or "").strip()
 
-    if isinstance(data, dict) and "items" in data:
-        raw_items = data["items"]
-    else:
-        raw_items = data if isinstance(data, list) else []
+    status_filter = "" if status in ("", "전체") else status
+    source_filter = "" if source in ("", "전체") else source.lower()
 
-    valid = [x for x in raw_items if isinstance(x, dict)]
-    rows = prepare_json_items_for_ui(valid)
+    sql = """
+        SELECT id, title, organization, start_date, end_date, status, url, description, ai_result, pdf_path,
+               ministry, executing_agency, source,
+               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json
+        FROM biz_projects
+        WHERE 1=1
+    """
+    params: list = []
 
+    if query:
+        sql += " AND (title LIKE ? OR organization LIKE ? OR description LIKE ?)"
+        like_q = f"%{query}%"
+        params.extend([like_q, like_q, like_q])
+
+    rows = get_db().execute(sql, params).fetchall()
+    rows_ui = prepare_db_rows_for_ui(rows)
+    rows_ui = filter_items(rows_ui, status=status_filter, source=source_filter)
+    summary = _compute_ui_summary(rows_ui)
+    if audit_ui_enabled():
+        log_source_mismatch_and_parser(rows_ui[:10], label="GET /new (목록 10)")
+        db = get_db()
+        for r in rows_ui[:5]:
+            rid = r.get("id")
+            if rid is not None:
+                log_detail_consistency(
+                    db,
+                    int(rid),
+                    prepare_row=_prepare_detail_row_for_template,
+                    normalize_item=normalize_display_item,
+                )
     return render_template(
-        "new.html", rows=rows, items=rows, count=len(rows), err=None
+        "new.html",
+        items=rows_ui,
+        rows=rows_ui,
+        count=len(rows_ui),
+        err=None,
+        status=status,
+        source=source,
+        q=query,
+        summary=summary,
+        source_labels=SOURCE_LABELS,
     )
 
 
