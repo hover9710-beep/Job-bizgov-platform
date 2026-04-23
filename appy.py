@@ -349,8 +349,11 @@ def index():
                     normalize_item=normalize_display_item,
                 )
     return render_template(
-        "index.html",
+        "new.html",
+        items=rows_ui,
         rows=rows_ui,
+        count=len(rows_ui),
+        err=None,
         status=status,
         source=source,
         q=query,
