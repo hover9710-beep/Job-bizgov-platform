@@ -1070,17 +1070,17 @@ def run_pipeline_route():
 
 @app.route("/new", strict_slashes=False)
 def new_announcements():
-    """DB 기반 공고 목록. `/` 와 동일 로직·기본값(status=접수중).
+    """DB 기반 + start_date 최근 7일 이내만 표시하는 신규 공고 화면.
 
-    예전 merged/new.json 비교 방식은 날짜·period_text 부재로 infer_status 가
-    대부분 '확인 필요'로만 나와 폐기. DB row 는 start/end/period_text 가 있어
-    상태·마감 배지가 정상 표시된다.
+    `/` 와 달리 status 쿼리 기본값 없음(미지정 시 전체 상태). 이후 7일 필터 적용.
     """
-    status = (request.args.get("status") or "접수중").strip()
+    status = request.args.get("status")
+    if status is not None:
+        status = status.strip()
     source = (request.args.get("source") or "").strip()
     query = (request.args.get("q") or "").strip()
 
-    status_filter = "" if status in ("", "전체") else status
+    status_filter = "" if status in (None, "", "전체") else status
     source_filter = "" if source in ("", "전체") else source.lower()
 
     sql = """
@@ -1100,6 +1100,15 @@ def new_announcements():
     rows = get_db().execute(sql, params).fetchall()
     rows_ui = prepare_db_rows_for_ui(rows)
     rows_ui = filter_items(rows_ui, status=status_filter, source=source_filter)
+
+    today = date.today()
+    cutoff = today - timedelta(days=7)
+    rows_ui = [
+        it
+        for it in rows_ui
+        if (sd := _safe_parse_date(it.get("start_date"))) is not None and sd >= cutoff
+    ]
+
     summary = _compute_ui_summary(rows_ui)
     if audit_ui_enabled():
         log_source_mismatch_and_parser(rows_ui[:10], label="GET /new (목록 10)")
@@ -1119,7 +1128,7 @@ def new_announcements():
         rows=rows_ui,
         count=len(rows_ui),
         err=None,
-        status=status,
+        status=(status if status is not None else ""),
         source=source,
         q=query,
         summary=summary,
