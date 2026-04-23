@@ -4,8 +4,7 @@
     <meta charset="utf-8">
     <title>신규 공고 목록</title>
     <style>
-        table { border-collapse: collapse; }
-        th, td { border: 1px solid #999; padding: 6px 10px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif; }
         .err { color: #c00; }
         .topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
         .topnav a { text-decoration: none; color: #1d4ed8; font-weight: 600; }
@@ -16,12 +15,35 @@
         .filterbar a { padding: 3px 10px; border-radius: 999px; border: 1px solid #cbd5e1; color: #1f2937; text-decoration: none; font-size: 13px; background: #f8fafc; }
         .filterbar a:hover { background: #e2e8f0; }
         .filterbar a.active { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
-        .status-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid transparent; }
+
+        /* --- 메인 테이블: 고정 레이아웃 + 컬럼 너비 고정 --- */
+        table.table-main { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 8px; }
+        table.table-main th,
+        table.table-main td {
+            border: 1px solid #d1d5db;
+            padding: 6px 8px;
+            font-size: 13px;
+            line-height: 1.4;
+            vertical-align: middle;
+            box-sizing: border-box;
+        }
+        table.table-main th { background: #f1f5f9; text-align: left; font-weight: 600; color: #374151; white-space: nowrap; }
+
+        td.num-col    { text-align: center; color: #6b7280; }
+        td.title-col  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        td.org-col    { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #374151; }
+        td.status-col { text-align: center; padding: 4px 2px; overflow: hidden; }
+        td.date-col   { white-space: nowrap; color: #374151; font-variant-numeric: tabular-nums; text-align: center; }
+        td.source-col { text-align: center; padding: 4px 4px; overflow: hidden; }
+        td.url-col    { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
+        td.url-col a  { color: #1d4ed8; text-decoration: none; }
+        td.url-col a:hover { text-decoration: underline; }
+
+        .status-badge { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 600; border: 1px solid transparent; white-space: nowrap; }
         .status-open    { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
         .status-closed  { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
         .status-unknown { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
-        .source-tag { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 12px; background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; }
-        td.date-col { white-space: nowrap; color: #374151; font-variant-numeric: tabular-nums; }
+        .source-tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -73,7 +95,20 @@
     {% else %}
     <p><strong>신규 {{ count }}건</strong></p>
 
-    <table>
+    <table class="table-main">
+        {# 고정 컬럼 너비: table-layout:fixed 기준 권위(authoritative) 지정.
+           제목 35% / 기관 15% / URL 나머지 auto, 그 외는 px. #}
+        <colgroup>
+            <col style="width: 40px;">
+            <col style="width: 35%;">
+            <col style="width: 15%;">
+            <col style="width: 60px;">
+            <col style="width: 90px;">
+            <col style="width: 90px;">
+            <col style="width: 70px;">
+            <col>
+        </colgroup>
+        <thead>
         <tr>
             <th>#</th>
             <th>제목</th>
@@ -84,23 +119,29 @@
             <th>소스</th>
             <th>URL</th>
         </tr>
+        </thead>
+        <tbody>
         {% for item in items %}
         {# display_status 는 infer_status() 결과. DB raw status 는 폴백용. #}
         {% set st = item.get('display_status') or item.get('status') or item.get('상태') or '' %}
         {% set st_cls = 'status-open' if st == '접수중'
                          else ('status-closed' if st == '마감'
                                else 'status-unknown') %}
+        {% set title_txt = item.get('title') or item.get('공고제목') or '' %}
+        {% set org_txt   = item.get('organization') or item.get('기관') or '' %}
+        {% set u = item.get('url') or item.get('상세URL') or '' %}
         <tr>
-            <td>{{ loop.index }}</td>
-            <td>{{ item.get('title') or item.get('공고제목') or '' }}</td>
-            <td>{{ item.get('organization') or item.get('기관') or '' }}</td>
-            <td><span class="status-badge {{ st_cls }}">{{ st or '-' }}</span></td>
+            <td class="num-col">{{ loop.index }}</td>
+            <td class="title-col" title="{{ title_txt }}">{{ title_txt }}</td>
+            <td class="org-col" title="{{ org_txt }}">{{ org_txt }}</td>
+            <td class="status-col"><span class="status-badge {{ st_cls }}">{{ st or '-' }}</span></td>
             <td class="date-col">{{ item.get('start_date') or '-' }}</td>
             <td class="date-col">{{ item.get('end_date') or '-' }}</td>
-            <td><span class="source-tag">{{ (item.get('source') or item.get('source_badge') or '-')|lower }}</span></td>
-            <td>{% set u = item.get('url') or item.get('상세URL') or '' %}<a href="{{ u }}" target="_blank">{{ u[:80] }}{% if u|length > 80 %}…{% endif %}</a></td>
+            <td class="source-col"><span class="source-tag">{{ (item.get('source') or item.get('source_badge') or '-')|lower }}</span></td>
+            <td class="url-col" title="{{ u }}"><a href="{{ u }}" target="_blank">{{ u }}</a></td>
         </tr>
         {% endfor %}
+        </tbody>
     </table>
     {% endif %}
 </body>
