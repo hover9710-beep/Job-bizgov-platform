@@ -52,6 +52,13 @@ SOURCE_MIN_QUOTA = 5
 # 메일 표시용 URL 치환 (직접 링크가 JS 렌더링에 의존해 빈 화면이 되는 소스는 목록 페이지로).
 _KSTARTUP_FALLBACK_URL = "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do"
 
+MAIL_SOURCE_ORDER: List[str] = ["jbexport", "bizinfo", "kstartup"]
+MAIL_SOURCE_LABELS: Dict[str, str] = {
+    "jbexport": "전북수출통합지원시스템",
+    "bizinfo": "기업마당",
+    "kstartup": "K-Startup",
+}
+
 # ---------------------------------------------------------------------------
 # 소스별 메일 구조 (2026-04 개편)
 # ---------------------------------------------------------------------------
@@ -460,6 +467,78 @@ def format_section(
 URGENT_MAIL_DAYS = 3
 
 
+def _esc_html_txt(s: Any) -> str:
+    return html.escape(str(s if s is not None else ""), quote=False)
+
+
+def _esc_html_attr(s: Any) -> str:
+    return html.escape(str(s if s is not None else ""), quote=True)
+
+
+def _group_items_by_source(
+    items: Iterable[Dict[str, Any]],
+) -> Dict[str, List[Dict[str, Any]]]:
+    """MAIL_SOURCE_ORDER 소스별 분류. 그 외는 extra."""
+    buckets: Dict[str, List[Dict[str, Any]]] = {s: [] for s in MAIL_SOURCE_ORDER}
+    buckets["extra"] = []
+    for it in items:
+        src = str(it.get("source") or "").strip().lower()
+        if src in MAIL_SOURCE_ORDER:
+            buckets[src].append(it)
+        else:
+            buckets["extra"].append(it)
+    return buckets
+
+
+def _render_mail_card(item: Dict[str, Any], *, urgent: bool = False) -> str:
+    href = _esc_html_attr(item.get("url") or "")
+    title = _esc_html_txt(item.get("title") or "-")
+    org = _esc_html_txt(item.get("organization") or "-")
+    sd = _esc_html_txt(item.get("start_date") or "-")
+    ed = _esc_html_txt(item.get("end_date") or "-")
+    if urgent:
+        badge = _esc_html_txt(item.get("deadline_badge") or "")
+        return f"""
+<div style="margin-bottom:14px; padding:10px; border:1px solid #fee2e2; border-radius:6px;">
+  <a href="{href}" style="font-size:15px; font-weight:bold; color:#111827; text-decoration:none;">{title}</a><br>
+  <span style="font-size:12px; color:#6b7280;">{org} | {sd} ~ {ed}</span><br>
+  <span style="font-size:12px; color:#b91c1c; font-weight:bold;">{badge}</span>
+</div>"""
+    status = _esc_html_txt(item.get("display_status") or "")
+    return f"""
+<div style="margin-bottom:12px; padding:8px; border-bottom:1px solid #e5e7eb;">
+  <a href="{href}" style="font-size:15px; font-weight:bold; color:#111827; text-decoration:none;">{title}</a><br>
+  <span style="font-size:12px; color:#6b7280;">{org} | {sd} ~ {ed}</span><br>
+  <span style="font-size:12px; color:#16a34a;">{status}</span>
+</div>"""
+
+
+def _render_source_mail_section(
+    label: str,
+    urgent_list: List[Dict[str, Any]],
+    new_list: List[Dict[str, Any]],
+) -> str:
+    """단일 기관(또는 기타) 블록: 마감 임박 → 신규. 둘 다 비면 빈 문자열."""
+    if not urgent_list and not new_list:
+        return ""
+    lines: List[str] = [
+        (
+            '<div style="margin-top:24px; margin-bottom:10px; padding:8px 12px; '
+            'background:#f3f4f6; border-radius:8px; font-weight:700;">'
+            f"{_esc_html_txt(label)}</div>"
+        )
+    ]
+    if urgent_list:
+        lines.append("""<h3 style="color:#b91c1c;">🔥 마감 임박</h3>""")
+        for it in urgent_list:
+            lines.append(_render_mail_card(it, urgent=True))
+    if new_list:
+        lines.append("""<h3 style="margin-top:20px;">🆕 신규 공고</h3>""")
+        for it in new_list:
+            lines.append(_render_mail_card(it, urgent=False))
+    return "\n".join(lines)
+
+
 def _mail_deadline_badge(it: Dict[str, Any], today_iso: str) -> str:
     """마감 임박 섹션용 D-n 문구."""
     t = _parse_iso(today_iso)
@@ -478,45 +557,39 @@ def render_mail_html(
     new_items: List[Dict[str, Any]],
     urgent_items: List[Dict[str, Any]],
 ) -> str:
-    """클릭형 링크·마감임박 강조 HTML 본문."""
+    """기관(소스)별 섹션 — 각 블록 안에서 마감 임박 → 신규 공고."""
 
-    def esc(s: Any) -> str:
-        return html.escape(str(s if s is not None else ""), quote=False)
+    urgent_by = _group_items_by_source(urgent_items)
+    new_by = _group_items_by_source(new_items)
 
-    def esc_attr(s: Any) -> str:
-        return html.escape(str(s if s is not None else ""), quote=True)
-
-    out = ""
-    out += """
+    parts: List[str] = [
+        """
 <div style="font-family:Arial, sans-serif;">
   <h2 style="margin-bottom:10px;">📌 지원사업 알림</h2>
 """
-    if urgent_items:
-        out += """<h3 style="color:#b91c1c;">🔥 마감 임박</h3>"""
-        for i in urgent_items:
-            href = esc_attr(i.get("url") or "")
-            out += f"""
-<div style="margin-bottom:14px; padding:10px; border:1px solid #fee2e2; border-radius:6px;">
-  <a href="{href}" style="font-size:15px; font-weight:bold; color:#111827; text-decoration:none;">{esc(i.get("title") or "-")}</a><br>
-  <span style="font-size:12px; color:#6b7280;">{esc(i.get("organization") or "-")} | {esc(i.get("start_date") or "-")} ~ {esc(i.get("end_date") or "-")}</span><br>
-  <span style="font-size:12px; color:#b91c1c; font-weight:bold;">{esc(i.get("deadline_badge") or "")}</span>
-</div>"""
+    ]
 
-    out += """<h3 style="margin-top:20px;">🆕 신규 공고</h3>"""
-    for i in new_items:
-        href = esc_attr(i.get("url") or "")
-        out += f"""
-<div style="margin-bottom:12px; padding:8px; border-bottom:1px solid #e5e7eb;">
-  <a href="{href}" style="font-size:15px; font-weight:bold; color:#111827; text-decoration:none;">{esc(i.get("title") or "-")}</a><br>
-  <span style="font-size:12px; color:#6b7280;">{esc(i.get("organization") or "-")} | {esc(i.get("start_date") or "-")} ~ {esc(i.get("end_date") or "-")}</span><br>
-  <span style="font-size:12px; color:#16a34a;">{esc(i.get("display_status") or "")}</span>
-</div>"""
+    for src in MAIL_SOURCE_ORDER:
+        block = _render_source_mail_section(
+            MAIL_SOURCE_LABELS.get(src, src),
+            urgent_by[src],
+            new_by[src],
+        )
+        if block:
+            parts.append(block)
 
-    out += """
+    u_ex = urgent_by["extra"]
+    n_ex = new_by["extra"]
+    if u_ex or n_ex:
+        parts.append(_render_source_mail_section("기타", u_ex, n_ex))
+
+    parts.append(
+        """
   <hr style="margin-top:20px;">
   <div style="font-size:11px; color:#9ca3af;">본 메일은 JB BizGov Tracker 자동 발송입니다.</div>
 </div>"""
-    return out
+    )
+    return "".join(parts)
 
 
 def _enrich_for_html_template(it: Dict[str, Any], today_iso: str) -> Dict[str, Any]:
