@@ -930,12 +930,11 @@ def merge_detail_into_item(item: dict, detail_data: Dict[str, Any]) -> dict:
         atts = []
 
     if title:
-        old_t = out.get("title")
-        old_kt = out.get("공고제목")
-        if _is_empty(old_t) or _title_is_junk(old_t):
-            out["title"] = title
-        if _is_empty(old_kt) or _title_is_junk(old_kt):
-            out["공고제목"] = title
+        # 제목 병합은 `_merge_title()` 단일 정책으로 일원화.
+        # 규칙: 기존이 junk → enriched 교체 / enriched 에 `[카테고리]` 접두어가 있고
+        #       기존에 없으면 교체 / 그 외 유지. (`_merge_title` 정의 참조)
+        out["title"] = _merge_title(out.get("title"), title)
+        out["공고제목"] = _merge_title(out.get("공고제목"), title)
 
     if org and _is_empty(out.get("organization")) and _is_empty(out.get("기관")):
         out["organization"] = org
@@ -1171,15 +1170,36 @@ def _title_is_junk(title: str) -> bool:
     return False
 
 
+_CATEGORY_PREFIX_RE = re.compile(r"^\[[^\[\]]{1,30}\]\s*\S")
+
+
+def _has_category_prefix(title: str) -> bool:
+    """title 이 '[카테고리] ...' 접두어 형태로 시작하면 True."""
+    return bool(_CATEGORY_PREFIX_RE.match(title or ""))
+
+
 def _merge_title(item_title: Any, enriched_title: Any) -> str:
     """
-    기존 title 이 정상이면 유지, junk(spSeq=... / 빈값) 면 enriched 로 덮어씀.
-    enriched 도 junk 면 기존 값 유지.
+    title 병합 규칙:
+      1) 기존이 junk(spSeq=.../ MENU / 빈값 등) 이면 enriched 로 교체.
+      2) enriched 에 `[카테고리] ...` 접두어가 있고 기존에는 없으면 교체
+         (일관된 `[카테고리] 제목` 포맷 유지 목적).
+      3) 그 외에는 기존 유지.
     """
     old = str(item_title or "").strip()
     new = str(enriched_title or "").strip()
+
     if _title_is_junk(old) and new and not _title_is_junk(new):
         return new
+
+    if (
+        new
+        and not _title_is_junk(new)
+        and _has_category_prefix(new)
+        and not _has_category_prefix(old)
+    ):
+        return new
+
     return old
 
 
