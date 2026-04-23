@@ -1075,15 +1075,16 @@ def new_announcements():
     """data/merged/new.json 기준 신규 공고 (순번·규칙 요약·첨부)."""
     path = MERGED_NEW_JSON
     if not path.exists():
-        return render_template("new_projects.html", rows=[], count=0, err=None)
+        return render_template("new.html", rows=[], items=[], count=0, err=None)
 
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError, TypeError) as exc:
         return render_template(
-            "new_projects.html",
+            "new.html",
             rows=[],
+            items=[],
             count=0,
             err=f"new.json 읽기 실패: {exc}",
         )
@@ -1097,7 +1098,7 @@ def new_announcements():
     rows = prepare_json_items_for_ui(valid)
 
     return render_template(
-        "new_projects.html", rows=rows, count=len(rows), err=None
+        "new.html", rows=rows, items=rows, count=len(rows), err=None
     )
 
 
