@@ -43,6 +43,7 @@ from pipeline.flask_ui_audit import (
 )
 from pipeline.presenter import normalize_display_item
 from pipeline.ui_view import (
+    filter_items,
     prepare_db_rows_for_ui,
     prepare_json_items_for_ui,
     sqlite_row_to_item,
@@ -308,8 +309,15 @@ def api_jbexport_list():
 
 @app.route("/")
 def index():
-    status = (request.args.get("status") or "").strip()
+    # 필터는 UI 레이어(ui_view.filter_items)에서만 처리.
+    # status 는 infer_status() 기반 display_status 기준이므로 DB raw status 로 SQL 필터를 걸지 않는다.
+    # 기본값: status="접수중". status="전체" 는 필터 해제.
+    status = (request.args.get("status") or "접수중").strip()
+    source = (request.args.get("source") or "").strip()
     query = (request.args.get("q") or "").strip()
+
+    status_filter = "" if status in ("", "전체") else status
+    source_filter = "" if source in ("", "전체") else source.lower()
 
     sql = """
         SELECT id, title, organization, start_date, end_date, status, url, description, ai_result, pdf_path,
@@ -318,11 +326,7 @@ def index():
         FROM biz_projects
         WHERE 1=1
     """
-    params = []
-
-    if status:
-        sql += " AND status = ?"
-        params.append(status)
+    params: list = []
 
     if query:
         sql += " AND (title LIKE ? OR organization LIKE ? OR description LIKE ?)"
@@ -331,6 +335,7 @@ def index():
 
     rows = get_db().execute(sql, params).fetchall()
     rows_ui = prepare_db_rows_for_ui(rows)
+    rows_ui = filter_items(rows_ui, status=status_filter, source=source_filter)
     if audit_ui_enabled():
         log_source_mismatch_and_parser(rows_ui[:10], label="GET / (목록 10)")
         db = get_db()
@@ -343,7 +348,13 @@ def index():
                     prepare_row=_prepare_detail_row_for_template,
                     normalize_item=normalize_display_item,
                 )
-    return render_template("index.html", rows=rows_ui, status=status, q=query)
+    return render_template(
+        "index.html",
+        rows=rows_ui,
+        status=status,
+        source=source,
+        q=query,
+    )
 
 
 @app.route("/company", methods=["GET", "POST"])
