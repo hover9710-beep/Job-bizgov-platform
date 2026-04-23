@@ -407,6 +407,15 @@ def truncate_body(body: str, max_chars: int = MAX_BODY_CHARS) -> str:
     return cut + f"\n\n… [본문 길이 제한으로 절단됨: {len(body)-max_chars:,}자 생략]\n"
 
 
+def _count_by_source(items: Iterable[Dict[str, Any]]) -> Dict[str, int]:
+    """단계별 진단을 위한 소스별 카운트. 빈 소스는 'unknown'."""
+    out: Dict[str, int] = {}
+    for it in items:
+        src = (it.get("source") or "unknown").lower() or "unknown"
+        out[src] = out.get(src, 0) + 1
+    return out
+
+
 def build_mail_body(
     rows: Optional[List[Dict[str, Any]]] = None,
     today: Optional[str] = None,
@@ -417,16 +426,29 @@ def build_mail_body(
     """
     3개 섹션(신규/마감임박/접수중)을 이어 붙여 본문 문자열 반환.
     rows 미지정 시 DB에서 직접 로드.
+
+    단계별 소스 카운트를 [stage*] 프리픽스로 로그에 남겨
+    어느 단계에서 소스가 사라지는지 추적 가능.
     """
     t = today or _today_str()
     if rows is None:
         rows = load_db_rows()
 
+    # stage1: load_db_rows 직후 — 소스별 원본 카운트
+    print(f"[mail_view] today={t} rows={len(rows)} items(raw)={len(rows)}", flush=True)
+    print(f"[mail_view][stage1 load_db_rows] by_source={_count_by_source(rows)}", flush=True)
+
     items = [to_mail_item(r, today=t) for r in rows]
+    print(f"[mail_view][stage2 to_mail_item] by_source={_count_by_source(items)}", flush=True)
 
     new_items = filter_new(items, days=new_days, today=t)
+    print(f"[mail_view][stage3 filter_new] by_source={_count_by_source(new_items)}", flush=True)
+
     ending_items = filter_ending_soon(items, days=ending_days, today=t)
+    print(f"[mail_view][stage4 filter_ending_soon] by_source={_count_by_source(ending_items)}", flush=True)
+
     active_items = filter_active(items, today=t)
+    print(f"[mail_view][stage5 filter_active] by_source={_count_by_source(active_items)}", flush=True)
 
     # 접수중은 end_date 임박 순 (없으면 뒤로).
     def _end_sort_key(x: Dict[str, Any]) -> tuple:
@@ -437,7 +459,6 @@ def build_mail_body(
     ending_items.sort(key=_end_sort_key)
     active_items.sort(key=_end_sort_key)
 
-    print(f"[mail_view] today={t} rows={len(rows)} items={len(items)}", flush=True)
     print(
         f"[mail_view] sections: new={len(new_items)} "
         f"ending_soon={len(ending_items)} active={len(active_items)}",
