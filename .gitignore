@@ -16,6 +16,8 @@ debug_detail.html
 
 # local scratch
 x.py
+.flask_test.err
+.flask_test.out
 
 # temp/debug scripts (moved out of root)
 scripts/debug/
