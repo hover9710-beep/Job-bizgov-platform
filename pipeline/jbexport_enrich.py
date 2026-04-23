@@ -621,19 +621,103 @@ def _build_download_url(path_num: str, file_uuid: str) -> str:
     return f"{JBEXPORT_BASE}/downloadFile.do?{q}"
 
 
+_JB_SITE_NAME = "전북특별자치도 수출통합지원시스템"
+_JB_TITLE_JS_RE = re.compile(
+    r"""\$\(['"]title['"]\)\s*\.\s*text\(\s*['"](?P<val>[^'"]+)['"]\s*\)""",
+    re.I,
+)
+
+
 def _title_from_html(html: str) -> str:
+    """jbexport 상세 HTML 에서 공고명 추출.
+
+    jbexport 상세 페이지의 실제 공고명은 `<td class="th">지원사업</td>` 라벨의
+    다음 `<td>` 에 담겨 있다. 여기에는 `<strong>[카테고리]</strong>` 접두와
+    뒤쪽 배지(`span.blue_txt` 등)가 섞여 있을 수 있어 깨끗한 텍스트만 추린다.
+
+    순서:
+      1) 상세 테이블 `지원사업` 라벨 → 다음 td (가장 정확)
+      2) inline JS `$('title').text('... | 공고명')` 의 마지막 `|` 세그먼트
+      3) 기존 셀렉터(h3.tit 등) / 본문 헤딩 / <title> / <strong> 순 fallback
+      4) 모두 실패 시 "" (merge 단계가 기존 값을 덮어쓰지 않음)
+    """
     soup = BeautifulSoup(html or "", "html.parser")
-    for sel in ("h3.tit", "h2.tit", "div.subject", "td.subject"):
+
+    def _clean(el: Any) -> str:
+        return re.sub(r"\s+", " ", el.get_text(" ", strip=True)).strip()
+
+    def _not_site_name(t: str) -> bool:
+        return t.replace(" ", "") != _JB_SITE_NAME.replace(" ", "")
+
+    # 1) 상세 테이블: <td class="th">지원사업</td> 다음의 td
+    for th in soup.find_all("td", class_="th"):
+        label = th.get_text(strip=True)
+        if label in ("지원사업", "공고명", "사업명"):
+            nxt = th.find_next_sibling("td")
+            if not nxt:
+                continue
+            # 배지류 제거 후 텍스트 추출
+            for badge in nxt.select("span.blue_txt, span.label, span.label_02, span[class*=label]"):
+                badge.extract()
+            t = _clean(nxt)
+            if t and not _title_is_junk(t) and _not_site_name(t):
+                return t
+
+    # 2) inline JS: $('title').text('사이트 | 상위 | 공고명')
+    for script in soup.find_all("script"):
+        m = _JB_TITLE_JS_RE.search(script.get_text() or "")
+        if not m:
+            continue
+        val = m.group("val").strip()
+        parts = [p.strip() for p in val.split("|") if p.strip()]
+        if parts:
+            cand = parts[-1]
+            if cand and not _title_is_junk(cand) and _not_site_name(cand):
+                return cand
+
+    # 3) 기존 셀렉터
+    for sel in (
+        "h3.tit",
+        "h2.tit",
+        "div.subject",
+        "td.subject",
+        ".view_tit",
+        ".board_view .tit",
+        ".boardView .tit",
+    ):
         el = soup.select_one(sel)
         if el:
-            t = re.sub(r"\s+", " ", el.get_text(" ", strip=True)).strip()
-            if t:
+            t = _clean(el)
+            if t and not _title_is_junk(t) and _not_site_name(t):
                 return t
+
+    # 4) 본문 영역 헤딩 (h1~h4)
+    for tag in ("h1", "h2", "h3", "h4"):
+        for el in soup.find_all(tag):
+            t = _clean(el)
+            if t and not _title_is_junk(t) and _not_site_name(t) and len(t) >= 5:
+                return t
+
+    # 5) <title> 태그
+    if soup.title:
+        t = _clean(soup.title)
+        for sep in ("|", "-", "·", "::"):
+            if sep in t:
+                parts = [p.strip() for p in t.split(sep) if p.strip()]
+                if parts:
+                    cand = parts[-1]
+                    if cand and not _title_is_junk(cand) and _not_site_name(cand):
+                        return cand
+        if t and not _title_is_junk(t) and _not_site_name(t) and len(t) >= 5:
+            return t
+
+    # 6) <strong> 최후 수단
     strong = soup.find("strong")
     if strong:
-        t = re.sub(r"\s+", " ", strong.get_text(" ", strip=True)).strip()
-        if t:
+        t = _clean(strong)
+        if t and not _title_is_junk(t) and _not_site_name(t):
             return t
+
     return ""
 
 
@@ -1042,15 +1126,47 @@ def _pick_str(newv: Any, oldv: Any) -> str:
     return str(oldv or "").strip()
 
 
+_TITLE_JUNK_EXACT = {
+    "menu",
+    "nav",
+    "navigation",
+    "top",
+    "home",
+    "메뉴",
+    "상세",
+    "상세보기",
+    "공지사항",
+    "content",
+    "contents",
+    "본문",
+    "본문 바로가기",
+    "바로가기",
+    "제목",
+    "title",
+}
+
+
 def _title_is_junk(title: str) -> bool:
-    """title 이 spSeq=해시 형태 / 빈 문자열이면 True."""
+    """
+    title 이 쓰레기(빈값 / spSeq=해시 / 내비게이션 토큰 / 2글자 이하 등) 이면 True.
+
+    jbexport 상세 페이지 파서가 사이트 공통 nav 의 'MENU' 같은 단어를 잘못
+    주울 수 있어 exact 매칭 블랙리스트와 최소 길이 기준을 함께 사용한다.
+    """
     t = str(title or "").strip()
     if not t:
         return True
-    # spSeq= 로 시작하거나 spSeq= 만 포함된 해시성 문자열
-    if t.lower().startswith("spseq="):
+    low = t.lower()
+    if low.startswith("spseq="):
         return True
-    if "spseq=" in t.lower() and len(t) < 60:
+    if "spseq=" in low and len(t) < 60:
+        return True
+    if low in _TITLE_JUNK_EXACT:
+        return True
+    if len(t) <= 2:
+        return True
+    # jbexport 사이트명 자체가 들어간 경우(<title> fallback 실패 케이스)
+    if t.replace(" ", "") == "전북특별자치도수출통합지원시스템":
         return True
     return False
 
