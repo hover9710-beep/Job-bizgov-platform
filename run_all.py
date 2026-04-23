@@ -2,23 +2,20 @@
 """
 Run the full pipeline in order (project root = cwd for each subprocess).
 
-1) JBEXPORT: connectors/connectors_jbexport/jbexport_proxy.py (Flask — background for pipeline duration)
-2) BIZINFO: connectors/connector_bizinfo.py
-3) filter_recommend
-4) merge_sources → data/merged/all_sites.json (+ history)
-4b) diff_new → data/merged/new.json
-5) make_mail (data/mail/mail_body.txt)
-5a) kakao token refresh (scripts/kakao_token_refresh.py)
-5b) make_kakao (data/kakao/kakao_body.txt)
-5c) kakao_notify (data/kakao/kakao_body.txt → Kakao Memo API)
-6) mailer --dry-run
-7) mailer (real send)
+전체(--mode all):
+  1) JBEXPORT: jbexport_proxy + pipeline/jbexport_daily.py
+  2) BIZINFO: connectors/connector_bizinfo.py
+  2b) K-Startup: connectors/connector_kstartup.py
+  3) filter_recommend → merge_sources → diff_new → merge_jb → update_db
+  4) make_mail / 카카오 / mailer
+
+부분(--mode jbexport|bizinfo): 해당 수집만 후 병합·DB(메일·카카오 없음).
 
 옵션:
-  --test            : 신규 공고 0건이거나 mail_body.txt 없음이어도 강제로 메일 발송.
-                      (이번 실행이 "스케줄러에서 진짜 실행됐는지" 확인용)
-  --skip-crawl      : 1~3단계(크롤링/필터) 스킵, 기존 JSON 재사용.
-  --only-mail       : 크롤러와 병합을 전부 건너뛰고 make_mail → mailer 만 실행.
+  --mode all|jbexport|bizinfo (기본 all)
+  --test            : 중간 실패해도 이후 단계 시도·테스트 메일
+  --skip-crawl      : 크롤 3종 스킵, 병합·알림만
+  --only-mail       : make_mail → mailer 만
 """
 from __future__ import annotations
 
@@ -148,136 +145,38 @@ def _ensure_force_mail_body() -> None:
     print(f"[run_all] --test: 비어있던 mail_body 를 강제 채움 → {out_file}", flush=True)
 
 
-def main() -> int:
-    _utf8_stdio()
+# ── 크롤·병합 단계 분리 ─────────────────────────────────────────────────────
 
-    parser = argparse.ArgumentParser(description="BizGovPlanner 전체 파이프라인")
-    parser.add_argument("--test", action="store_true",
-                        help="신규 0건이어도 mail_body 를 강제 채워 실제 메일 발송")
-    parser.add_argument("--skip-crawl", action="store_true",
-                        help="1~3단계 스킵, 기존 JSON 재사용")
-    parser.add_argument("--only-mail", action="store_true",
-                        help="크롤러/병합 전부 스킵, make_mail → mailer 만 실행")
-    args = parser.parse_args()
+def run_jbexport() -> int:
+    """jbexport: 프록시 기동 → jbexport_daily 수집 → 프록시 종료."""
+    _section("1) JBEXPORT proxy + daily collection")
+    if not PROXY_SCRIPT.is_file():
+        print(f"[run_all] Missing script: {PROXY_SCRIPT}", flush=True)
+        return 1
 
-    # ── 로그 파일 tee ──
-    log_fp, log_path = _open_logfile()
-    sys.stdout = _TeeWriter(sys.stdout, log_fp)
-    sys.stderr = _TeeWriter(sys.stderr, log_fp)
-    print(f"[run_all] log file: {log_path}", flush=True)
-
-    proc = None
+    proxy_cmd = [PY, str(PROXY_SCRIPT)]
+    print(
+        "[run_all] Starting Flask proxy in background (required for local jbexport API).",
+        flush=True,
+    )
+    print(f"$ {' '.join(proxy_cmd)}", flush=True)
+    proc: subprocess.Popen | None = None
     try:
-        if not args.only_mail:
-            _section("1) JBEXPORT crawler (jbexport_proxy — background)")
-            if not PROXY_SCRIPT.is_file():
-                print(f"[run_all] Missing script: {PROXY_SCRIPT}", flush=True)
-                return 1
+        proc = subprocess.Popen(proxy_cmd, cwd=str(ROOT))
+        time.sleep(0.2)
+        if proc.poll() is not None:
+            print(
+                f"[run_all] JBEXPORT proxy exited immediately (code {proc.returncode}).",
+                flush=True,
+            )
+            return proc.returncode if proc.returncode is not None else 1
+        time.sleep(2)
+        if proc.poll() is not None:
+            print(f"[run_all] JBEXPORT proxy stopped (code {proc.returncode}).", flush=True)
+            return proc.returncode if proc.returncode is not None else 1
 
-            proxy_cmd = [PY, str(PROXY_SCRIPT)]
-            print("[run_all] Starting Flask proxy in background (required for local jbexport API).",
-                  flush=True)
-            print(f"$ {' '.join(proxy_cmd)}", flush=True)
-            proc = subprocess.Popen(proxy_cmd, cwd=str(ROOT))
-            time.sleep(0.2)
-            if proc.poll() is not None:
-                print(f"[run_all] JBEXPORT proxy exited immediately (code {proc.returncode}).",
-                      flush=True)
-                return proc.returncode if proc.returncode is not None else 1
-            time.sleep(2)
-            if proc.poll() is not None:
-                print(f"[run_all] JBEXPORT proxy stopped (code {proc.returncode}).", flush=True)
-                return proc.returncode if proc.returncode is not None else 1
-
-        # ── 파이프라인 스텝 정의 ──
-        pre_mail_steps: list[tuple[str, list[str]]] = []
-        if not args.only_mail:
-            if not args.skip_crawl:
-                pre_mail_steps.append((
-                    "2) BIZINFO crawler",
-                    [PY, str(ROOT / "connectors" / "connector_bizinfo.py")],
-                ))
-                pre_mail_steps.append((
-                    "3) Filter recommend",
-                    [PY, str(ROOT / "pipeline" / "filter_recommend.py")],
-                ))
-            pre_mail_steps.append((
-                "4) Merge sources",
-                [PY, str(ROOT / "pipeline" / "merge_sources.py")],
-            ))
-            pre_mail_steps.append((
-                "4b) Diff new (merged/new.json)",
-                [PY, str(ROOT / "pipeline" / "diff_new.py")],
-            ))
-
-        mail_steps: list[tuple[str, list[str]]] = [
-            # mail_view: DB → period_text + infer_status 기반 본문 생성 (새 뷰 계층).
-            ("5) Make mail body (mail_view)", [PY, "-m", "pipeline.mail_view"]),
-            # 카카오 access_token 은 24h 만료 — refresh 가능한 환경이면 매일 갱신.
-            ("5a) Kakao token refresh", [PY, str(ROOT / "scripts" / "kakao_token_refresh.py")]),
-            ("5b) Make Kakao body", [PY, str(ROOT / "pipeline" / "make_kakao.py")]),
-            # 카카오 발송 — 실패해도 메일 발송은 계속 진행 (아래 non-fatal 처리).
-            ("5c) Kakao notify (send)", [PY, str(ROOT / "kakao_notify.py")]),
-            ("6) Mailer (dry-run)", [PY, str(ROOT / "mailer.py"), "--dry-run"]),
-        ]
-
-        # 카카오 관련 단계는 실패해도 메일 발송을 멈추지 않는다 (best-effort).
-        NON_FATAL_STEPS = {
-            "5a) Kakao token refresh",
-            "5b) Make Kakao body",
-            "5c) Kakao notify (send)",
-        }
-
-        # --test 가 아니면, 중간 스텝 하나라도 실패하면 즉시 리턴.
-        # --test 면, 모든 스텝을 실행하되 실패해도 발송 단계까지 진행.
-        failures: list[tuple[str, int]] = []
-
-        for title, cmd in pre_mail_steps + mail_steps:
-            _section(title)
-            if any("mailer.py" in str(p) for p in cmd):
-                _print_smtp_debug()
-            rc = _run(cmd)
-            if rc != 0:
-                msg = f"[run_all] FAILED: {title} (exit {rc})"
-                print(msg, flush=True)
-                failures.append((title, rc))
-                if title in NON_FATAL_STEPS:
-                    print(f"[run_all] non-fatal: {title} 실패, 계속 진행", flush=True)
-                    continue
-                if not args.test:
-                    return rc
-
-        # 7) Real mail send
-        _section("7) Mailer (real send)")
-        smtp_user = (os.environ.get("SMTP_USER") or "").strip()
-        smtp_pass = (os.environ.get("SMTP_PASS") or "").strip()
-
-        if args.test:
-            _ensure_force_mail_body()
-
-        if not smtp_user or not smtp_pass:
-            print("[run_all] Skipped: SMTP_USER and SMTP_PASS must both be set for real send.",
-                  flush=True)
-            print("  (mailer.py would exit 1 without them.)", flush=True)
-            return 1 if not args.test else 0
-
-        _print_smtp_debug()
-        rc = _run([PY, str(ROOT / "mailer.py")])
-        if rc != 0:
-            print(f"[run_all] FAILED: 7) Mailer (real send) (exit {rc})", flush=True)
-            if not args.test:
-                return rc
-            failures.append(("7) Mailer", rc))
-
-        if failures:
-            print("\n[run_all] 완료 (일부 스텝 실패):", flush=True)
-            for t, rc in failures:
-                print(f"  - {t} (exit {rc})", flush=True)
-            # --test 에선 non-zero 스텝이 있어도 0 반환 (스케줄러 탐지용)
-            return 0 if args.test else 1
-
-        print("\nALL PIPELINE COMPLETED", flush=True)
-        return 0
+        _section("1b) JBEXPORT jbexport_daily.py")
+        return _run([PY, str(ROOT / "pipeline" / "jbexport_daily.py")])
     finally:
         if proc is not None:
             print("\n[run_all] Stopping JBEXPORT proxy...", flush=True)
@@ -287,6 +186,200 @@ def main() -> int:
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait(timeout=5)
+
+
+def run_bizinfo() -> int:
+    """bizinfo: connector_bizinfo 단일 실행."""
+    _section("2) BIZINFO crawler")
+    return _run([PY, str(ROOT / "connectors" / "connector_bizinfo.py")])
+
+
+def run_kstartup() -> int:
+    """kstartup: connector_kstartup 단일 실행."""
+    _section("2b) K-Startup crawler")
+    return _run([PY, str(ROOT / "connectors" / "connector_kstartup.py")])
+
+
+def _post_merge_steps(args: argparse.Namespace) -> int:
+    """merge / DB 반영 / 필터 (메일·카카오 제외)."""
+    steps: list[tuple[str, list[str]]] = [
+        (
+            "3) Filter recommend",
+            [PY, str(ROOT / "pipeline" / "filter_recommend.py")],
+        ),
+        (
+            "4) Merge sources",
+            [PY, str(ROOT / "pipeline" / "merge_sources.py")],
+        ),
+        (
+            "4b) Diff new (merged/new.json)",
+            [PY, str(ROOT / "pipeline" / "diff_new.py")],
+        ),
+        (
+            "4c) Merge jb → all_jb.json",
+            [PY, str(ROOT / "pipeline" / "merge_jb.py")],
+        ),
+        (
+            "4d) Update DB (biz.db)",
+            [PY, str(ROOT / "pipeline" / "update_db.py")],
+        ),
+    ]
+    failures: list[tuple[str, int]] = []
+    for title, cmd in steps:
+        _section(title)
+        rc = _run(cmd)
+        if rc != 0:
+            msg = f"[run_all] FAILED: {title} (exit {rc})"
+            print(msg, flush=True)
+            failures.append((title, rc))
+            if not args.test:
+                return rc
+    if failures:
+        print("\n[run_all] post-merge 일부 실패 (--test 계속):", flush=True)
+        for t, rc in failures:
+            print(f"  - {t} (exit {rc})", flush=True)
+    return 0
+
+
+def run_post_update_only(args: argparse.Namespace) -> int:
+    """병합·DB·필터만 (알림 없음)."""
+    return _post_merge_steps(args)
+
+
+def _run_mail_chain(args: argparse.Namespace) -> int:
+    """make_mail / 카카오 / mailer dry-run / 실발송."""
+    mail_steps: list[tuple[str, list[str]]] = [
+        ("5) Make mail body (mail_view)", [PY, "-m", "pipeline.mail_view"]),
+        ("5a) Kakao token refresh", [PY, str(ROOT / "scripts" / "kakao_token_refresh.py")]),
+        ("5b) Make Kakao body", [PY, str(ROOT / "pipeline" / "make_kakao.py")]),
+        ("5c) Kakao notify (send)", [PY, str(ROOT / "kakao_notify.py")]),
+        ("6) Mailer (dry-run)", [PY, str(ROOT / "mailer.py"), "--dry-run"]),
+    ]
+    NON_FATAL_STEPS = {
+        "5a) Kakao token refresh",
+        "5b) Make Kakao body",
+        "5c) Kakao notify (send)",
+    }
+    failures: list[tuple[str, int]] = []
+
+    for title, cmd in mail_steps:
+        _section(title)
+        if any("mailer.py" in str(p) for p in cmd):
+            _print_smtp_debug()
+        rc = _run(cmd)
+        if rc != 0:
+            msg = f"[run_all] FAILED: {title} (exit {rc})"
+            print(msg, flush=True)
+            failures.append((title, rc))
+            if title in NON_FATAL_STEPS:
+                print(f"[run_all] non-fatal: {title} 실패, 계속 진행", flush=True)
+                continue
+            if not args.test:
+                return rc
+
+    _section("7) Mailer (real send)")
+    smtp_user = (os.environ.get("SMTP_USER") or "").strip()
+    smtp_pass = (os.environ.get("SMTP_PASS") or "").strip()
+
+    if args.test:
+        _ensure_force_mail_body()
+
+    if not smtp_user or not smtp_pass:
+        print(
+            "[run_all] Skipped: SMTP_USER and SMTP_PASS must both be set for real send.",
+            flush=True,
+        )
+        print("  (mailer.py would exit 1 without them.)", flush=True)
+        return 1 if not args.test else 0
+
+    _print_smtp_debug()
+    rc = _run([PY, str(ROOT / "mailer.py")])
+    if rc != 0:
+        print(f"[run_all] FAILED: 7) Mailer (real send) (exit {rc})", flush=True)
+        if not args.test:
+            return rc
+        failures.append(("7) Mailer", rc))
+
+    if failures:
+        print("\n[run_all] 완료 (일부 스텝 실패):", flush=True)
+        for t, rc in failures:
+            print(f"  - {t} (exit {rc})", flush=True)
+        return 0 if args.test else 1
+
+    print("\nALL PIPELINE COMPLETED", flush=True)
+    return 0
+
+
+def run_post_update_and_notify(args: argparse.Namespace) -> int:
+    """병합·DB 후 메일·카카오까지."""
+    rc = _post_merge_steps(args)
+    if rc != 0 and not args.test:
+        return rc
+    return _run_mail_chain(args)
+
+
+def run_all(args: argparse.Namespace) -> int:
+    """전체: jbexport → bizinfo → kstartup → 병합·알림."""
+    if not args.skip_crawl:
+        r = run_jbexport()
+        if r != 0 and not args.test:
+            return r
+        r = run_bizinfo()
+        if r != 0 and not args.test:
+            return r
+        r = run_kstartup()
+        if r != 0 and not args.test:
+            return r
+    return run_post_update_and_notify(args)
+
+
+def _only_mail_flow(args: argparse.Namespace) -> int:
+    """--only-mail: make_mail → … → 실발송 만."""
+    return _run_mail_chain(args)
+
+
+def main() -> int:
+    _utf8_stdio()
+
+    parser = argparse.ArgumentParser(description="BizGovPlanner 전체 파이프라인")
+    parser.add_argument("--test", action="store_true",
+                        help="신규 0건이어도 mail_body 를 강제 채워 실제 메일 발송")
+    parser.add_argument("--skip-crawl", action="store_true",
+                        help="크롤 단계 스킵(jbexport/bizinfo/kstartup), 병합·알림만")
+    parser.add_argument("--only-mail", action="store_true",
+                        help="크롤러/병합 전부 스킵, make_mail → mailer 만 실행")
+    parser.add_argument(
+        "--mode",
+        choices=["all", "jbexport", "bizinfo"],
+        default="all",
+        help="실행 범위: all=전체, jbexport|bizinfo=해당 수집 후 병합·DB만(메일·카카오 없음)",
+    )
+    args = parser.parse_args()
+
+    # ── 로그 파일 tee ──
+    log_fp, log_path = _open_logfile()
+    sys.stdout = _TeeWriter(sys.stdout, log_fp)
+    sys.stderr = _TeeWriter(sys.stderr, log_fp)
+    print(f"[run_all] log file: {log_path}", flush=True)
+
+    code = 1
+    try:
+        if args.only_mail:
+            code = _only_mail_flow(args)
+        elif args.mode == "all":
+            code = run_all(args)
+        elif args.mode == "jbexport":
+            code = run_jbexport()
+            if code == 0 or args.test:
+                code = run_post_update_only(args)
+        elif args.mode == "bizinfo":
+            code = run_bizinfo()
+            if code == 0 or args.test:
+                code = run_post_update_only(args)
+        else:
+            code = 1
+        return code
+    finally:
         try:
             log_fp.write(
                 f"===== run_all end {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} =====\n"

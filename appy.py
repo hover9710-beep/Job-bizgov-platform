@@ -138,29 +138,17 @@ def _log_line(msg: str) -> None:
         RUN_LOG.append(line)
 
 
-def _run_pipeline_has_skip_options() -> bool:
-    """run_pipeline.py 가 argparse + skip 계열 옵션을 갖는지 정적 검사."""
-    script = _project_root() / "run_pipeline.py"
-    try:
-        txt = script.read_text(encoding="utf-8")
-    except OSError:
-        return False
-    low = txt.lower()
-    return "argparse" in txt and "add_argument" in txt and "skip" in low
-
-
 def _build_command(mode: str) -> List[str]:
-    """크롤/파이프라인 실행 커맨드. mode: all | jbexport | bizinfo."""
+    """UI 패널에서 run_all.py 를 --mode 와 함께 실행."""
     root = _project_root()
-    py = sys.executable
-    if mode == "all":
-        return [py, str(root / "run_all.py")]
-    if mode in ("jbexport", "bizinfo") and _run_pipeline_has_skip_options():
-        if mode == "jbexport":
-            return [py, str(root / "run_pipeline.py"), "--skip-bizinfo"]
-        return [py, str(root / "run_pipeline.py"), "--skip-jbexport"]
-    # run_pipeline 에 skip 미지원 시 전체 스케줄(run_all)로 폴백
-    return [py, str(root / "run_all.py")]
+    if mode in ("all", "jbexport", "bizinfo"):
+        return [
+            sys.executable,
+            os.path.join(str(root), "run_all.py"),
+            "--mode",
+            mode,
+        ]
+    raise ValueError(f"unknown mode: {mode}")
 
 
 def _run_pipeline_background(mode: str) -> None:
