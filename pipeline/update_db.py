@@ -81,6 +81,8 @@ def _init_db(conn: sqlite3.Connection) -> None:
         "attachments_json",
     ):
         _ensure_column(conn, "biz_projects", col)
+    _ensure_column(conn, "biz_projects", "ai_summary", "TEXT")
+    _ensure_column(conn, "biz_projects", "ai_summary_at", "TEXT")
     _ensure_column(conn, "projects", "source")
     _ensure_column(conn, "projects", "site")
     _ensure_column(conn, "projects", "collected_at")
@@ -88,6 +90,8 @@ def _init_db(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "projects", "executing_agency")
     _ensure_column(conn, "projects", "period_text")
     _ensure_column(conn, "projects", "attachments_json")
+    _ensure_column(conn, "projects", "ai_summary", "TEXT")
+    _ensure_column(conn, "projects", "ai_summary_at", "TEXT")
     conn.execute(
         """
         UPDATE biz_projects
@@ -128,14 +132,22 @@ def _ensure_organization_column(conn: sqlite3.Connection, table_name: str) -> No
     print(f"[update_db] add column: {table_name}.organization")
 
 
-def _ensure_column(conn: sqlite3.Connection, table_name: str, column_name: str) -> None:
+def _ensure_column(
+    conn: sqlite3.Connection,
+    table_name: str,
+    column_name: str,
+    col_type: str = "TEXT",
+) -> None:
     if not _table_exists(conn, table_name):
         return
     cols = {str(c[1]) for c in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
     if column_name in cols:
         return
-    conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} TEXT")
-    print(f"[update_db] add column: {table_name}.{column_name}")
+    ct = col_type.strip().upper() if col_type else "TEXT"
+    if ct not in ("TEXT", "INTEGER", "REAL", "BLOB"):
+        ct = "TEXT"
+    conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {ct}")
+    print(f"[update_db] add column: {table_name}.{column_name} ({ct})")
 
 
 def _load_items() -> List[Dict[str, Any]]:
@@ -157,6 +169,12 @@ def _is_empty_attachments_json(val: Any) -> bool:
         return True
     s = str(val).strip()
     return s == "" or s == "[]"
+
+
+def _is_empty_ai_summary(val: Any) -> bool:
+    if val is None:
+        return True
+    return str(val).strip() == ""
 
 
 def _normalize_attachments_json_field(raw: Any) -> str:
@@ -238,6 +256,7 @@ def _prepare_row(item: Dict[str, Any]) -> Tuple[Dict[str, Any], str, str]:
     if status == "확인 필요":
         status = infer_status(period_text, sd, ed, date.today().isoformat())
     attachments_json = _normalize_attachments_json_field(item.get("attachments_json"))
+    ai_s = item.get("ai_summary")
     row = {
         "title": title,
         "organization": organization,
@@ -253,6 +272,7 @@ def _prepare_row(item: Dict[str, Any]) -> Tuple[Dict[str, Any], str, str]:
         "collected_at": collected_at,
         "period_text": period_text,
         "attachments_json": attachments_json,
+        "ai_summary": str(ai_s).strip() if ai_s is not None else "",
     }
     return row, title, url
 
@@ -311,9 +331,10 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
                 title, organization, ministry, executing_agency, source,
                 start_date, end_date, status, url, description, site,
                 ai_result, pdf_path, collected_at, period_text, attachments_json,
+                ai_summary, ai_summary_at,
                 created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """,
             (
                 row["title"],
@@ -332,15 +353,17 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
                 row["collected_at"],
                 row["period_text"],
                 row["attachments_json"] or None,
+                row["ai_summary"] or None,
+                None,
             ),
         )
         return
 
     cur = conn.execute(
-        "SELECT ai_result, pdf_path, attachments_json FROM biz_projects WHERE id = ?",
+        "SELECT ai_result, pdf_path, attachments_json, ai_summary FROM biz_projects WHERE id = ?",
         (eid,),
     ).fetchone()
-    old_ai, old_pdf, old_aj = (cur or (None, None, None))
+    old_ai, old_pdf, old_aj, old_asum = (cur or (None, None, None, None))
 
     new_ai = old_ai if ai_result is None else ai_result
     new_pdf = old_pdf if pdf_path is None else pdf_path
@@ -349,13 +372,18 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
     if _is_empty_attachments_json(merged_aj) and not _is_empty_attachments_json(old_aj):
         merged_aj = str(old_aj).strip()
 
+    merged_as = row["ai_summary"]
+    if _is_empty_ai_summary(merged_as) and not _is_empty_ai_summary(old_asum):
+        merged_as = str(old_asum).strip()
+
     conn.execute(
         """
         UPDATE biz_projects
         SET title = ?, organization = ?, ministry = ?, executing_agency = ?,
             source = ?, start_date = ?, end_date = ?, status = ?, url = ?,
             description = ?, site = ?, ai_result = ?, pdf_path = ?,
-            collected_at = ?, period_text = ?, attachments_json = ?, updated_at = CURRENT_TIMESTAMP
+            collected_at = ?, period_text = ?, attachments_json = ?,
+            ai_summary = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
         """,
         (
@@ -375,6 +403,7 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
             row["collected_at"],
             row["period_text"],
             merged_aj or None,
+            merged_as or None,
             eid,
         ),
     )

@@ -316,11 +316,19 @@ def run_post_update_and_notify(args: argparse.Namespace) -> int:
             "메일·알림 단계 계속",
             flush=True,
         )
+    _section("4f) AI summary cache (non-fatal)")
+    sum_rc = _run([PY, "-m", "pipeline.ai_summary_cache"])
+    if sum_rc != 0:
+        print(
+            f"[run_all] non-fatal: ai_summary_cache exit {sum_rc}, "
+            "메일·알림 단계 계속",
+            flush=True,
+        )
     return _run_mail_chain(args)
 
 
 def run_all(args: argparse.Namespace) -> int:
-    """전체: (1) 소스 크롤 → (2) 병합·정규화 → (3) update_db → (4) 첨부 텍스트 추출 → (5~6) 메일/카카오."""
+    """전체: 크롤 → 병합·update_db → 첨부 텍스트 → AI 요약 캐시 → 메일/카카오."""
     if not args.skip_crawl:
         r = run_jbexport()
         if r != 0 and not args.test:

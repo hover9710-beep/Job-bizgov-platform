@@ -1,5 +1,5 @@
 # AI 요약 모듈 - OpenAI GPT 사용.
-# summarize_project() 내부만 교체하면 다른 AI로 전환 가능.
+# generate_project_summary() 내부만 교체하면 다른 AI로 전환 가능.
 
 from __future__ import annotations
 
@@ -26,24 +26,30 @@ def load_attachment_text(source: str, attachment_filename: str) -> str:
         for p in sorted(base.glob(f"*{stem}.txt")):
             if p.is_file():
                 try:
-                    return p.read_text(encoding="utf-8", errors="ignore")[:2000]
+                    return p.read_text(encoding="utf-8", errors="ignore")[:3000]
                 except OSError:
                     continue
     return ""
 
 
-def summarize_project(title: str, description: str, attachment_text: str) -> str:
+def generate_project_summary(item: dict, text: str = "") -> str:
     """
     OpenAI GPT로 공고 1줄 요약.
-    API 키 없거나 실패하면 빈 문자열 반환 (전체 파이프라인 중단 없음).
+    API 키 없거나 실패하면 빈 문자열 (파이프라인 중단 없음).
+    입력 본문은 최대 3000자로 잘라서 전송.
     """
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
         return ""
 
-    content = attachment_text or description or title
-    if not content:
+    title = str(item.get("title") or "").strip()
+    org = str(item.get("organization") or "").strip()
+    body = (text or "").strip()
+    if not body:
+        body = f"{title}\n{org}".strip()
+    if not body:
         return ""
+    body = body[:3000]
 
     try:
         client = OpenAI(api_key=api_key)
@@ -56,7 +62,7 @@ def summarize_project(title: str, description: str, attachment_text: str) -> str
                 },
                 {
                     "role": "user",
-                    "content": f"공고명: {title}\n\n내용: {content[:1500]}",
+                    "content": f"공고명: {title}\n기관: {org}\n\n내용:\n{body}",
                 },
             ],
             max_tokens=100,
@@ -67,16 +73,3 @@ def summarize_project(title: str, description: str, attachment_text: str) -> str
     except Exception as e:
         print(f"[ai_summary] GPT 요약 실패: {e}")
         return ""
-
-
-def get_project_summary(item: dict) -> str:
-    title = item.get("title", "")
-    description = item.get("description", "") or ""
-    source = item.get("source", "")
-
-    attachment_text = ""
-    attach_names = item.get("attachment_names") or []
-    if isinstance(attach_names, list) and attach_names:
-        attachment_text = load_attachment_text(source, str(attach_names[0]))
-
-    return summarize_project(title, description, attachment_text)

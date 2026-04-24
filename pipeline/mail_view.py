@@ -28,13 +28,12 @@ import sqlite3
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from pipeline.ai_summary import get_project_summary
 from pipeline.normalize_project import infer_status
 from pipeline.url_utils import canonical_url
 
@@ -164,6 +163,11 @@ def _ensure_attachments_json_column(conn: sqlite3.Connection) -> bool:
     return "attachments_json" in cols
 
 
+def _ensure_ai_summary_columns(conn: sqlite3.Connection) -> Tuple[bool, bool]:
+    cols = {str(c[1]) for c in conn.execute("PRAGMA table_info(biz_projects)").fetchall()}
+    return "ai_summary" in cols, "ai_summary_at" in cols
+
+
 def load_db_rows(db_path: Path = DB_PATH) -> List[Dict[str, Any]]:
     """biz_projects 전체 행을 dict 리스트로 반환. period_text 컬럼 유무 자동 대응."""
     if not db_path.exists():
@@ -181,12 +185,25 @@ def load_db_rows(db_path: Path = DB_PATH) -> List[Dict[str, Any]]:
             if has_aj
             else "'' AS attachments_json"
         )
+        has_as, has_as_at = _ensure_ai_summary_columns(conn)
+        as_expr = (
+            "COALESCE(ai_summary, '') AS ai_summary"
+            if has_as
+            else "'' AS ai_summary"
+        )
+        as_at_expr = (
+            "COALESCE(ai_summary_at, '') AS ai_summary_at"
+            if has_as_at
+            else "'' AS ai_summary_at"
+        )
         sql = f"""
             SELECT
                 id, title, organization, source,
                 start_date, end_date, status, url, description,
                 {pt_expr},
-                {aj_expr}
+                {aj_expr},
+                {as_expr},
+                {as_at_expr}
             FROM biz_projects
         """
         rows = conn.execute(sql).fetchall()
@@ -301,6 +318,7 @@ def to_mail_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, 
         "status": infer_status(period_text, start_date, end_date, t),
         "attachment_summary": att_summary,
         "attachment_names": att_names,
+        "ai_summary": str(row.get("ai_summary") or "").strip(),
     }
 
 
@@ -577,12 +595,12 @@ def _render_mail_card(item: Dict[str, Any], *, urgent: bool = False) -> str:
             f"📎 첨부: {_esc_html_txt(att_summ)}"
             f"</div><br>\n"
         )
-    ai_one_line = get_project_summary(item).strip()
+    ai_sum = str(item.get("ai_summary") or "").strip()
     summary_block = ""
-    if ai_one_line:
+    if ai_sum:
         summary_block = (
-            '<div style="font-size:12px; color:#374151; margin-top:4px; font-style:italic;">'
-            f"{_esc_html_txt(ai_one_line)}</div><br>\n"
+            '<div style="font-size:12px; color:#6b7280; font-style:italic; margin-top:4px;">'
+            f"{_esc_html_txt(ai_sum)}</div><br>\n"
         )
     if urgent:
         badge = _esc_html_txt(item.get("deadline_badge") or "")
@@ -601,13 +619,24 @@ def _render_mail_card(item: Dict[str, Any], *, urgent: bool = False) -> str:
 </div>"""
 
 
+_EMPTY_SUBSECTION_HTML = (
+    '<div style="font-size:12px; color:#9ca3af; padding:8px 0;">해당 공고 없음</div>'
+)
+
+
 def _render_source_mail_section(
     label: str,
     urgent_list: List[Dict[str, Any]],
     new_list: List[Dict[str, Any]],
+    *,
+    required: bool = False,
 ) -> str:
-    """단일 기관(또는 기타) 블록: 마감 임박 → 신규. 둘 다 비면 빈 문자열."""
-    if not urgent_list and not new_list:
+    """단일 기관 블록: 마감 임박 → 신규.
+
+    required=True (jbexport): 항상 두 소제목·건수 표시, 비어 있으면 '해당 공고 없음'.
+    required=False: 둘 다 비면 빈 문자열; 항목 있는 소제목만 표시하고 건수 포함.
+    """
+    if not required and not urgent_list and not new_list:
         return ""
     lines: List[str] = [
         (
@@ -616,14 +645,33 @@ def _render_source_mail_section(
             f"{_esc_html_txt(label)}</div>"
         )
     ]
-    if urgent_list:
-        lines.append("""<h3 style="color:#b91c1c;">🔥 마감 임박</h3>""")
-        for it in urgent_list:
-            lines.append(_render_mail_card(it, urgent=True))
-    if new_list:
-        lines.append("""<h3 style="margin-top:20px;">🆕 신규 공고</h3>""")
-        for it in new_list:
-            lines.append(_render_mail_card(it, urgent=False))
+    if required:
+        nu, nn = len(urgent_list), len(new_list)
+        lines.append(f'<h3 style="color:#b91c1c;">🔥 마감 임박 ({nu}건)</h3>')
+        if urgent_list:
+            for it in urgent_list:
+                lines.append(_render_mail_card(it, urgent=True))
+        else:
+            lines.append(_EMPTY_SUBSECTION_HTML)
+        lines.append(f'<h3 style="margin-top:20px;">🆕 신규 공고 ({nn}건)</h3>')
+        if new_list:
+            for it in new_list:
+                lines.append(_render_mail_card(it, urgent=False))
+        else:
+            lines.append(_EMPTY_SUBSECTION_HTML)
+    else:
+        if urgent_list:
+            lines.append(
+                f'<h3 style="color:#b91c1c;">🔥 마감 임박 ({len(urgent_list)}건)</h3>'
+            )
+            for it in urgent_list:
+                lines.append(_render_mail_card(it, urgent=True))
+        if new_list:
+            lines.append(
+                f'<h3 style="margin-top:20px;">🆕 신규 공고 ({len(new_list)}건)</h3>'
+            )
+            for it in new_list:
+                lines.append(_render_mail_card(it, urgent=False))
     return "\n".join(lines)
 
 
@@ -650,18 +698,33 @@ def render_mail_html(
     urgent_by = _group_items_by_source(urgent_items)
     new_by = _group_items_by_source(new_items)
 
+    n_new_total = len(new_items)
+    n_urgent_total = len(urgent_items)
+
     parts: List[str] = [
         """
 <div style="font-family:Arial, sans-serif;">
   <h2 style="margin-bottom:10px;">📌 지원사업 알림</h2>
-"""
+""",
+        f"""
+<div style="margin-bottom:16px; padding:10px; background:#f8fafc; border-radius:8px;">
+  🆕 신규 공고: {n_new_total}건<br>
+  🔥 마감 임박: {n_urgent_total}건
+</div>
+""",
     ]
 
     for src in MAIL_SOURCE_ORDER:
+        is_required = src == "jbexport"
+        src_urgent = urgent_by[src]
+        src_new = new_by[src]
+        if not src_new and not src_urgent and not is_required:
+            continue
         block = _render_source_mail_section(
             MAIL_SOURCE_LABELS.get(src, src),
-            urgent_by[src],
-            new_by[src],
+            src_urgent,
+            src_new,
+            required=is_required,
         )
         if block:
             parts.append(block)
@@ -669,7 +732,7 @@ def render_mail_html(
     u_ex = urgent_by["extra"]
     n_ex = new_by["extra"]
     if u_ex or n_ex:
-        parts.append(_render_source_mail_section("기타", u_ex, n_ex))
+        parts.append(_render_source_mail_section("기타", u_ex, n_ex, required=False))
 
     parts.append(
         """
@@ -689,6 +752,7 @@ def _enrich_for_html_template(it: Dict[str, Any], today_iso: str) -> Dict[str, A
         "deadline_badge": _mail_deadline_badge(it, today_iso),
         "display_status": str(it.get("status") or ""),
         "attachment_summary": str(it.get("attachment_summary") or "").strip(),
+        "ai_summary": str(it.get("ai_summary") or "").strip(),
     }
 
 
