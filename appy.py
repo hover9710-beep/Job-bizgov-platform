@@ -39,6 +39,24 @@ from kakao_notify import build_recommend_kakao_text, send_kakao_memo
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-key")
 
+
+@app.context_processor
+def _inject_index_url() -> dict:
+    """쿼리스트링을 유지한 채 `index` URL 생성 (필터 링크용)."""
+
+    def index_url(**overrides: Any) -> str:
+        d = request.args.to_dict(flat=True)
+        for k, v in overrides.items():
+            if v is None or (isinstance(v, str) and v.strip() == ""):
+                d.pop(k, None)
+            else:
+                d[k] = str(v).strip() if isinstance(v, str) else v
+        d = {k: v for k, v in d.items() if v is not None and str(v) != ""}
+        return url_for("index", **d)
+
+    return dict(index_url=index_url)
+
+
 BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
@@ -440,18 +458,26 @@ def api_jbexport_list():
 def index():
     # 필터는 UI 레이어(ui_view.filter_items)에서만 처리.
     # status 는 infer_status() 기반 display_status 기준이므로 DB raw status 로 SQL 필터를 걸지 않는다.
-    # 기본값: status="접수중". status="전체" 는 필터 해제.
-    status = (request.args.get("status") or "접수중").strip()
+    # status 미지정·"전체" 는 상태 필터 해제.
+    status = (request.args.get("status") or "").strip()
     source = (request.args.get("source") or "").strip()
     query = (request.args.get("q") or "").strip()
+    deadline = (request.args.get("deadline") or "").strip()
+    recent = (request.args.get("recent") or "").strip()
+    has_ai_summary = (request.args.get("has_ai_summary") or "").strip()
+    has_recommend_label = (request.args.get("has_recommend_label") or "").strip()
+    has_attachments = (request.args.get("has_attachments") or "").strip()
+    category = (request.args.get("category") or "").strip()
 
     status_filter = "" if status in ("", "전체") else status
     source_filter = "" if source in ("", "전체") else source.lower()
+    fq = request.args.to_dict(flat=True)
 
     sql = """
         SELECT id, title, organization, start_date, end_date, status, url, description, ai_result, pdf_path,
                ministry, executing_agency, source,
-               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json
+               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json,
+               ai_summary, ai_summary_at, recommend_label, recommend_label_at
         FROM biz_projects
         WHERE 1=1
     """
@@ -464,7 +490,18 @@ def index():
 
     rows = get_db().execute(sql, params).fetchall()
     rows_ui = prepare_db_rows_for_ui(rows)
-    rows_ui = filter_items(rows_ui, status=status_filter, source=source_filter)
+    rows_ui = filter_items(
+        rows_ui,
+        status=status_filter,
+        source=source_filter,
+        q=query,
+        deadline=deadline or None,
+        recent=recent or None,
+        has_ai_summary=has_ai_summary or None,
+        has_recommend_label=has_recommend_label or None,
+        has_attachments=has_attachments or None,
+        category=category or None,
+    )
     summary = _compute_ui_summary(rows_ui)
     if audit_ui_enabled():
         log_source_mismatch_and_parser(rows_ui[:10], label="GET / (목록 10)")
@@ -487,6 +524,13 @@ def index():
         status=status,
         source=source,
         q=query,
+        deadline=deadline,
+        recent=recent,
+        has_ai_summary=has_ai_summary,
+        has_recommend_label=has_recommend_label,
+        has_attachments=has_attachments,
+        category=category,
+        fq=fq,
         summary=summary,
         source_labels=SOURCE_LABELS,
     )
@@ -527,7 +571,8 @@ def projects_list():
         """
         SELECT id, title, organization, start_date, end_date, status, url, description,
                ministry, executing_agency, source,
-               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json
+               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json,
+               ai_summary, ai_summary_at, recommend_label, recommend_label_at
         FROM biz_projects
         ORDER BY COALESCE(end_date, '9999-12-31') DESC
         """
@@ -544,7 +589,8 @@ def project_detail(pid):
         """
         SELECT id, title, organization, ministry, executing_agency, source, start_date, end_date,
                status, url, description, ai_result, pdf_path,
-               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json
+               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json,
+               ai_summary, ai_summary_at, recommend_label, recommend_label_at
         FROM biz_projects
         WHERE id = ?
         """,
@@ -577,7 +623,8 @@ def detail(pid):
         """
         SELECT id, title, organization, ministry, executing_agency, source, start_date, end_date,
                status, url, description, ai_result, pdf_path,
-               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json
+               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json,
+               ai_summary, ai_summary_at, recommend_label, recommend_label_at
         FROM biz_projects
         WHERE id = ?
         """,
@@ -1153,16 +1200,26 @@ def new_announcements():
     status = request.args.get("status")
     if status is not None:
         status = status.strip()
+    else:
+        status = ""
     source = (request.args.get("source") or "").strip()
     query = (request.args.get("q") or "").strip()
+    deadline = (request.args.get("deadline") or "").strip()
+    recent = (request.args.get("recent") or "").strip()
+    has_ai_summary = (request.args.get("has_ai_summary") or "").strip()
+    has_recommend_label = (request.args.get("has_recommend_label") or "").strip()
+    has_attachments = (request.args.get("has_attachments") or "").strip()
+    category = (request.args.get("category") or "").strip()
 
     status_filter = "" if status in (None, "", "전체") else status
     source_filter = "" if source in ("", "전체") else source.lower()
+    fq = request.args.to_dict(flat=True)
 
     sql = """
         SELECT id, title, organization, start_date, end_date, status, url, description, ai_result, pdf_path,
                ministry, executing_agency, source,
-               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json
+               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json,
+               ai_summary, ai_summary_at, recommend_label, recommend_label_at
         FROM biz_projects
         WHERE 1=1
     """
@@ -1175,7 +1232,18 @@ def new_announcements():
 
     rows = get_db().execute(sql, params).fetchall()
     rows_ui = prepare_db_rows_for_ui(rows)
-    rows_ui = filter_items(rows_ui, status=status_filter, source=source_filter)
+    rows_ui = filter_items(
+        rows_ui,
+        status=status_filter,
+        source=source_filter,
+        q=query,
+        deadline=deadline or None,
+        recent=recent or None,
+        has_ai_summary=has_ai_summary or None,
+        has_recommend_label=has_recommend_label or None,
+        has_attachments=has_attachments or None,
+        category=category or None,
+    )
 
     today = date.today()
     cutoff = today - timedelta(days=7)
@@ -1204,9 +1272,16 @@ def new_announcements():
         rows=rows_ui,
         count=len(rows_ui),
         err=None,
-        status=(status if status is not None else ""),
+        status=status,
         source=source,
         q=query,
+        deadline=deadline,
+        recent=recent,
+        has_ai_summary=has_ai_summary,
+        has_recommend_label=has_recommend_label,
+        has_attachments=has_attachments,
+        category=category,
+        fq=fq,
         summary=summary,
         source_labels=SOURCE_LABELS,
     )

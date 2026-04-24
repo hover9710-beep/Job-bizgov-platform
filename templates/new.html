@@ -15,6 +15,12 @@
         .filterbar a { padding: 3px 10px; border-radius: 999px; border: 1px solid #cbd5e1; color: #1f2937; text-decoration: none; font-size: 13px; background: #f8fafc; }
         .filterbar a:hover { background: #e2e8f0; }
         .filterbar a.active { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+        .filter-stack { flex-direction: column; align-items: flex-start; gap: 10px; }
+        .filter-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; width: 100%; }
+        .filter-search { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 12px; }
+        .filter-search input[type="search"] { min-width: 200px; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; }
+        .filter-search button { padding: 6px 14px; border-radius: 8px; border: 1px solid #1d4ed8; background: #1d4ed8; color: #fff; font-weight: 600; font-size: 13px; cursor: pointer; }
+        .filter-search button:hover { background: #1e40af; }
 
         /* --- 메인 테이블: 고정 레이아웃 + 컬럼 너비 고정 --- */
         table.table-main { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 8px; }
@@ -192,35 +198,91 @@
         <a href="{{ url_for('run_pipeline_route') }}">파이프라인 실행</a>
     </nav>
 
-    {# 공고목록(/) 과 동일한 필터를 이 페이지에서도 조작 가능하도록 링크 제공.
-       필터 로직은 pipeline.ui_view.filter_items (display_status 기준) 를 사용.
-       status="전체" / source="전체" 는 필터 해제를 의미. #}
-    {% set cur_status = status|default('') %}
-    {% set cur_source = source|default('') %}
-    <div class="filterbar">
-        <div class="group">
+    {# 필터: pipeline.ui_view.filter_items. index_url 은 현재 쿼리를 유지한 채 / 로 이동. #}
+    {% set fq = fq|default({}) %}
+    {% set st = status|default('', true) %}
+    {% set src = source|default('', true) %}
+    {% set dl = deadline|default('', true) %}
+    {% set rc = recent|default('', true) %}
+    {% set hsum = has_ai_summary|default('', true) %}
+    {% set hrec = has_recommend_label|default('', true) %}
+    {% set hatt = has_attachments|default('', true) %}
+    {% set cat = category|default('', true) %}
+    <div class="filterbar filter-stack">
+        <div class="filter-row">
             <span class="label">상태:</span>
-            <a href="{{ url_for('index', status='전체', source=cur_source) }}"
-               class="{% if cur_status in ('', '전체') %}active{% endif %}">전체</a>
-            <a href="{{ url_for('index', status='접수중', source=cur_source) }}"
-               class="{% if cur_status == '접수중' %}active{% endif %}">접수중</a>
-            <a href="{{ url_for('index', status='마감', source=cur_source) }}"
-               class="{% if cur_status == '마감' %}active{% endif %}">마감</a>
-            <a href="{{ url_for('index', status='확인 필요', source=cur_source) }}"
-               class="{% if cur_status == '확인 필요' %}active{% endif %}">확인필요</a>
+            <a href="{{ index_url(status='', deadline='', recent='') }}"
+               class="{% if dl != 'urgent' and rc != '7' and st != '접수중' and st != '마감' %}active{% endif %}">전체</a>
+            <a href="{{ index_url(status='접수중', deadline='', recent='') }}"
+               class="{% if st == '접수중' and dl != 'urgent' and rc != '7' %}active{% endif %}">신청가능</a>
+            <a href="{{ index_url(status='', deadline='urgent', recent='') }}"
+               class="{% if dl == 'urgent' %}active{% endif %}">마감임박</a>
+            <a href="{{ index_url(status='', deadline='', recent='7') }}"
+               class="{% if rc == '7' %}active{% endif %}">신규</a>
+            <a href="{{ index_url(status='마감', deadline='', recent='') }}"
+               class="{% if st == '마감' and dl != 'urgent' and rc != '7' %}active{% endif %}">마감</a>
         </div>
-        <div class="group">
-            <span class="label">소스:</span>
-            <a href="{{ url_for('index', status=cur_status, source='전체') }}"
-               class="{% if cur_source in ('', '전체') %}active{% endif %}">전체</a>
-            <a href="{{ url_for('index', status=cur_status, source='jbexport') }}"
-               class="{% if cur_source|lower == 'jbexport' %}active{% endif %}">전북수출</a>
-            <a href="{{ url_for('index', status=cur_status, source='bizinfo') }}"
-               class="{% if cur_source|lower == 'bizinfo' %}active{% endif %}">기업마당</a>
-            <a href="{{ url_for('index', status=cur_status, source='kstartup') }}"
-               class="{% if cur_source|lower == 'kstartup' %}active{% endif %}">K-Startup</a>
+        <div class="filter-row">
+            <span class="label">기관:</span>
+            <a href="{{ index_url(source='') }}"
+               class="{% if src|lower not in ['jbexport', 'bizinfo', 'kstartup'] %}active{% endif %}">전체</a>
+            <a href="{{ index_url(source='jbexport') }}"
+               class="{% if src|lower == 'jbexport' %}active{% endif %}">전북수출</a>
+            <a href="{{ index_url(source='bizinfo') }}"
+               class="{% if src|lower == 'bizinfo' %}active{% endif %}">기업마당</a>
+            <a href="{{ index_url(source='kstartup') }}"
+               class="{% if src|lower == 'kstartup' %}active{% endif %}">K-Startup</a>
+        </div>
+        <div class="filter-row">
+            <span class="label">옵션:</span>
+            {% if hsum == '1' %}
+            <a href="{{ index_url(has_ai_summary='') }}" class="active">AI요약 있음</a>
+            {% else %}
+            <a href="{{ index_url(has_ai_summary='1') }}">AI요약 있음</a>
+            {% endif %}
+            {% if hrec == '1' %}
+            <a href="{{ index_url(has_recommend_label='') }}" class="active">추천 있음</a>
+            {% else %}
+            <a href="{{ index_url(has_recommend_label='1') }}">추천 있음</a>
+            {% endif %}
+            {% if hatt == '1' %}
+            <a href="{{ index_url(has_attachments='') }}" class="active">첨부 있음</a>
+            {% else %}
+            <a href="{{ index_url(has_attachments='1') }}">첨부 있음</a>
+            {% endif %}
+        </div>
+        <div class="filter-row">
+            <span class="label">분야:</span>
+            <a href="{{ index_url(category='') }}"
+               class="{% if cat == '' %}active{% endif %}">전체</a>
+            <a href="{{ index_url(category='export') }}"
+               class="{% if cat == 'export' %}active{% endif %}">수출</a>
+            <a href="{{ index_url(category='marketing') }}"
+               class="{% if cat == 'marketing' %}active{% endif %}">마케팅</a>
+            <a href="{{ index_url(category='expo') }}"
+               class="{% if cat == 'expo' %}active{% endif %}">전시/상담회</a>
+            <a href="{{ index_url(category='consulting') }}"
+               class="{% if cat == 'consulting' %}active{% endif %}">컨설팅</a>
+            <a href="{{ index_url(category='cert') }}"
+               class="{% if cat == 'cert' %}active{% endif %}">인증</a>
+            <a href="{{ index_url(category='logistics') }}"
+               class="{% if cat == 'logistics' %}active{% endif %}">물류</a>
+            <a href="{{ index_url(category='startup') }}"
+               class="{% if cat == 'startup' %}active{% endif %}">창업</a>
+            <a href="{{ index_url(category='education') }}"
+               class="{% if cat == 'education' %}active{% endif %}">교육</a>
         </div>
     </div>
+
+    <form method="get" action="{{ request.path }}" class="filter-search">
+        {% for k, v in fq.items() %}
+            {% if k != 'q' and v %}
+                <input type="hidden" name="{{ k }}" value="{{ v }}">
+            {% endif %}
+        {% endfor %}
+        <input type="search" name="q" value="{{ q|default('', true) }}" placeholder="제목·기관 검색" aria-label="검색어">
+        <button type="submit">검색</button>
+    </form>
 
     <div class="run-panel" id="run-panel">
         <div class="run-panel-header">
@@ -273,7 +335,7 @@
     {% if err %}
     <p class="err">오류: {{ err }}</p>
     {% else %}
-    <p><strong>신규 {{ count }}건</strong></p>
+    <h3>공고 {{ count }}건</h3>
 
     <table class="table-main">
         <colgroup>
