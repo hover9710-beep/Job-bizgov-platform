@@ -515,6 +515,32 @@ def filter_items(
     return out
 
 
+def sort_recommend_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    추천 탭 정렬: 마감임박(D-0~3) → recommend_label → ai_summary → jbexport → end_date 빠른 순.
+    """
+    today_d = date.today()
+
+    def sort_key(it: Dict[str, Any]) -> Tuple[int, int, int, int, date, int]:
+        urgent = (
+            0
+            if _item_matches_urgent_deadline(it, today_d)
+            or _DEADLINE_URGENT_BADGE.match(
+                str(it.get("deadline_badge") or "").strip()
+            )
+            else 1
+        )
+        rl = 0 if str(it.get("recommend_label") or "").strip() else 1
+        ai = 0 if str(it.get("ai_summary") or "").strip() else 1
+        jb = 0 if (it.get("source_badge") or "").lower() == "jbexport" else 1
+        ed = _parse_iso(str(it.get("end_date") or ""))
+        ed_sort = ed if ed is not None else date(9999, 12, 31)
+        iid = int(it.get("id") or 0)
+        return (urgent, rl, ai, jb, ed_sort, iid)
+
+    return sorted(items, key=sort_key)
+
+
 # ---------------------------------------------------------------------------
 # 디버그 로그 (구간별 카운트 + 샘플)
 # ---------------------------------------------------------------------------

@@ -83,6 +83,7 @@ from pipeline.presenter import normalize_display_item
 from pipeline.ui_view import (
     filter_items,
     prepare_db_rows_for_ui,
+    sort_recommend_items,
     sqlite_row_to_item,
 )
 
@@ -459,6 +460,10 @@ def index():
     # 필터는 UI 레이어(ui_view.filter_items)에서만 처리.
     # status 는 infer_status() 기반 display_status 기준이므로 DB raw status 로 SQL 필터를 걸지 않는다.
     # status 미지정·"전체" 는 상태 필터 해제.
+    tab = (request.args.get("tab") or "").strip()
+    if len(request.args) == 0:
+        tab = "recommend"
+
     status = (request.args.get("status") or "").strip()
     source = (request.args.get("source") or "").strip()
     query = (request.args.get("q") or "").strip()
@@ -469,9 +474,18 @@ def index():
     has_attachments = (request.args.get("has_attachments") or "").strip()
     category = (request.args.get("category") or "").strip()
 
+    if tab == "recommend":
+        has_recommend_label = "1"
+
     status_filter = "" if status in ("", "전체") else status
     source_filter = "" if source in ("", "전체") else source.lower()
     fq = request.args.to_dict(flat=True)
+    if tab:
+        fq["tab"] = tab
+    elif len(request.args) == 0:
+        fq["tab"] = "recommend"
+    else:
+        fq.pop("tab", None)
 
     sql = """
         SELECT id, title, organization, start_date, end_date, status, url, description, ai_result, pdf_path,
@@ -502,6 +516,8 @@ def index():
         has_attachments=has_attachments or None,
         category=category or None,
     )
+    if tab == "recommend":
+        rows_ui = sort_recommend_items(rows_ui)
     summary = _compute_ui_summary(rows_ui)
     if audit_ui_enabled():
         log_source_mismatch_and_parser(rows_ui[:10], label="GET / (목록 10)")
@@ -530,6 +546,7 @@ def index():
         has_recommend_label=has_recommend_label,
         has_attachments=has_attachments,
         category=category,
+        tab=tab,
         fq=fq,
         summary=summary,
         source_labels=SOURCE_LABELS,
@@ -1281,6 +1298,7 @@ def new_announcements():
         has_recommend_label=has_recommend_label,
         has_attachments=has_attachments,
         category=category,
+        tab=(request.args.get("tab") or "").strip(),
         fq=fq,
         summary=summary,
         source_labels=SOURCE_LABELS,
