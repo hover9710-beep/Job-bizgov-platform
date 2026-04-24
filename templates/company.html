@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <title>회사 정보 등록</title>
     <style>
-        body { font-family: sans-serif; max-width: 520px; margin: 24px auto; padding: 0 16px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif; max-width: 640px; margin: 24px auto; padding: 0 16px; }
         label { display: block; margin-top: 14px; font-weight: 600; }
-        input[type="text"], select { width: 100%; max-width: 400px; padding: 8px; margin-top: 4px; box-sizing: border-box; }
-        button { margin-top: 20px; padding: 10px 20px; cursor: pointer; }
+        input[type="text"] { width: 100%; max-width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; }
+        button[type="submit"] { margin-top: 20px; padding: 10px 20px; cursor: pointer; }
         .flash { padding: 10px; margin: 12px 0; border-radius: 6px; }
         .flash.success { background: #d1fae5; color: #065f46; }
         .flash.danger { background: #fee2e2; color: #991b1b; }
@@ -15,6 +15,13 @@
         .topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
         .topnav a { text-decoration: none; color: #1d4ed8; font-weight: 600; }
         .topnav a:hover { text-decoration: underline; }
+
+        .notice-box { background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:12px; font-size:12px; color:#1e40af; margin-bottom:16px; line-height: 1.5; }
+        .choice-grid { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; margin-top: 6px; }
+        .choice-btn { padding:6px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; cursor:pointer; font-size:13px; }
+        .choice-btn.active { background:#2563eb; color:#fff; border-color:#2563eb; }
+        .optional-help { font-size:11px; color:#94a3b8; display: block; margin-top: 4px; }
+        .conditional-box { margin-top:8px; }
     </style>
 </head>
 <body>
@@ -28,6 +35,12 @@
         <a href="{{ url_for('run_pipeline_route') }}">파이프라인 실행</a>
     </nav>
 
+    <div class="notice-box">
+      입력한 회사정보는 지원사업 추천을 위한 용도로만 사용됩니다.
+      자동 신청이나 외부 제출은 하지 않습니다.
+      AI 추천은 참고용이며, 최종 신청 여부는 사용자가 직접 확인해야 합니다.
+    </div>
+
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
@@ -40,11 +53,41 @@
         <label for="company_name">회사명 <span style="color:#c00">*</span></label>
         <input type="text" id="company_name" name="company_name" required maxlength="200" placeholder="예: (주)테크코리아">
 
-        <label for="industry">업종</label>
-        <input type="text" id="industry" name="industry" maxlength="200" placeholder="예: 제조업, IT서비스">
+        <label>업종</label>
+        <input type="hidden" name="industry" id="industry-val" value="">
+        <div class="choice-grid">
+            <button type="button" class="choice-btn industry-btn" data-val="제조">제조</button>
+            <button type="button" class="choice-btn industry-btn" data-val="IT/SW">IT/SW</button>
+            <button type="button" class="choice-btn industry-btn" data-val="유통/물류">유통/물류</button>
+            <button type="button" class="choice-btn industry-btn" data-val="서비스">서비스</button>
+            <button type="button" class="choice-btn industry-btn" data-val="바이오/헬스">바이오/헬스</button>
+            <button type="button" class="choice-btn industry-btn" data-val="문화/콘텐츠">문화/콘텐츠</button>
+            <button type="button" class="choice-btn industry-btn" data-val="농식품">농식품</button>
+            <button type="button" class="choice-btn industry-btn" data-val="기타">기타</button>
+        </div>
 
-        <label for="region">지역</label>
-        <input type="text" id="region" name="region" maxlength="200" placeholder="예: 전북특별자치도">
+        <label>지역</label>
+        <input type="hidden" name="region" id="region-val" value="전북">
+        <div class="choice-grid">
+            <button type="button" class="choice-btn region-btn" data-val="전국">전국</button>
+            <button type="button" class="choice-btn region-btn" data-val="서울">서울</button>
+            <button type="button" class="choice-btn region-btn" data-val="부산">부산</button>
+            <button type="button" class="choice-btn region-btn" data-val="대구">대구</button>
+            <button type="button" class="choice-btn region-btn" data-val="인천">인천</button>
+            <button type="button" class="choice-btn region-btn" data-val="광주">광주</button>
+            <button type="button" class="choice-btn region-btn" data-val="대전">대전</button>
+            <button type="button" class="choice-btn region-btn" data-val="울산">울산</button>
+            <button type="button" class="choice-btn region-btn" data-val="세종">세종</button>
+            <button type="button" class="choice-btn region-btn" data-val="경기">경기</button>
+            <button type="button" class="choice-btn region-btn" data-val="강원">강원</button>
+            <button type="button" class="choice-btn region-btn" data-val="충북">충북</button>
+            <button type="button" class="choice-btn region-btn" data-val="충남">충남</button>
+            <button type="button" class="choice-btn region-btn" data-val="전북">전북</button>
+            <button type="button" class="choice-btn region-btn" data-val="전남">전남</button>
+            <button type="button" class="choice-btn region-btn" data-val="경북">경북</button>
+            <button type="button" class="choice-btn region-btn" data-val="경남">경남</button>
+            <button type="button" class="choice-btn region-btn" data-val="제주">제주</button>
+        </div>
 
         <label for="employee_count">직원수</label>
         <input type="text" id="employee_count" name="employee_count" maxlength="100" placeholder="예: 15명">
@@ -52,16 +95,62 @@
         <label for="revenue">매출</label>
         <input type="text" id="revenue" name="revenue" maxlength="200" placeholder="예: 10억 원">
 
-        <label for="export_flag">수출 여부</label>
-        <select id="export_flag" name="export_flag">
-            <option value="">선택</option>
-            <option value="예">예</option>
-            <option value="아니오">아니오</option>
-        </select>
+        <label>수출 여부</label>
+        <input type="hidden" name="export_flag" id="export-flag-val" value="">
+        <div class="choice-grid">
+            <button type="button" class="choice-btn export-flag-btn" data-val="예">예</button>
+            <button type="button" class="choice-btn export-flag-btn" data-val="아니오">아니오</button>
+            <button type="button" class="choice-btn export-flag-btn" data-val="준비중">준비중</button>
+        </div>
+
+        <div class="conditional-box" id="export-amount-box" style="display:none">
+            <label for="export_amount">수출액</label>
+            <input type="text" id="export_amount" name="export_amount" placeholder="작년 수출액 (선택)">
+        </div>
+
+        <label for="business_number">사업자번호</label>
+        <input type="text" id="business_number" name="business_number" maxlength="50" placeholder="선택 입력">
+        <span class="optional-help">선택 입력입니다. 추천 정확도를 높일 때만 사용됩니다.</span>
 
         <div>
             <button type="submit">저장</button>
         </div>
     </form>
+
+<script>
+(function () {
+  function syncExportAmountBox() {
+    var v = document.getElementById('export-flag-val').value;
+    var box = document.getElementById('export-amount-box');
+    box.style.display = (v === '예') ? 'block' : 'none';
+  }
+
+  function setupToggle(btnClass, hiddenId, defaultVal) {
+    document.querySelectorAll(btnClass).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll(btnClass).forEach(function (b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        document.getElementById(hiddenId).value = this.getAttribute('data-val');
+        if (hiddenId === 'export-flag-val') {
+          syncExportAmountBox();
+        }
+      });
+    });
+    if (defaultVal !== undefined && defaultVal !== null && defaultVal !== '') {
+      document.getElementById(hiddenId).value = defaultVal;
+      document.querySelectorAll(btnClass).forEach(function (b) {
+        if (b.getAttribute('data-val') === defaultVal) {
+          b.classList.add('active');
+        }
+      });
+    }
+  }
+
+  setupToggle('.industry-btn', 'industry-val', '');
+  setupToggle('.region-btn', 'region-val', '전북');
+  setupToggle('.export-flag-btn', 'export-flag-val', '');
+  syncExportAmountBox();
+})();
+</script>
 </body>
 </html>

@@ -304,6 +304,13 @@ def get_db():
     return g.db
 
 
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, col_type: str) -> None:
+    cur = conn.cursor()
+    col_names = {str(c[1]) for c in cur.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in col_names:
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+
+
 def _init_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
@@ -381,6 +388,8 @@ def _init_db():
         )
         """
     )
+    _ensure_column(conn, "companies", "export_amount", "TEXT")
+    _ensure_column(conn, "companies", "business_number", "TEXT")
     conn.commit()
     conn.close()
 
@@ -569,18 +578,33 @@ def company():
     employee_count = (request.form.get("employee_count") or "").strip()
     revenue = (request.form.get("revenue") or "").strip()
     export_flag = (request.form.get("export_flag") or "").strip()
+    export_amount = request.form.get("export_amount", "").strip()
+    business_number = request.form.get("business_number", "").strip()
 
     db = get_db()
-    db.execute(
+    cur = db.execute(
         """
-        INSERT INTO companies (company_name, industry, region, employee_count, revenue, export_flag)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO companies (
+            company_name, industry, region, employee_count, revenue, export_flag,
+            export_amount, business_number
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (company_name, industry, region, employee_count, revenue, export_flag),
+        (
+            company_name,
+            industry,
+            region,
+            employee_count,
+            revenue,
+            export_flag,
+            export_amount,
+            business_number,
+        ),
     )
     db.commit()
+    new_cid = int(cur.lastrowid or 0)
     flash("회사 정보가 저장되었습니다.", "success")
-    return redirect(url_for("company"))
+    return redirect(url_for("recommend", company_id=new_cid) if new_cid else url_for("recommend"))
 
 
 @app.route("/projects")
