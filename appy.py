@@ -406,6 +406,47 @@ def _init_db():
     conn.close()
 
 
+def load_top_clicked_projects(limit: int = 5) -> list:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        rows = conn.execute(
+            """
+            SELECT
+                project_id, title, source,
+                SUM(CASE WHEN action='apply' THEN 3 ELSE 1 END) AS score,
+                COUNT(*) AS click_count,
+                SUM(CASE WHEN action='apply' THEN 1 ELSE 0 END) AS apply_count,
+                SUM(CASE WHEN action='detail' THEN 1 ELSE 0 END) AS detail_count
+            FROM click_log
+            WHERE created_at >= datetime('now', '-30 days')
+            GROUP BY project_id, title, source
+            ORDER BY score DESC, click_count DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        conn.close()
+        return [
+            dict(
+                zip(
+                    [
+                        "project_id",
+                        "title",
+                        "source",
+                        "score",
+                        "click_count",
+                        "apply_count",
+                        "detail_count",
+                    ],
+                    r,
+                )
+            )
+            for r in rows
+        ]
+    except Exception:
+        return []
+
+
 @app.teardown_appcontext
 def close_db(_error):
     conn = g.pop("db", None)
@@ -604,6 +645,7 @@ def index():
                     prepare_row=_prepare_detail_row_for_template,
                     normalize_item=normalize_display_item,
                 )
+    top_clicked = load_top_clicked_projects(limit=5)
     return render_template(
         "new.html",
         items=rows_ui,
@@ -623,6 +665,7 @@ def index():
         fq=fq,
         summary=summary,
         source_labels=SOURCE_LABELS,
+        top_clicked=top_clicked,
     )
 
 
@@ -1447,6 +1490,7 @@ def new_announcements():
                     prepare_row=_prepare_detail_row_for_template,
                     normalize_item=normalize_display_item,
                 )
+    top_clicked = load_top_clicked_projects(limit=5)
     return render_template(
         "new.html",
         items=rows_ui,
@@ -1466,6 +1510,7 @@ def new_announcements():
         fq=fq,
         summary=summary,
         source_labels=SOURCE_LABELS,
+        top_clicked=top_clicked,
     )
 
 
