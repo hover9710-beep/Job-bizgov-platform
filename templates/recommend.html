@@ -4,26 +4,77 @@
     <meta charset="utf-8">
     <title>맞춤 추천 공고</title>
     <style>
-        body { font-family: sans-serif; max-width: 1200px; margin: 24px auto; padding: 0 16px; }
-        table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
-        th, td { border: 1px solid #999; padding: 8px 10px; text-align: left; vertical-align: top; }
-        th { background: #f0f0f0; }
-        .muted { color: #666; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif; max-width: 800px; margin: 24px auto; padding: 0 16px; color: #111827; }
+        .muted { color: #64748b; font-size: 13px; }
         .box { padding: 16px; background: #fff8e6; border: 1px solid #e5c76b; border-radius: 8px; margin: 16px 0; }
         .flash { padding: 10px; margin: 12px 0; border-radius: 6px; }
         .flash.success { background: #d1fae5; color: #065f46; }
         .flash.danger { background: #fee2e2; color: #991b1b; }
         .flash.warning { background: #fef3c7; color: #92400e; }
         .flash.info { background: #e0f2fe; color: #075985; }
-        a.btn { display: inline-block; padding: 10px 18px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600; }
-        button.btn { border: none; cursor: pointer; font-size: 1rem; }
+        a.btn, button.btn { display: inline-block; padding: 8px 14px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 13px; border: none; cursor: pointer; }
+        button.btn { font-size: 13px; }
+        a.btn-secondary { background: #fff; color: #334155; border: 1px solid #cbd5e1; }
+        a.btn-secondary:hover { background: #f8fafc; }
         .topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
         .topnav a { text-decoration: none; color: #1d4ed8; font-weight: 600; }
         .topnav a:hover { text-decoration: underline; }
+
+        .company-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 8px 14px;
+            margin: 12px 0 20px;
+            padding: 12px 14px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+        }
+        .company-bar-label { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
+        .company-bar-name { font-size: 17px; font-weight: 700; color: #0f172a; }
+        .company-bar-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+        .company-tag { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e0e7ff; color: #3730a3; }
+
+        .card-list { display: flex; flex-direction: column; gap: 14px; }
+        .rec-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 16px 18px;
+            background: #fff;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+        }
+        .rec-card:hover { border-color: #cbd5e1; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08); }
+        .rec-title {
+            font-size: 16px;
+            font-weight: 600;
+            line-height: 1.35;
+            margin: 0 0 8px;
+        }
+        .rec-title a { color: #0f172a; text-decoration: none; }
+        .rec-title a:hover { color: #2563eb; text-decoration: underline; }
+        .rec-meta { font-size: 13px; color: #475569; margin-bottom: 6px; }
+        .rec-agency-line { font-size: 12px; color: #64748b; margin-bottom: 8px; }
+        .rec-stars { font-size: 14px; letter-spacing: 2px; color: #ca8a04; margin: 6px 0 8px; }
+        .rec-reason {
+            font-size: 13px;
+            color: #334155;
+            line-height: 1.45;
+            margin: 8px 0 12px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .rec-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .rec-pdf-link { font-size: 12px; color: #64748b; margin-left: 4px; }
+        .rec-pdf-link a { color: #475569; }
+        .mail-row { margin: 16px 0 20px; }
     </style>
 </head>
 <body>
-    <h1>⭐ 맞춤 추천 공고</h1>
+    <h1>맞춤 추천 공고</h1>
     <nav class="topnav">
         <a href="{{ url_for('index') }}">공고목록</a>
         <a href="{{ url_for('new_announcements') }}">신규공고</a>
@@ -50,17 +101,25 @@
     {% elif no_projects %}
     <p><strong>등록된 공고가 없습니다.</strong></p>
     {% if company %}
-    <p class="muted">기준 회사: {{ company["company_name"] }}</p>
+    <div class="company-bar">
+        <span class="company-bar-label">기준 회사</span>
+        <span class="company-bar-name">{{ company["company_name"] }}</span>
+    </div>
     {% endif %}
     {% else %}
     {% if company %}
-    <p>기준 회사: <strong>{{ company["company_name"] }}</strong>
-        <span class="muted">(ID: {{ company["id"] }}{% if company_id_param is not none %} · URL /recommend/{{ company["id"] }}{% endif %})</span>
-    </p>
-    <p class="muted">추천 목록은 <code>py pipeline/recommend_projects.py</code> 실행 후 DB에 저장됩니다. 저장 전에는 화면에서 규칙 기반 즉시 계산 결과를 보여 줍니다.</p>
+    <div class="company-bar">
+        <span class="company-bar-label">기준 회사</span>
+        <span class="company-bar-name">{{ company["company_name"] }}</span>
+        <div class="company-bar-tags">
+            {% if company["industry"] %}<span class="company-tag">{{ company["industry"] }}</span>{% endif %}
+            {% if company["region"] %}<span class="company-tag">{{ company["region"] }}</span>{% endif %}
+        </div>
+    </div>
+    <p class="muted" style="margin-top:-8px;">추천 목록은 <code>py pipeline/recommend_projects.py</code> 실행 후 DB에 저장됩니다. 저장 전에는 규칙 기반으로 즉시 계산된 결과를 보여 줍니다.</p>
     {% endif %}
 
-    <p>
+    <div class="mail-row">
         <form method="post" action="{{ url_for('recommend_send') }}" style="display:inline;">
             {% if company %}
             <input type="hidden" name="company_id" value="{{ company['id'] }}">
@@ -68,40 +127,50 @@
             <button type="submit" class="btn">추천 결과 메일로 보내기</button>
         </form>
         <span class="muted" style="margin-left:8px;">(상위 10건 · 수신: MAIL_TO 환경변수)</span>
-    </p>
+    </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>공고명</th>
-                <th>소관부처</th>
-                <th>사업수행기관</th>
-                <th>기간</th>
-                <th>점수</th>
-                <th>추천 이유</th>
-                <th>PDF</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for it in items %}
-            <tr>
-                <td>{{ it["title"] }}</td>
-                <td>{{ it["ministry"] if it.get("ministry") else "정보 없음" }}</td>
-                <td>{{ it["executing_agency"] if it.get("executing_agency") else "정보 없음" }}</td>
-                <td>{{ it["period"] }}</td>
-                <td>{{ it["score"] }}</td>
-                <td style="max-width: 320px; font-size: 0.9rem;">{{ it["reason"] or '-' }}</td>
-                <td>
-                    {% if company %}
-                    <a href="{{ url_for('recommend_pdf', company_id=company['id'], project_id=it['id']) }}">추천 PDF</a>
-                    {% else %}
-                    —
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="card-list">
+        {% for it in items %}
+        {% set sc = (it.get('score') or 0) | int %}
+        {% set raw_n = (((sc * 5) / 6 + 0.5) | int) if sc <= 6 else ((sc / 20 + 0.5) | int) %}
+        {% set n = 0 if raw_n < 0 else (5 if raw_n > 5 else raw_n) %}
+        <article class="rec-card">
+            <h2 class="rec-title">
+                {% if it.get("url") %}
+                <a href="{{ it['url'] }}" target="_blank" rel="noopener noreferrer">{{ it["title"] }}</a>
+                {% else %}
+                {{ it["title"] }}
+                {% endif %}
+            </h2>
+            <div class="rec-meta">기간: {{ it["period"] or "—" }}</div>
+            {% set mn = (it.get("ministry") or "") | trim %}
+            {% set ex = (it.get("executing_agency") or "") | trim %}
+            {% if mn or ex %}
+            <div class="rec-agency-line">
+                {% if mn %}<span>{{ mn }}</span>{% endif %}
+                {% if mn and ex %} · {% endif %}
+                {% if ex %}<span>{{ ex }}</span>{% endif %}
+            </div>
+            {% endif %}
+            <div class="rec-stars" aria-label="추천 점수 {{ sc }}점">
+                {% for _ in range(n) %}★{% endfor %}{% for _ in range(5 - n) %}☆{% endfor %}
+                <span class="muted" style="letter-spacing:0;font-size:12px;margin-left:6px;">({{ sc }}점)</span>
+            </div>
+            {% if it.get("reason") %}
+            <p class="rec-reason" title="{{ it['reason'] | e }}">{{ it["reason"] }}</p>
+            {% endif %}
+            <div class="rec-actions">
+                <a class="btn btn-secondary" href="{{ url_for('project_detail', pid=it['id']) }}">상세보기</a>
+                {% if it.get("url") %}
+                <a class="btn" href="{{ it['url'] }}" target="_blank" rel="noopener noreferrer">신청 바로가기</a>
+                {% endif %}
+                {% if company %}
+                <span class="rec-pdf-link"><a href="{{ url_for('recommend_pdf', company_id=company['id'], project_id=it['id']) }}">PDF</a></span>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
     {% endif %}
 </body>
 </html>
