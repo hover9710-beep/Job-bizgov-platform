@@ -42,9 +42,11 @@
         .deadline-line {
             font-size: 14px;
             font-weight: 700;
-            color: #b91c1c;
             margin-bottom: 10px;
         }
+        .deadline-line.urgent { color: #dc2626; }
+        .deadline-line.warning { color: #d97706; }
+        .deadline-line.normal { color: #374151; }
         .primary-cta {
             display: block;
             width: 100%;
@@ -198,7 +200,15 @@
     <div class="meta-row"><strong>소스</strong> {{ src_label }}</div>
 
     <div class="detail-cta-box">
-        <div class="deadline-line">
+        {% set badge = (item.get('deadline_badge') or "") | trim %}
+        {% if badge in ["D-0", "D-1", "D-2", "D-3", "D-Day"] %}
+          {% set urgency = "urgent" %}
+        {% elif badge in ["D-4", "D-5", "D-6", "D-7"] %}
+          {% set urgency = "warning" %}
+        {% else %}
+          {% set urgency = "normal" %}
+        {% endif %}
+        <div class="deadline-line {{ urgency }}">
             {% if item.get('deadline_badge') %}
                 🔥 마감 임박 {{ item.deadline_badge }}
             {% elif item.get('end_date') %}
