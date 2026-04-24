@@ -969,6 +969,67 @@ def _recommend_data(
     return company, items, "ok"
 
 
+def sort_company_recommend_items(items: List[dict]) -> List[dict]:
+    def is_urgent(x: dict) -> bool:
+        badge = x.get("deadline_badge") or ""
+        return badge in ("D-0", "D-1", "D-2", "D-3", "D-Day")
+
+    def score_val(x: dict) -> int:
+        try:
+            return int(x.get("score") or x.get("match_score") or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    return sorted(
+        items,
+        key=lambda x: (
+            0 if is_urgent(x) else 1,
+            -score_val(x),
+            0 if x.get("recommend_label") else 1,
+            0 if x.get("ai_summary") else 1,
+            x.get("end_date") or "9999-12-31",
+        ),
+    )
+
+
+def _enrich_recommend_items_for_ui(db: Any, raw_items: List[dict]) -> List[dict]:
+    """biz_projects 전체 행 → prepare_db_rows_for_ui + 추천 점수/사유 병합."""
+    if not raw_items:
+        return []
+    ids = [int(it["id"]) for it in raw_items if it.get("id") is not None]
+    if not ids:
+        return []
+    placeholders = ",".join("?" * len(ids))
+    rows = db.execute(
+        f"""
+        SELECT id, title, organization, ministry, executing_agency, source, start_date, end_date,
+               status, url, description, ai_result, pdf_path,
+               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json,
+               ai_summary, ai_summary_at, recommend_label, recommend_label_at
+        FROM biz_projects
+        WHERE id IN ({placeholders})
+        """,
+        ids,
+    ).fetchall()
+    by_id = {int(r["id"]): r for r in rows}
+    ordered = [by_id[i] for i in ids if i in by_id]
+    if not ordered:
+        return []
+    prepared = prepare_db_rows_for_ui(ordered, audit=False)
+    orig_by_id = {int(it["id"]): it for it in raw_items if it.get("id") is not None}
+    for p in prepared:
+        oid = int(p["id"])
+        o = orig_by_id.get(oid)
+        if o is not None:
+            try:
+                p["score"] = int(o.get("score") or 0)
+            except (TypeError, ValueError):
+                p["score"] = 0
+            if o.get("reason"):
+                p["reason"] = str(o["reason"])
+    return sort_company_recommend_items(prepared)
+
+
 def _format_recommend_email_body(company: Any, top_items: List[dict]) -> str:
     lines: List[str] = [
         "맞춤 추천 공고 (상위 10건)",
@@ -989,6 +1050,8 @@ def _format_recommend_email_body(company: Any, top_items: List[dict]) -> str:
 def recommend(company_id: Optional[int] = None):
     db = get_db()
     company, items, state = _recommend_data(db, company_id=company_id)
+    urgent_count = 0
+    ai_count = 0
     if state == "no_company":
         if company_id is not None:
             n = db.execute("SELECT COUNT(*) AS c FROM companies").fetchone()["c"]
@@ -1001,6 +1064,8 @@ def recommend(company_id: Optional[int] = None):
             items=[],
             company=None,
             company_id_param=company_id,
+            urgent_count=0,
+            ai_count=0,
         )
     if state == "no_projects":
         return render_template(
@@ -1010,7 +1075,15 @@ def recommend(company_id: Optional[int] = None):
             company=company,
             items=[],
             company_id_param=company_id,
+            urgent_count=0,
+            ai_count=0,
         )
+    items = _enrich_recommend_items_for_ui(db, items)
+    urgent_badges = ("D-0", "D-1", "D-2", "D-3", "D-Day")
+    urgent_count = sum(
+        1 for x in items if (x.get("deadline_badge") or "") in urgent_badges
+    )
+    ai_count = sum(1 for x in items if str(x.get("ai_summary") or "").strip())
     return render_template(
         "recommend.html",
         no_company=False,
@@ -1018,6 +1091,8 @@ def recommend(company_id: Optional[int] = None):
         company=company,
         items=items,
         company_id_param=company_id,
+        urgent_count=urgent_count,
+        ai_count=ai_count,
     )
 
 

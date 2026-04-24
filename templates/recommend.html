@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <title>맞춤 추천 공고</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif; max-width: 800px; margin: 24px auto; padding: 0 16px; color: #111827; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif; max-width: 1100px; margin: 24px auto; padding: 0 16px; color: #111827; }
         .muted { color: #64748b; font-size: 13px; }
         .box { padding: 16px; background: #fff8e6; border: 1px solid #e5c76b; border-radius: 8px; margin: 16px 0; }
         .flash { padding: 10px; margin: 12px 0; border-radius: 6px; }
@@ -14,8 +14,6 @@
         .flash.info { background: #e0f2fe; color: #075985; }
         a.btn, button.btn { display: inline-block; padding: 8px 14px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 13px; border: none; cursor: pointer; }
         button.btn { font-size: 13px; }
-        a.btn-secondary { background: #fff; color: #334155; border: 1px solid #cbd5e1; }
-        a.btn-secondary:hover { background: #f8fafc; }
         .topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
         .topnav a { text-decoration: none; color: #1d4ed8; font-weight: 600; }
         .topnav a:hover { text-decoration: underline; }
@@ -25,7 +23,7 @@
             flex-wrap: wrap;
             align-items: baseline;
             gap: 8px 14px;
-            margin: 12px 0 20px;
+            margin: 12px 0 16px;
             padding: 12px 14px;
             background: #f8fafc;
             border: 1px solid #e2e8f0;
@@ -36,41 +34,134 @@
         .company-bar-tags { display: flex; flex-wrap: wrap; gap: 6px; }
         .company-tag { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e0e7ff; color: #3730a3; }
 
-        .card-list { display: flex; flex-direction: column; gap: 14px; }
-        .rec-card {
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 16px 18px;
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin: 16px 0 20px;
+        }
+        .summary-card {
             background: #fff;
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 14px 16px;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
         }
-        .rec-card:hover { border-color: #cbd5e1; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08); }
-        .rec-title {
-            font-size: 16px;
-            font-weight: 600;
-            line-height: 1.35;
-            margin: 0 0 8px;
+        .summary-card .summary-label { font-size: 12px; color: #64748b; font-weight: 600; }
+        .summary-card .summary-value { font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+        .top-recommend-box {
+            margin: 0 0 20px;
+            padding: 16px 18px;
+            border: 1px solid #bfdbfe;
+            border-radius: 12px;
+            background: linear-gradient(180deg, #eff6ff 0%, #fff 48%);
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
         }
-        .rec-title a { color: #0f172a; text-decoration: none; }
-        .rec-title a:hover { color: #2563eb; text-decoration: underline; }
-        .rec-meta { font-size: 13px; color: #475569; margin-bottom: 6px; }
-        .rec-agency-line { font-size: 12px; color: #64748b; margin-bottom: 8px; }
-        .rec-stars { font-size: 14px; letter-spacing: 2px; color: #ca8a04; margin: 6px 0 8px; }
-        .rec-reason {
+        .top-label { font-size: 13px; font-weight: 700; color: #1d4ed8; margin-bottom: 8px; }
+        .top-title { font-size: 18px; font-weight: 700; line-height: 1.35; margin-bottom: 8px; }
+        .top-title a { color: #0f172a; text-decoration: none; }
+        .top-title a:hover { color: #2563eb; text-decoration: underline; }
+        .top-tag { font-size: 13px; font-weight: 600; color: #2563eb; margin-bottom: 8px; }
+        .top-reason { font-size: 13px; color: #334155; line-height: 1.5; margin-bottom: 10px; }
+        .top-meta { font-size: 12px; color: #64748b; margin-bottom: 12px; }
+        .top-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+        .recommend-table {
+            width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+            margin: 16px 0 24px;
             font-size: 13px;
-            color: #334155;
-            line-height: 1.45;
-            margin: 8px 0 12px;
+        }
+        .recommend-table th,
+        .recommend-table td {
+            border-bottom: 1px solid #e5e7eb;
+            padding: 10px 8px;
+            vertical-align: top;
+        }
+        .recommend-table th {
+            text-align: center;
+            font-weight: 600;
+            background: #f8fafc;
+            color: #374151;
+        }
+        .recommend-table tr:hover { background: #fafafa; }
+        .recommend-table .num-col { width: 44px; text-align: center; color: #64748b; }
+        .recommend-table .org-col { width: 14%; text-align: center; }
+        .recommend-table .status-col { width: 90px; text-align: center; }
+        .recommend-table .end-col { width: 110px; text-align: center; font-variant-numeric: tabular-nums; }
+        .recommend-table .score-col { width: 72px; text-align: center; }
+        .recommend-table .action-col { width: 150px; text-align: center; white-space: nowrap; }
+
+        .title-cell { max-width: 0; }
+        .title-link { font-weight: 600; color: #0f172a; text-decoration: none; }
+        .title-link:hover { color: #2563eb; text-decoration: underline; }
+        .ai-summary-line {
+            margin-top: 4px;
+            font-size: 11px;
+            color: #64748b;
+            font-style: italic;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
-            text-overflow: ellipsis;
         }
-        .rec-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-        .rec-pdf-link { font-size: 12px; color: #64748b; margin-left: 4px; }
-        .rec-pdf-link a { color: #475569; }
-        .mail-row { margin: 16px 0 20px; }
+        .recommend-label-line {
+            margin-top: 4px;
+            font-size: 11px;
+            color: #2563eb;
+            font-weight: 600;
+        }
+        .recommend-reason-line {
+            margin-top: 4px;
+            font-size: 11px;
+            color: #475569;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .score-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 8px;
+            background: #fef3c7;
+            color: #92400e;
+            font-weight: 700;
+            font-size: 12px;
+        }
+        .empty-box {
+            padding: 28px 20px;
+            text-align: center;
+            background: #f8fafc;
+            border: 1px dashed #cbd5e1;
+            border-radius: 12px;
+            color: #475569;
+            font-size: 14px;
+            line-height: 1.6;
+            margin: 20px 0;
+        }
+        .empty-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 16px; }
+        .btn-detail, .btn-apply {
+            display: inline-block;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+        }
+        .btn-detail { border: 1px solid #cbd5e1; color: #334155; background: #ffffff; }
+        .btn-detail:hover { background: #f1f5f9; }
+        .btn-apply { border: 1px solid #2563eb; color: #fff; background: #2563eb; }
+        .btn-apply:hover { background: #1d4ed8; }
+        .mail-row { margin: 12px 0 8px; }
+
+        @media (max-width: 768px) {
+            .summary-grid { grid-template-columns: 1fr; }
+            .recommend-table { display: block; overflow-x: auto; }
+            .recommend-table .action-col { white-space: normal; }
+        }
     </style>
 </head>
 <body>
@@ -116,8 +207,38 @@
             {% if company["region"] %}<span class="company-tag">{{ company["region"] }}</span>{% endif %}
         </div>
     </div>
-    <p class="muted" style="margin-top:-8px;">추천 목록은 <code>py pipeline/recommend_projects.py</code> 실행 후 DB에 저장됩니다. 저장 전에는 규칙 기반으로 즉시 계산된 결과를 보여 줍니다.</p>
+    <p class="muted">추천 목록은 <code>py pipeline/recommend_projects.py</code> 실행 후 DB에 저장됩니다. 저장 전에는 규칙 기반으로 즉시 계산된 결과를 보여 줍니다.</p>
     {% endif %}
+
+    {% if items %}
+    <div class="summary-grid">
+        <div class="summary-card">
+            <div class="summary-label">추천 지원사업</div>
+            <div class="summary-value">{{ items|length }}건</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-label">마감임박 (D-0~D-3)</div>
+            <div class="summary-value">{{ urgent_count|default(0) }}건</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-label">AI요약 포함</div>
+            <div class="summary-value">{{ ai_count|default(0) }}건</div>
+        </div>
+    </div>
+
+    {% set top = items[0] %}
+    <div class="top-recommend-box">
+        <div class="top-label">🎯 귀사 맞춤 1순위</div>
+        <div class="top-title"><a href="{{ url_for('project_detail', pid=top.id) }}">{{ top.title }}</a></div>
+        {% if top.recommend_label %}<div class="top-tag">⭐ {{ top.recommend_label }}</div>{% endif %}
+        {% if top.recommend_reason %}<div class="top-reason">{{ top.recommend_reason }}</div>
+        {% elif top.ai_summary %}<div class="top-reason">{{ top.ai_summary }}</div>{% endif %}
+        <div class="top-meta">{% if top.organization %}{{ top.organization }}{% else %}-{% endif %} · {{ top.display_status or top.status or '-' }} · 마감 {{ top.end_date or '-' }}</div>
+        <div class="top-actions">
+            <a href="{{ url_for('project_detail', pid=top.id) }}" class="btn-detail">상세보기</a>
+            {% if top.url %}<a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply">신청 바로가기</a>{% endif %}
+        </div>
+    </div>
 
     <div class="mail-row">
         <form method="post" action="{{ url_for('recommend_send') }}" style="display:inline;">
@@ -129,48 +250,52 @@
         <span class="muted" style="margin-left:8px;">(상위 10건 · 수신: MAIL_TO 환경변수)</span>
     </div>
 
-    <div class="card-list">
-        {% for it in items %}
-        {% set sc = (it.get('score') or 0) | int %}
-        {% set raw_n = (((sc * 5) / 6 + 0.5) | int) if sc <= 6 else ((sc / 20 + 0.5) | int) %}
-        {% set n = 0 if raw_n < 0 else (5 if raw_n > 5 else raw_n) %}
-        <article class="rec-card">
-            <h2 class="rec-title">
-                {% if it.get("url") %}
-                <a href="{{ it['url'] }}" target="_blank" rel="noopener noreferrer">{{ it["title"] }}</a>
-                {% else %}
-                {{ it["title"] }}
-                {% endif %}
-            </h2>
-            <div class="rec-meta">기간: {{ it["period"] or "—" }}</div>
-            {% set mn = (it.get("ministry") or "") | trim %}
-            {% set ex = (it.get("executing_agency") or "") | trim %}
-            {% if mn or ex %}
-            <div class="rec-agency-line">
-                {% if mn %}<span>{{ mn }}</span>{% endif %}
-                {% if mn and ex %} · {% endif %}
-                {% if ex %}<span>{{ ex }}</span>{% endif %}
-            </div>
-            {% endif %}
-            <div class="rec-stars" aria-label="추천 점수 {{ sc }}점">
-                {% for _ in range(n) %}★{% endfor %}{% for _ in range(5 - n) %}☆{% endfor %}
-                <span class="muted" style="letter-spacing:0;font-size:12px;margin-left:6px;">({{ sc }}점)</span>
-            </div>
-            {% if it.get("reason") %}
-            <p class="rec-reason" title="{{ it['reason'] | e }}">{{ it["reason"] }}</p>
-            {% endif %}
-            <div class="rec-actions">
-                <a class="btn btn-secondary" href="{{ url_for('project_detail', pid=it['id']) }}">상세보기</a>
-                {% if it.get("url") %}
-                <a class="btn" href="{{ it['url'] }}" target="_blank" rel="noopener noreferrer">신청 바로가기</a>
-                {% endif %}
-                {% if company %}
-                <span class="rec-pdf-link"><a href="{{ url_for('recommend_pdf', company_id=company['id'], project_id=it['id']) }}">PDF</a></span>
-                {% endif %}
-            </div>
-        </article>
-        {% endfor %}
+    <table class="recommend-table">
+        <thead>
+            <tr>
+                <th class="num-col">#</th>
+                <th>공고명</th>
+                <th class="org-col">기관</th>
+                <th class="status-col">상태</th>
+                <th class="end-col">마감일</th>
+                <th class="score-col">점수</th>
+                <th class="action-col">액션</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for it in items %}
+            {% set st = it.get('display_status') or it.get('status') or '' %}
+            {% set org = (it.get('organization') or '') | trim %}
+            <tr>
+                <td class="num-col">{{ loop.index }}</td>
+                <td class="title-cell">
+                    <a href="{{ url_for('project_detail', pid=it.id) }}" class="title-link">{{ it.title }}</a>
+                    {% if it.ai_summary %}<div class="ai-summary-line">{{ it.ai_summary }}</div>{% endif %}
+                    {% if it.recommend_label %}<div class="recommend-label-line">🏷 {{ it.recommend_label }}</div>{% endif %}
+                    {% if it.recommend_reason %}<div class="recommend-reason-line">{{ it.recommend_reason }}</div>{% endif %}
+                </td>
+                <td class="org-col">{% if org %}{{ org }}{% else %}-{% endif %}</td>
+                <td class="status-col">{{ st or '-' }}</td>
+                <td class="end-col">{{ it.end_date or '-' }}</td>
+                <td class="score-col"><span class="score-badge">{{ it.score | default(0) }}</span></td>
+                <td class="action-col">
+                    <a href="{{ url_for('project_detail', pid=it.id) }}" class="btn-detail">상세보기</a>
+                    {% if it.url %}<a href="{{ it.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply">신청</a>{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-box">
+      조건에 맞는 지원사업이 없습니다.<br>
+      업종, 지역, 수출 여부를 변경해 다시 추천을 받아보세요.
     </div>
+    <div class="empty-actions">
+      <a href="{{ url_for('company') }}" class="btn-detail">회사정보 다시 입력</a>
+      <a href="{{ url_for('index') }}" class="btn-detail">전체 공고 보기</a>
+    </div>
+    {% endif %}
     {% endif %}
 </body>
 </html>
