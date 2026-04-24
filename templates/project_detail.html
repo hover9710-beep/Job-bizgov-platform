@@ -31,12 +31,8 @@
         .btn-detail:hover { background: #f1f5f9; }
 
         @media (max-width: 700px) {
-            body {
-                font-size: 16px;
-            }
 
             .container,
-            .detail-container,
             main {
                 max-width: none !important;
                 width: 100% !important;
@@ -47,43 +43,39 @@
             h1, h2 {
                 font-size: 22px !important;
                 line-height: 1.35 !important;
+                margin-bottom: 12px;
             }
 
-            .detail-meta,
-            .meta-line,
-            .detail-info {
+            .meta-row {
                 font-size: 15px !important;
                 line-height: 1.7 !important;
+                margin-bottom: 6px;
             }
 
-            .summary-box,
-            .info-box,
-            .ai-box,
-            .reason-box,
-            .attach-box {
+            .block {
                 padding: 14px 16px !important;
                 font-size: 15px !important;
                 line-height: 1.6 !important;
+                margin-bottom: 12px;
+                border-radius: 10px;
             }
 
-            .detail-actions,
-            .actions {
-                display: flex !important;
-                flex-direction: column !important;
-                gap: 10px !important;
-                margin-top: 18px !important;
+            .actions,
+            .detail-actions {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                margin-top: 18px;
             }
 
-            .detail-actions a,
             .actions a,
             .btn-detail,
             .btn-apply {
                 width: 100% !important;
-                text-align: center !important;
-                padding: 14px 12px !important;
-                font-size: 16px !important;
-                border-radius: 10px !important;
-                box-sizing: border-box !important;
+                text-align: center;
+                padding: 14px 12px;
+                font-size: 16px;
+                border-radius: 10px;
             }
         }
     </style>
