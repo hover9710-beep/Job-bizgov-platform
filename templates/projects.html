@@ -19,14 +19,40 @@
 
         table { width: 100%; border-collapse: collapse; background: #fff; font-size: 15px; border: 1px solid #e5e7eb; }
         th { background: #f3f4f6; color: #374151; font-weight: 700; padding: 12px 10px; text-align: left; border: 1px solid #e5e7eb; }
-        td { padding: 12px 10px; border: 1px solid #e5e7eb; color: #374151; vertical-align: middle; }
-        td:first-child, th:first-child { font-weight: 600; }
+        td { padding: 14px 10px; border: 1px solid #e5e7eb; color: #374151; vertical-align: middle; }
+
+        tr {
+            transition: background 0.12s ease;
+        }
+
+        tbody tr:hover {
+            background: #f9fafb;
+        }
+
+        td:first-child {
+            font-size: 16px;
+            font-weight: 700;
+            color: #111827;
+            line-height: 1.45;
+            word-break: keep-all;
+        }
+
+        td:nth-child(2),
+        td:nth-child(3),
+        td:nth-child(4) {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        td:nth-child(4) {
+            font-weight: 700;
+            color: #dc2626;
+        }
+
+        td.title-cell { max-width: 480px; }
 
         a { color: #2563eb; font-weight: 600; text-decoration: none; }
         a:hover { text-decoration: underline; }
-        tr:hover { background: #f9fafb; }
-
-        td.title-cell { max-width: 480px; font-weight: 600; line-height: 1.45; word-break: keep-all; }
 
         .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
@@ -34,6 +60,15 @@
             body { font-size: 15px; padding: 10px; }
             h1 { font-size: 22px; }
             table { font-size: 14px; min-width: 720px; }
+            td:first-child {
+                font-size: 15px;
+                line-height: 1.45;
+            }
+            td:nth-child(2),
+            td:nth-child(3),
+            td:nth-child(4) {
+                font-size: 13px;
+            }
         }
 
         .topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
