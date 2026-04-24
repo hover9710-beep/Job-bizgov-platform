@@ -244,6 +244,39 @@
         .btn-detail { border: 1px solid #cbd5e1; color: #334155; background: #ffffff; }
         .btn-apply { border: 1px solid #2563eb; color: #ffffff; background: #2563eb; }
         .top-recommend-actions { margin-top: 10px; }
+
+        @media (max-width: 700px) {
+          /* 테이블 카드형 전환 */
+          .project-table, .project-table thead, .project-table tbody,
+          .project-table th, .project-table td, .project-table tr {
+            display: block;
+          }
+          .project-table thead { display: none; }
+          .project-table tr {
+            margin-bottom: 12px; padding: 12px;
+            border: 1px solid #e5e7eb; border-radius: 12px; background: #ffffff;
+          }
+          .project-table td { border-bottom: none; padding: 4px 0; text-align: left; }
+          .num-col, .source-col { display: none; }
+          .title-cell { max-width: none; }
+          .title-main, .title-link { -webkit-line-clamp: 3; font-size: 15px; line-height: 1.45; }
+          .center-cell { text-align: left; font-size: 12px; }
+          .status-col, .date-col { display: inline-block; margin-right: 8px; }
+          .action-col { display: flex; gap: 6px; margin-top: 8px; }
+          .btn-detail, .btn-apply { flex: 1; text-align: center; padding: 8px 10px; font-size: 12px; }
+
+          /* 필터 가로 스크롤 */
+          .filter-row {
+            overflow-x: auto; white-space: nowrap; padding-bottom: 4px;
+          }
+          .filter-row .filter-btn, .filter-row a {
+            display: inline-block; margin-bottom: 6px;
+          }
+
+          /* 요약 카드 2열 */
+          .summary-grid { grid-template-columns: repeat(2, 1fr); }
+          .top-recommend-card { padding: 12px; }
+        }
     </style>
 </head>
 <body>

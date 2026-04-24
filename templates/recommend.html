@@ -157,10 +157,42 @@
         .btn-apply:hover { background: #1d4ed8; }
         .mail-row { margin: 12px 0 8px; }
 
-        @media (max-width: 768px) {
+        @media (max-width: 700px) {
             .summary-grid { grid-template-columns: 1fr; }
+            .top-recommend-box { padding: 14px; }
+            .rec-card { padding: 14px; margin-bottom: 12px; }
+            .rec-title { font-size: 15px; line-height: 1.45; }
+            .rec-actions { display: flex; flex-direction: column; gap: 6px; }
+            .rec-actions a { width: 100%; text-align: center; box-sizing: border-box; }
+
+            .top-title { font-size: 15px; line-height: 1.45; }
+            .top-actions {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+            }
+            .top-actions .btn-detail,
+            .top-actions .btn-apply {
+                width: 100%;
+                text-align: center;
+                box-sizing: border-box;
+            }
             .recommend-table { display: block; overflow-x: auto; }
-            .recommend-table .action-col { white-space: normal; }
+            .recommend-table .action-col {
+                white-space: normal;
+                display: block;
+                width: 100%;
+            }
+            .recommend-table .action-col .btn-detail,
+            .recommend-table .action-col .btn-apply {
+                display: block;
+                width: 100%;
+                text-align: center;
+                box-sizing: border-box;
+                margin: 0 0 6px;
+            }
+            .recommend-table .action-col .btn-apply:last-child { margin-bottom: 0; }
+            .mail-row .btn { width: 100%; box-sizing: border-box; text-align: center; }
         }
     </style>
 </head>

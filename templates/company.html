@@ -22,6 +22,12 @@
         .choice-btn.active { background:#2563eb; color:#fff; border-color:#2563eb; }
         .optional-help { font-size:11px; color:#94a3b8; display: block; margin-top: 4px; }
         .conditional-box { margin-top:8px; }
+
+        @media (max-width: 700px) {
+          .choice-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+          .choice-btn { width: 100%; padding: 10px 8px; box-sizing: border-box; }
+          input, select, button { font-size: 16px; }
+        }
     </style>
 </head>
 <body>
