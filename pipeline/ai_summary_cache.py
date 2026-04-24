@@ -9,7 +9,7 @@ import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 
 _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
@@ -27,6 +27,34 @@ from pipeline.mail_view import (
     to_mail_item,
     _today_str,
 )
+
+
+def _norm_filter_arg(val: Optional[str]) -> Optional[str]:
+    if val is None:
+        return None
+    t = str(val).strip()
+    return t if t else None
+
+
+def load_by_filter(
+    source: Optional[str] = None,
+    status: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    try:
+        query = "SELECT * FROM biz_projects WHERE 1=1"
+        params: List[Any] = []
+        if source:
+            query += " AND source = ?"
+            params.append(source)
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
 
 
 def _source_text_for_item(mail_item: Dict[str, Any]) -> str:
@@ -63,18 +91,32 @@ def _collect_mail_candidates(today: str) -> List[Dict[str, Any]]:
     return out
 
 
+def _collect_candidates(
+    today: str,
+    *,
+    source: Optional[str],
+    status: Optional[str],
+) -> List[Dict[str, Any]]:
+    if source or status:
+        rows = load_by_filter(source=source, status=status)
+        return [to_mail_item(r, today=today) for r in rows]
+    return _collect_mail_candidates(today)
+
+
 def run_ai_summary_cache(
     *,
     limit: int,
     dry_run: bool,
     overwrite: bool,
+    source: Optional[str] = None,
+    status: Optional[str] = None,
 ) -> int:
     if not dry_run and not os.environ.get("OPENAI_API_KEY", "").strip():
         print("[ai-summary] OPENAI_API_KEY 없음, skip", flush=True)
         return 0
 
     today = _today_str()
-    candidates = _collect_mail_candidates(today)
+    candidates = _collect_candidates(today, source=source, status=status)
     need_list = [
         c
         for c in candidates
@@ -82,8 +124,11 @@ def run_ai_summary_cache(
     ]
     missing_n = len(need_list)
 
+    extra = ""
+    if source or status:
+        extra = f" source={source!r} status={status!r}"
     print(
-        f"[ai-summary] target={len(candidates)} missing={missing_n} limit={limit}",
+        f"[ai-summary] target={len(candidates)} missing={missing_n} limit={limit}{extra}",
         flush=True,
     )
 
@@ -170,11 +215,21 @@ def main() -> int:
         action="store_true",
         help="이미 ai_summary 있어도 재생성",
     )
+    parser.add_argument("--source", default=None)
+    parser.add_argument("--status", default=None)
     args = parser.parse_args()
     lim = args.limit if args.limit is not None else DEFAULT_LIMIT
     if lim < 0:
         lim = 0
-    return run_ai_summary_cache(limit=lim, dry_run=args.dry_run, overwrite=args.overwrite)
+    src = _norm_filter_arg(args.source)
+    st = _norm_filter_arg(args.status)
+    return run_ai_summary_cache(
+        limit=lim,
+        dry_run=args.dry_run,
+        overwrite=args.overwrite,
+        source=src,
+        status=st,
+    )
 
 
 if __name__ == "__main__":
