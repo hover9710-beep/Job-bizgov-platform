@@ -47,27 +47,33 @@
 
             h1, h2 {
                 font-size: 20px !important;
-                line-height: 1.4 !important;
+                line-height: 1.45 !important;
                 word-break: keep-all !important;
-                letter-spacing: -0.2px;
+                letter-spacing: -0.3px;
+                margin-bottom: 14px !important;
             }
 
-            .meta-row {
+            .meta-row,
+            .detail-meta {
+                display: grid !important;
+                grid-template-columns: 80px 1fr !important;
+                gap: 6px 8px !important;
                 font-size: 15px !important;
             }
 
-            .detail-meta,
+            .meta-row strong {
+                color: #666 !important;
+                font-weight: 500;
+            }
+
             .detail-info {
                 font-size: 16px !important;
                 line-height: 1.8 !important;
                 margin-bottom: 8px !important;
             }
 
-            .summary-box,
             .info-box,
-            .ai-box,
-            .reason-box,
-            .attach-box {
+            .ai-box {
                 padding: 16px !important;
                 font-size: 16px !important;
                 line-height: 1.7 !important;
@@ -75,8 +81,13 @@
                 border-radius: 12px !important;
             }
 
-            .block {
-                font-size: 15px !important;
+            .block,
+            .summary-box,
+            .reason-box,
+            .attach-box {
+                padding: 14px !important;
+                margin-bottom: 12px !important;
+                border-radius: 12px !important;
             }
 
             .actions,
