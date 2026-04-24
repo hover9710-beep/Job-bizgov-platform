@@ -187,6 +187,38 @@ def sqlite_row_to_item(row: Any) -> Dict[str, Any]:
     return d
 
 
+def build_recommend_reason(item: dict) -> str:
+    try:
+        label = item.get("recommend_label", "") or ""
+        source = item.get("source", "") or ""
+        ai_summary = item.get("ai_summary", "") or ""
+        badge = item.get("deadline_badge", "") or ""
+
+        parts: List[str] = []
+
+        prefix = (
+            "전북 수출기업 기준으로, "
+            if str(source).strip().lower() == "jbexport"
+            else ""
+        )
+
+        if str(label).strip():
+            label_sentence = f"{str(label).strip()}이 검토할 만한 공고입니다."
+            parts.append(prefix + label_sentence)
+        elif str(ai_summary).strip():
+            parts.append("AI 요약 기준으로 검토할 만한 공고입니다.")
+        else:
+            return ""
+
+        if badge in ("D-0", "D-1", "D-2", "D-3", "D-Day"):
+            parts.append("마감이 임박해 우선 확인이 필요합니다.")
+
+        result = " ".join(parts)
+        return result[:120]
+    except Exception:
+        return ""
+
+
 def _apply_display_url(it: Dict[str, Any]) -> None:
     """
     UI 표시 URL 치환.
@@ -623,6 +655,7 @@ def prepare_db_rows_for_ui(
         rl = str(it.get("recommend_label") or "").strip()
         it["recommend_label"] = rl
         it["has_recommend_label"] = bool(rl)
+        it["recommend_reason"] = build_recommend_reason(it)
     # 4) 정렬
     items = sort_items(items, key=sort)
     for i, it in enumerate(items, start=1):

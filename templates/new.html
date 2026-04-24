@@ -193,6 +193,20 @@
         .top-recommend-label { font-size: 12px; font-weight: 600; color: #2563eb; margin-top: 4px; }
         .top-recommend-summary { font-size: 12px; color: #475569; font-style: italic; margin-top: 4px; }
         .top-recommend-meta { font-size: 11px; color: #64748b; margin-top: 6px; }
+        .recommend-reason-line {
+            margin-top: 3px;
+            font-size: 11px;
+            color: #334155;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .top-recommend-reason {
+            font-size: 12px;
+            color: #334155;
+            margin-top: 6px;
+            line-height: 1.5;
+        }
     </style>
 </head>
 <body>
@@ -342,7 +356,7 @@
     {% if not err and tb == 'recommend' and items %}
     {% set top = items[0] %}
     <div class="top-recommend-card">
-        <div class="top-recommend-title">⭐ 오늘 추천 공고</div>
+        <div class="top-recommend-title">🎯 귀사 기준 추천 공고</div>
         {% if top.url %}
         <a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="top-recommend-link">
             {{ top.title }}
@@ -352,6 +366,11 @@
         {% endif %}
         {% if top.recommend_label %}
         <div class="top-recommend-label">👉 추천: {{ top.recommend_label }}</div>
+        {% endif %}
+        {% if top.recommend_reason %}
+        <div class="top-recommend-reason">
+            {{ top.recommend_reason }}
+        </div>
         {% endif %}
         {% if top.ai_summary %}
         <div class="top-recommend-summary">{{ top.ai_summary }}</div>
@@ -420,6 +439,11 @@
               {% if item.recommend_label %}
                 <div class="recommend-label-line">
                   🏷 {{ item.recommend_label }}
+                </div>
+              {% endif %}
+              {% if item.recommend_reason %}
+                <div class="recommend-reason-line" title="{{ item.recommend_reason }}">
+                  {{ item.recommend_reason }}
                 </div>
               {% endif %}
             </td>
