@@ -47,6 +47,11 @@
         .deadline-line.urgent { color: #dc2626; }
         .deadline-line.warning { color: #d97706; }
         .deadline-line.normal { color: #374151; }
+        .cta-sub {
+            font-size: 13px;
+            color: #374151;
+            margin-bottom: 10px;
+        }
         .primary-cta {
             display: block;
             width: 100%;
@@ -165,6 +170,7 @@
             .deadline-line {
                 font-size: 15px !important;
             }
+            .cta-sub { font-size: 14px !important; }
             .primary-cta {
                 font-size: 17px !important;
                 padding: 16px 12px !important;
@@ -214,6 +220,9 @@
             {% elif item.get('end_date') %}
                 ⏰ 마감일 {{ item.end_date }}
             {% endif %}
+        </div>
+        <div class="cta-sub">
+            ✔ 전북 기업 대상 / 지원사업
         </div>
         {% if item.get('url') %}
         <a href="{{ item.url }}" target="_blank" rel="noopener" class="btn-apply primary-cta">
