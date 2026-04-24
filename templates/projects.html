@@ -53,8 +53,8 @@
             vertical-align: middle;
         }
 
-        .project-table tbody tr:hover {
-            background: #f9fafb;
+        tbody tr:hover {
+            background: #f1f5f9;
         }
 
         .title-cell {
@@ -103,8 +103,8 @@
 
         .action-cell {
             width: 8%;
-            min-width: 80px;
             text-align: center;
+            min-width: 90px;
         }
 
         .status-badge {
@@ -117,22 +117,27 @@
             font-weight: 800;
         }
 
-        .btn-detail {
+        .btn-apply {
             display: inline-block;
-            padding: 7px 12px;
-            border: 1px solid #d1d5db;
-            border-radius: 8px;
-            background: #fff;
-            color: #2563eb;
+            padding: 8px 14px;
+            background: #2563eb;
+            color: #fff;
+            border-radius: 10px;
             font-size: 13px;
-            font-weight: 700;
+            font-weight: 800;
             text-decoration: none;
-            white-space: nowrap;
         }
 
-        .btn-detail:hover {
-            background: #eff6ff;
+        .btn-apply:hover {
+            background: #1d4ed8;
             text-decoration: none;
+        }
+
+        .d-day {
+            font-size: 12px;
+            margin-top: 4px;
+            color: #dc2626;
+            font-weight: 800;
         }
 
         .nav,
@@ -155,6 +160,12 @@
         .topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
         .topnav a { text-decoration: none; color: #1d4ed8; font-weight: 600; }
         .topnav a:hover { text-decoration: underline; }
+
+        a.btn-apply,
+        a.btn-apply:hover {
+            color: #fff;
+            text-decoration: none;
+        }
 
         @media (max-width: 700px) {
             body {
@@ -237,8 +248,15 @@
                     {% endif %}
                 </td>
                 <td class="date-cell">{{ row.get('start_date') or '—' }}</td>
-                <td class="deadline-cell">{{ row.get('end_date') or '—' }}</td>
-                <td class="action-cell"><a href="{{ url_for('project_detail', pid=row['id']) }}" class="btn-detail">보기</a></td>
+                <td class="deadline-cell">
+                    {{ row.get('end_date') or '—' }}
+                    {% if row.dday is defined %}
+                    <div class="d-day">D-{{ row.dday }}</div>
+                    {% endif %}
+                </td>
+                <td class="action-cell">
+                    <a href="/project/{{ row.id }}" class="btn-apply">보기</a>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
