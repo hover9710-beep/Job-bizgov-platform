@@ -273,16 +273,25 @@
           .status-col, .date-col { display: inline-block; margin-right: 8px; }
           .action-col {
             display: flex;
-            flex-direction: column;
-            gap: 8px;
+            flex-direction: row;
+            gap: 6px;
             margin-top: 10px;
-          }
-          .btn-detail, .btn-apply {
             width: 100%;
+          }
+
+          .btn-detail, .btn-apply {
+            flex: 1;
             text-align: center;
-            padding: 10px 12px;
-            font-size: 14px;
+            padding: 10px 6px;
+            font-size: 12px;
+            white-space: nowrap;
             box-sizing: border-box;
+            min-width: 0;
+          }
+
+          .btn-apply {
+            overflow: visible;
+            padding: 10px 8px;
           }
 
           /* 모바일에서 불필요한 컬럼 숨김 */
