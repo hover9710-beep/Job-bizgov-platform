@@ -133,11 +133,11 @@
             text-decoration: none;
         }
 
-        .deadline-date { font-size: 13px; color: #6b7280; }
-        .d-day { margin-top: 4px; font-size: 13px; font-weight: 800; }
-        .d-day.soon { color: #f59e0b; }
-        .d-day.urgent { color: #dc2626; font-size: 14px; }
-        tbody tr:has(.d-day.urgent) { background: #fff1f2; }
+        .deadline-date { font-size:13px; color:#6b7280; }
+        .d-day { margin-top:4px; font-size:13px; font-weight:800; }
+        .d-day.soon { color:#f59e0b; }
+        .d-day.urgent { color:#dc2626; font-size:14px; }
+        tbody tr:has(.d-day.urgent) { background:#fff1f2; }
 
         .nav,
         .navbar,
@@ -248,10 +248,11 @@
                 </td>
                 <td class="date-cell">{{ row.get('start_date') or '—' }}</td>
                 <td class="deadline-cell">
-                    <div class="deadline-date">{{ row.get('end_date') or '—' }}</div>
-                    {% if row.get('deadline_badge') %}
-                    <div class="d-day {% if row.get('deadline_badge') in ['D-0','D-1','D-2','D-3','D-Day'] %}urgent{% elif row.get('deadline_badge') in ['D-4','D-5','D-6','D-7'] %}soon{% endif %}">
-                        {{ row.get('deadline_badge') }}
+                    <div class="deadline-date">{{ row.end_date }}</div>
+
+                    {% if row.deadline_badge %}
+                    <div class="d-day {% if row.deadline_badge in ['D-0','D-1','D-2','D-3','D-Day'] %}urgent{% elif row.deadline_badge in ['D-4','D-5','D-6','D-7'] %}soon{% endif %}">
+                        {{ row.deadline_badge }}
                     </div>
                     {% elif row.dday is defined and row.dday is not none %}
                     <div class="d-day {% if row.dday <= 3 %}urgent{% elif row.dday <= 7 %}soon{% endif %}">
