@@ -304,35 +304,57 @@
           .center-cell { text-align: left; font-size: 13px; }
           .status-col, .date-col { display: inline-block; margin-right: 8px; }
           .rec-card {
-            margin-bottom: 16px;
             padding: 14px;
+          }
+
+          .rec-card,
+          .project-card,
+          .project-table tbody tr {
+            margin-bottom: 14px;
           }
 
           .action-col {
             display: flex;
-            flex-direction: column;
-            gap: 10px;
+            gap: 8px;
             margin-top: 14px;
-          }
-
-          .action-col a,
-          .action-col button {
-            width: 100%;
-            text-align: center;
-            padding: 14px 12px;
-            font-size: 15px;
-            border-radius: 10px;
+            align-items: center;
           }
 
           .btn-detail {
+            height: 44px;
+            min-height: 44px;
+            padding: 0 18px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            min-width: 112px;
+            box-sizing: border-box;
+            text-decoration: none;
             background: #f5f5f5;
             border: 1px solid #ddd;
+            color: #334155;
           }
 
           .btn-apply {
+            height: 44px;
+            min-height: 44px;
+            padding: 0 18px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1 1 auto;
+            box-sizing: border-box;
+            text-decoration: none;
             background: #2f6fed;
             color: #fff;
-            font-weight: 600;
+            border: 1px solid #2f6fed;
           }
 
           /* 모바일에서 불필요한 컬럼 숨김 */
@@ -380,13 +402,14 @@
           .top-recommend-card {
             padding: 16px;
           }
+          .top-recommend-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+          }
           .top-recommend-card .btn-detail,
           .top-recommend-card .btn-apply {
-            display: block;
-            width: 100%;
-            margin: 4px 0;
-            text-align: center;
-            box-sizing: border-box;
+            margin: 0;
           }
 
           .top-clicked-box { margin:14px 0; padding:14px; }
