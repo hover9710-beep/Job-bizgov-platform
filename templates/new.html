@@ -81,6 +81,13 @@
             text-overflow: ellipsis;
         }
 
+        .recommend-label-line {
+            margin-top: 2px;
+            font-size: 11px;
+            color: #2563eb;
+            font-weight: 600;
+        }
+
         /* --- 마감일 배지 (D-3 / D-7 / 마감) --- */
         .deadline-badge { display: inline-block; margin-left: 4px; font-weight: 700; font-size: 11px; padding: 2px 5px; border-radius: 6px; line-height: 1.2; }
         .deadline-danger { background: #fee2e2; color: #b91c1c; }
@@ -314,6 +321,11 @@
               {% if item.ai_summary %}
                 <div class="ai-summary-line">
                   {{ item.ai_summary }}
+                </div>
+              {% endif %}
+              {% if item.recommend_label %}
+                <div class="recommend-label-line">
+                  🏷 {{ item.recommend_label }}
                 </div>
               {% endif %}
             </td>

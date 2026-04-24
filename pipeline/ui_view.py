@@ -119,6 +119,18 @@ def load_db_rows(
             if has_as_at
             else "'' AS ai_summary_at"
         )
+        has_rl = _has_column(conn, table, "recommend_label")
+        has_rl_at = _has_column(conn, table, "recommend_label_at")
+        select_parts.append(
+            "COALESCE(recommend_label, '') AS recommend_label"
+            if has_rl
+            else "'' AS recommend_label"
+        )
+        select_parts.append(
+            "COALESCE(recommend_label_at, '') AS recommend_label_at"
+            if has_rl_at
+            else "'' AS recommend_label_at"
+        )
 
         sql = f"SELECT {', '.join(select_parts)} FROM {table}"
         rows = conn.execute(sql).fetchall()
@@ -213,6 +225,9 @@ def to_ui_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, An
     d["ai_summary"] = asum
     d["ai_summary_at"] = asat
     d["has_ai_summary"] = bool(asum)
+    rl = str(d.get("recommend_label") or "").strip()
+    d["recommend_label"] = rl
+    d["has_recommend_label"] = bool(rl)
     return d
 
 
@@ -499,6 +514,9 @@ def prepare_db_rows_for_ui(
         it["ai_summary"] = asum
         it["ai_summary_at"] = asat
         it["has_ai_summary"] = bool(asum)
+        rl = str(it.get("recommend_label") or "").strip()
+        it["recommend_label"] = rl
+        it["has_recommend_label"] = bool(rl)
     # 4) 정렬
     items = sort_items(items, key=sort)
     for i, it in enumerate(items, start=1):
