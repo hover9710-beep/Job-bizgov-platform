@@ -284,6 +284,28 @@
             box-sizing: border-box;
           }
 
+          /* 모바일에서 불필요한 컬럼 숨김 */
+          .project-table th:nth-child(1),
+          .project-table td:nth-child(1),
+          .project-table th:nth-child(5),
+          .project-table td:nth-child(5),
+          .project-table th:nth-child(7),
+          .project-table td:nth-child(7) {
+            display: none;
+          }
+
+          /* 폰트/패딩 조정 */
+          .project-table th,
+          .project-table td {
+            font-size: 13px;
+            padding: 8px 6px;
+          }
+
+          /* 제목 영역 넓게 */
+          .project-table td:nth-child(2) {
+            width: 100%;
+          }
+
           /* 필터 */
           .filter-row {
             overflow-x: auto;
