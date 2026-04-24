@@ -133,12 +133,11 @@
             text-decoration: none;
         }
 
-        .d-day {
-            font-size: 12px;
-            margin-top: 4px;
-            color: #dc2626;
-            font-weight: 800;
-        }
+        .deadline-date { font-size: 13px; color: #6b7280; }
+        .d-day { margin-top: 4px; font-size: 13px; font-weight: 800; }
+        .d-day.soon { color: #f59e0b; }
+        .d-day.urgent { color: #dc2626; font-size: 14px; }
+        tbody tr:has(.d-day.urgent) { background: #fff1f2; }
 
         .nav,
         .navbar,
@@ -202,9 +201,9 @@
                 font-size: 13px;
             }
 
-            .btn-detail {
-                padding: 8px 12px;
-                font-size: 13px;
+            .btn-apply {
+                padding: 10px 14px;
+                font-size: 14px;
             }
         }
     </style>
@@ -249,9 +248,11 @@
                 </td>
                 <td class="date-cell">{{ row.get('start_date') or '—' }}</td>
                 <td class="deadline-cell">
-                    {{ row.get('end_date') or '—' }}
+                    <div class="deadline-date">{{ row.get('end_date') or '—' }}</div>
                     {% if row.dday is defined %}
-                    <div class="d-day">D-{{ row.dday }}</div>
+                    <div class="d-day{% if row.dday <= 3 %} urgent{% elif row.dday <= 7 %} soon{% endif %}">
+                        D-{{ row.dday }}
+                    </div>
                     {% endif %}
                 </td>
                 <td class="action-cell">
