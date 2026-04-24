@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <title>{{ item.get('title') or '공고 상세' }}</title>
+    <title>{{ item.display_title or item.get('title') or '공고 상세' }}</title>
     <style>
         body {
             font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
@@ -250,7 +250,7 @@
             ✔ 전북 기업 대상 / 지원사업
         </div>
         {% if item.get('url') %}
-        <a href="{{ item.url }}" target="_blank" rel="noopener" class="btn-apply primary-cta" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ item.title|e }}')">
+        <a href="{{ item.url }}" target="_blank" rel="noopener" class="btn-apply primary-cta" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">
             👉 지금 신청하기
         </a>
         {% endif %}

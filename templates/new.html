@@ -623,9 +623,9 @@
         {% endif %}
         <div class="top-recommend-meta">마감일: {{ top.end_date or '-' }}</div>
         <div class="top-recommend-actions">
-            <a href="{{ url_for('project_detail', pid=top.id) }}" class="btn-detail" onclick="logClick('{{ top.id }}', 'detail', '{{ top.source|e }}', '{{ top.title|e }}')">상세보기</a>
+            <a href="{{ url_for('project_detail', pid=top.id) }}" class="btn-detail" onclick="logClick('{{ top.id }}', 'detail', '{{ top.source|e }}', '{{ (top.display_title or top.title)|e }}')">상세보기</a>
             {% if top.url %}
-            <a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply" onclick="logClick('{{ top.id }}', 'apply', '{{ top.source|e }}', '{{ top.title|e }}')">신청 바로가기</a>
+            <a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply" onclick="logClick('{{ top.id }}', 'apply', '{{ top.source|e }}', '{{ (top.display_title or top.title)|e }}')">신청 바로가기</a>
             {% endif %}
         </div>
     </div>
@@ -676,9 +676,9 @@
                             or src_key or '-' %}
         <tr>
             <td class="num-col">{{ loop.index }}</td>
-            <td class="title-cell" title="{{ item.title }}">
+            <td class="title-cell" title="{{ item.display_title or item.title }}">
               <div class="title-main">
-                <a href="{{ url_for('project_detail', pid=item.id) }}" class="title-link">{{ item.title }}</a>
+                <a href="{{ url_for('project_detail', pid=item.id) }}" class="title-link">{{ item.display_title or item.title }}</a>
               </div>
 
               {% if item.ai_summary %}
@@ -710,9 +710,9 @@
             </td>
             <td class="source-col"><span class="source-tag">{{ src_label }}</span></td>
             <td class="action-col">
-                <a class="btn-detail" href="{{ url_for('project_detail', pid=item.id) }}" onclick="logClick('{{ item.id }}', 'detail', '{{ item.source|e }}', '{{ item.title|e }}')">상세보기</a>
+                <a class="btn-detail" href="{{ url_for('project_detail', pid=item.id) }}" onclick="logClick('{{ item.id }}', 'detail', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">상세보기</a>
                 {% if item.url %}
-                <a class="btn-apply" href="{{ item.url }}" target="_blank" rel="noopener noreferrer" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ item.title|e }}')">신청 바로가기</a>
+                <a class="btn-apply" href="{{ item.url }}" target="_blank" rel="noopener noreferrer" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">신청 바로가기</a>
                 {% endif %}
             </td>
         </tr>

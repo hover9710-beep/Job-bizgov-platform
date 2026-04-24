@@ -262,9 +262,9 @@
             <tr class="{% if row.dday is defined and row.dday is not none %}{% if row.dday <= 3 %}row-urgent{% elif row.dday <= 7 %}row-soon{% endif %}{% endif %}">
                 <td class="title-cell">
                     <a href="/project/{{ row.id }}"
-                       onclick="logClick('{{ row.id }}','detail','{{ row.source|e }}','{{ row.title|e }}')"
+                       onclick="logClick('{{ row.id }}','detail','{{ row.source|e }}','{{ (row.display_title or row.title)|e }}')"
                        class="title-link">
-                        {{ row.title }}
+                        {{ row.display_title or row.title }}
                     </a>
                 </td>
                 <td class="org-cell">{{ row.get('organization') or '—' }}</td>

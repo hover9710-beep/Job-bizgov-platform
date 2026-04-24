@@ -633,6 +633,18 @@ def _log_top_sample(items: List[Dict[str, Any]], n: int = 5) -> None:
         )
 
 
+def clean_display_title(title: Any, fallback: str = "공고 상세보기") -> str:
+    s = str(title or "").strip()
+    if not s:
+        return fallback
+    low = s.lower()
+    if low.startswith("spseq="):
+        return fallback
+    if "spseq=" in low and len(s) < 80:
+        return fallback
+    return s
+
+
 # ---------------------------------------------------------------------------
 # 공개 API (appy.py 호환 + 신규 UI 뷰)
 # ---------------------------------------------------------------------------
@@ -683,6 +695,7 @@ def prepare_db_rows_for_ui(
         it["recommend_label"] = rl
         it["has_recommend_label"] = bool(rl)
         it["recommend_reason"] = build_recommend_reason(it)
+        it["display_title"] = clean_display_title(it.get("title"))
     # 4) 정렬
     items = sort_items(items, key=sort)
     for i, it in enumerate(items, start=1):
