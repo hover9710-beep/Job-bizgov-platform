@@ -267,8 +267,8 @@
         {% elif top.ai_summary %}<div class="top-reason">{{ top.ai_summary }}</div>{% endif %}
         <div class="top-meta">{% if top.organization %}{{ top.organization }}{% else %}-{% endif %} · {{ top.display_status or top.status or '-' }} · 마감 {{ top.end_date or '-' }}</div>
         <div class="top-actions">
-            <a href="{{ url_for('project_detail', pid=top.id) }}" class="btn-detail">상세보기</a>
-            {% if top.url %}<a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply">신청 바로가기</a>{% endif %}
+            <a href="{{ url_for('project_detail', pid=top.id) }}" class="btn-detail" onclick="logClick('{{ top.id }}', 'detail', '{{ top.source|e }}', '{{ top.title|e }}')">상세보기</a>
+            {% if top.url %}<a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply" onclick="logClick('{{ top.id }}', 'apply', '{{ top.source|e }}', '{{ top.title|e }}')">신청 바로가기</a>{% endif %}
         </div>
     </div>
 
@@ -311,8 +311,8 @@
                 <td class="end-col">{{ it.end_date or '-' }}</td>
                 <td class="score-col"><span class="score-badge">{{ it.score | default(0) }}</span></td>
                 <td class="action-col">
-                    <a href="{{ url_for('project_detail', pid=it.id) }}" class="btn-detail">상세보기</a>
-                    {% if it.url %}<a href="{{ it.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply">신청</a>{% endif %}
+                    <a href="{{ url_for('project_detail', pid=it.id) }}" class="btn-detail" onclick="logClick('{{ it.id }}', 'detail', '{{ it.source|e }}', '{{ it.title|e }}')">상세보기</a>
+                    {% if it.url %}<a href="{{ it.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply" onclick="logClick('{{ it.id }}', 'apply', '{{ it.source|e }}', '{{ it.title|e }}')">신청</a>{% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -329,5 +329,16 @@
     </div>
     {% endif %}
     {% endif %}
+<script>
+function logClick(projectId, action, source, title) {
+  try {
+    fetch("/api/click", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({project_id: projectId||"", action: action||"", source: source||"", title: title||""})
+    }).catch(function(){});
+  } catch(e) {}
+}
+</script>
 </body>
 </html>

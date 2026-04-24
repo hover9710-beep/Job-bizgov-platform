@@ -388,6 +388,18 @@ def _init_db():
         )
         """
     )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS click_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT,
+            action TEXT,
+            source TEXT,
+            title TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
     _ensure_column(conn, "companies", "export_amount", "TEXT")
     _ensure_column(conn, "companies", "business_number", "TEXT")
     conn.commit()
@@ -415,6 +427,26 @@ def _prepare_detail_row_for_template(row: sqlite3.Row) -> dict:
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
     return d
+
+
+@app.route("/api/click", methods=["POST"])
+def api_click():
+    try:
+        data = request.get_json(silent=True) or {}
+        project_id = str(data.get("project_id") or "")
+        action = str(data.get("action") or "")
+        source = str(data.get("source") or "")
+        title = str(data.get("title") or "")
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute(
+            "INSERT INTO click_log (project_id, action, source, title) VALUES (?,?,?,?)",
+            (project_id, action, source, title),
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
 
 
 @app.route("/api/jbexport/list", methods=["POST"])

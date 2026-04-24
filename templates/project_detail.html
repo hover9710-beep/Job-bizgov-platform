@@ -225,7 +225,7 @@
             ✔ 전북 기업 대상 / 지원사업
         </div>
         {% if item.get('url') %}
-        <a href="{{ item.url }}" target="_blank" rel="noopener" class="btn-apply primary-cta">
+        <a href="{{ item.url }}" target="_blank" rel="noopener" class="btn-apply primary-cta" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ item.title|e }}')">
             👉 지금 신청하기
         </a>
         {% endif %}
@@ -262,5 +262,16 @@
     <div class="actions">
         <a href="{{ url_for('index') }}" class="btn-detail">목록으로 돌아가기</a>
     </div>
+<script>
+function logClick(projectId, action, source, title) {
+  try {
+    fetch("/api/click", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({project_id: projectId||"", action: action||"", source: source||"", title: title||""})
+    }).catch(function(){});
+  } catch(e) {}
+}
+</script>
 </body>
 </html>

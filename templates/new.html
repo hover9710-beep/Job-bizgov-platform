@@ -564,9 +564,9 @@
         {% endif %}
         <div class="top-recommend-meta">마감일: {{ top.end_date or '-' }}</div>
         <div class="top-recommend-actions">
-            <a href="{{ url_for('project_detail', pid=top.id) }}" class="btn-detail">상세보기</a>
+            <a href="{{ url_for('project_detail', pid=top.id) }}" class="btn-detail" onclick="logClick('{{ top.id }}', 'detail', '{{ top.source|e }}', '{{ top.title|e }}')">상세보기</a>
             {% if top.url %}
-            <a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply">신청 바로가기</a>
+            <a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply" onclick="logClick('{{ top.id }}', 'apply', '{{ top.source|e }}', '{{ top.title|e }}')">신청 바로가기</a>
             {% endif %}
         </div>
     </div>
@@ -651,9 +651,9 @@
             </td>
             <td class="source-col"><span class="source-tag">{{ src_label }}</span></td>
             <td class="action-col">
-                <a class="btn-detail" href="{{ url_for('project_detail', pid=item.id) }}">상세보기</a>
+                <a class="btn-detail" href="{{ url_for('project_detail', pid=item.id) }}" onclick="logClick('{{ item.id }}', 'detail', '{{ item.source|e }}', '{{ item.title|e }}')">상세보기</a>
                 {% if item.url %}
-                <a class="btn-apply" href="{{ item.url }}" target="_blank" rel="noopener noreferrer">신청 바로가기</a>
+                <a class="btn-apply" href="{{ item.url }}" target="_blank" rel="noopener noreferrer" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ item.title|e }}')">신청 바로가기</a>
                 {% endif %}
             </td>
         </tr>
@@ -676,6 +676,16 @@ function toggleFilter() {
     box.style.display = "none";
     btn.innerText = "🔽 필터 열기";
   }
+}
+
+function logClick(projectId, action, source, title) {
+  try {
+    fetch("/api/click", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({project_id: projectId||"", action: action||"", source: source||"", title: title||""})
+    }).catch(function(){});
+  } catch(e) {}
 }
 
 (function () {
