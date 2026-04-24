@@ -249,8 +249,12 @@
                 <td class="date-cell">{{ row.get('start_date') or '—' }}</td>
                 <td class="deadline-cell">
                     <div class="deadline-date">{{ row.get('end_date') or '—' }}</div>
-                    {% if row.dday is defined %}
-                    <div class="d-day{% if row.dday <= 3 %} urgent{% elif row.dday <= 7 %} soon{% endif %}">
+                    {% if row.get('deadline_badge') %}
+                    <div class="d-day {% if row.get('deadline_badge') in ['D-0','D-1','D-2','D-3','D-Day'] %}urgent{% elif row.get('deadline_badge') in ['D-4','D-5','D-6','D-7'] %}soon{% endif %}">
+                        {{ row.get('deadline_badge') }}
+                    </div>
+                    {% elif row.dday is defined and row.dday is not none %}
+                    <div class="d-day {% if row.dday <= 3 %}urgent{% elif row.dday <= 7 %}soon{% endif %}">
                         D-{{ row.dday }}
                     </div>
                     {% endif %}
