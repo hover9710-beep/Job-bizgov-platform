@@ -648,12 +648,15 @@
 function toggleFilter() {
   const box = document.getElementById("filter-box");
   const btn = document.querySelector(".filter-toggle-btn");
-  if (box.style.display === "none" || box.style.display === "") {
+
+  const isHidden = box.style.display === "none" || box.style.display === "";
+
+  if (isHidden) {
     box.style.display = "block";
-    btn.textContent = "🔼 필터 닫기";
+    btn.innerText = "🔼 필터 닫기";
   } else {
     box.style.display = "none";
-    btn.textContent = "🔽 필터 열기";
+    btn.innerText = "🔽 필터 열기";
   }
 }
 
