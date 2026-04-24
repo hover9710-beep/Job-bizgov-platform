@@ -544,6 +544,36 @@ def filter_items(
         if cat and not _item_matches_category(it, cat):
             continue
         out.append(it)
+    return dedupe_items_for_ui(out)
+
+
+def normalize_text(s: str) -> str:
+    if not s:
+        return ""
+    return re.sub(r"\s+", " ", str(s).strip().lower())
+
+
+def dedupe_items_for_ui(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen = set()
+    out = []
+    for item in items:
+        key = (
+            (item.get("source") or "").strip().lower(),
+            normalize_text(item.get("title")),
+            normalize_text(item.get("organization")),
+            item.get("start_date") or "",
+            item.get("end_date") or "",
+        )
+        fallback_key = (
+            (item.get("source") or "").strip().lower(),
+            normalize_text(item.get("title")),
+            normalize_text(item.get("organization")),
+        )
+        final_key = key if (item.get("start_date") or item.get("end_date")) else fallback_key
+        if final_key in seen:
+            continue
+        seen.add(final_key)
+        out.append(item)
     return out
 
 
