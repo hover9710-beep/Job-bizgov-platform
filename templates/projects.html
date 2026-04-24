@@ -133,15 +133,15 @@
             text-decoration: none;
         }
 
-        .deadline-date { font-size:13px; color:#6b7280; font-weight:700; }
-        .deadline-badge {
-            display:inline-block; margin-top:6px; padding:4px 10px;
-            border-radius:999px; font-size:13px; font-weight:800;
-            line-height:1.2; white-space:nowrap;
-        }
+        .deadline-wrapper { display:flex; flex-direction:column; align-items:center; }
+        .deadline-date { font-size:13px; color:#6b7280; }
+        .deadline-badge { display:inline-block; margin-top:6px; padding:4px 10px; border-radius:999px; font-size:13px; font-weight:800; }
         .deadline-badge.urgent { background:#fee2e2; color:#dc2626; }
         .deadline-badge.soon { background:#fef3c7; color:#d97706; }
         .deadline-badge.normal { background:#e5e7eb; color:#374151; }
+        .row-urgent { background:#fff7f7; }
+        .row-soon { background:#fffbeb; }
+        .project-table td:last-child { padding-right:16px; }
 
         .nav,
         .navbar,
@@ -243,7 +243,7 @@
         <tbody>
             {% for row in rows %}
             {% set st = row.get('display_status') or row.get('status') or '—' %}
-            <tr>
+            <tr class="{% if row.dday is defined and row.dday is not none %}{% if row.dday <= 3 %}row-urgent{% elif row.dday <= 7 %}row-soon{% endif %}{% endif %}">
                 <td class="title-cell">{{ row.get('title') or '' }}</td>
                 <td class="org-cell">{{ row.get('organization') or '—' }}</td>
                 <td class="status-cell">
@@ -255,16 +255,16 @@
                 </td>
                 <td class="date-cell">{{ row.get('start_date') or '—' }}</td>
                 <td class="deadline-cell">
-                    <div class="deadline-date">{{ row.end_date }}</div>
-                    {% if row.dday is defined and row.dday is not none %}
-                    <div class="deadline-badge {% if row.dday <= 3 %}urgent{% elif row.dday <= 7 %}soon{% else %}normal{% endif %}">
-                        ⏰ D-{{ row.dday }}
+                    <div class="deadline-wrapper">
+                        <div class="deadline-date">{{ row.end_date }}</div>
+                        {% if row.dday is defined and row.dday is not none %}
+                        <div class="deadline-badge {% if row.dday <= 3 %}urgent{% elif row.dday <= 7 %}soon{% else %}normal{% endif %}">
+                            ⏰ D-{{ row.dday }}
+                        </div>
+                        {% elif row.deadline_badge %}
+                        <div class="deadline-badge urgent">⏰ {{ row.deadline_badge }}</div>
+                        {% endif %}
                     </div>
-                    {% elif row.deadline_badge %}
-                    <div class="deadline-badge urgent">
-                        ⏰ {{ row.deadline_badge }}
-                    </div>
-                    {% endif %}
                 </td>
                 <td class="action-cell">
                     <a href="/project/{{ row.id }}" class="btn-apply">보기</a>
