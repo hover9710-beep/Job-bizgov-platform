@@ -406,27 +406,44 @@ def _init_db():
     conn.close()
 
 
+def clean_display_title(title: Any, fallback: str = "공고 상세보기") -> str:
+    s = str(title or "").strip()
+    if not s:
+        return fallback
+    if s.lower().startswith("spseq="):
+        return fallback
+    if "spseq=" in s.lower() and len(s) < 80:
+        return fallback
+    return s
+
+
 def load_top_clicked_projects(limit: int = 5) -> list:
     try:
         conn = sqlite3.connect(DB_PATH)
         rows = conn.execute(
             """
             SELECT
-                project_id, title, source,
-                SUM(CASE WHEN action='apply' THEN 3 ELSE 1 END) AS score,
+                cl.project_id,
+                COALESCE(NULLIF(bp.title, ''), cl.title) AS title,
+                COALESCE(NULLIF(bp.source, ''), cl.source) AS source,
+                SUM(CASE WHEN cl.action = 'apply' THEN 3 ELSE 1 END) AS score,
                 COUNT(*) AS click_count,
-                SUM(CASE WHEN action='apply' THEN 1 ELSE 0 END) AS apply_count,
-                SUM(CASE WHEN action='detail' THEN 1 ELSE 0 END) AS detail_count
-            FROM click_log
-            WHERE created_at >= datetime('now', '-30 days')
-            GROUP BY project_id, title, source
+                SUM(CASE WHEN cl.action = 'apply' THEN 1 ELSE 0 END) AS apply_count,
+                SUM(CASE WHEN cl.action = 'detail' THEN 1 ELSE 0 END) AS detail_count
+            FROM click_log cl
+            LEFT JOIN biz_projects bp
+                ON CAST(bp.id AS TEXT) = CAST(cl.project_id AS TEXT)
+            WHERE cl.created_at >= datetime('now', '-30 days')
+            GROUP BY cl.project_id,
+                COALESCE(NULLIF(bp.title, ''), cl.title),
+                COALESCE(NULLIF(bp.source, ''), cl.source)
             ORDER BY score DESC, click_count DESC
             LIMIT ?
             """,
             (limit,),
         ).fetchall()
         conn.close()
-        return [
+        out = [
             dict(
                 zip(
                     [
@@ -443,6 +460,9 @@ def load_top_clicked_projects(limit: int = 5) -> list:
             )
             for r in rows
         ]
+        for item in out:
+            item["title"] = clean_display_title(item.get("title"))
+        return out
     except Exception:
         return []
 
