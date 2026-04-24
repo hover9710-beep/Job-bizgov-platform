@@ -547,33 +547,30 @@ def filter_items(
     return dedupe_items_for_ui(out)
 
 
-def normalize_text(s: str) -> str:
-    if not s:
-        return ""
-    return re.sub(r"\s+", " ", str(s).strip().lower())
+def normalize_text_for_dedupe(v: Any) -> str:
+    """UI 목록 중복 제거용: 공백·대소문자·대괄호 등 사소한 차이 축소 (source는 키에 넣지 않음)."""
+    s = str(v or "").strip().lower()
+    s = re.sub(r"\s+", " ", s)
+    s = re.sub(r"[\[\]]", "", s)
+    s = s.replace(" ", "")
+    return s
 
 
 def dedupe_items_for_ui(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    seen = set()
-    out = []
-    for item in items:
+    seen: set[Tuple[str, str, str, str]] = set()
+    out: List[Dict[str, Any]] = []
+    for it in items:
+        org = it.get("organization") or it.get("executing_agency")
         key = (
-            (item.get("source") or "").strip().lower(),
-            normalize_text(item.get("title")),
-            normalize_text(item.get("organization")),
-            item.get("start_date") or "",
-            item.get("end_date") or "",
+            normalize_text_for_dedupe(it.get("title")),
+            normalize_text_for_dedupe(org),
+            str(it.get("start_date") or ""),
+            str(it.get("end_date") or ""),
         )
-        fallback_key = (
-            (item.get("source") or "").strip().lower(),
-            normalize_text(item.get("title")),
-            normalize_text(item.get("organization")),
-        )
-        final_key = key if (item.get("start_date") or item.get("end_date")) else fallback_key
-        if final_key in seen:
+        if key in seen:
             continue
-        seen.add(final_key)
-        out.append(item)
+        seen.add(key)
+        out.append(it)
     return out
 
 

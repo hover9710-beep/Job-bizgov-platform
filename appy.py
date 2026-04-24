@@ -432,6 +432,7 @@ def _prepare_detail_row_for_template(row: sqlite3.Row) -> dict:
 @app.route("/api/click", methods=["POST"])
 def api_click():
     try:
+        _init_db()
         data = request.get_json(silent=True) or {}
         project_id = str(data.get("project_id") or "")
         action = str(data.get("action") or "")
@@ -447,6 +448,36 @@ def api_click():
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route("/admin/clicks")
+def admin_clicks():
+    """클릭 로그 확인용(비로그인). DB 저장만 하던 기록을 표로 확인."""
+    _init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    recent = cur.execute(
+        "SELECT id, project_id, action, source, title, created_at "
+        "FROM click_log ORDER BY id DESC LIMIT 100"
+    ).fetchall()
+    action_counts = cur.execute(
+        "SELECT action, COUNT(*) AS cnt FROM click_log GROUP BY action ORDER BY cnt DESC"
+    ).fetchall()
+    source_counts = cur.execute(
+        "SELECT source, COUNT(*) AS cnt FROM click_log GROUP BY source ORDER BY cnt DESC"
+    ).fetchall()
+    top_projects = cur.execute(
+        "SELECT project_id, title, COUNT(*) AS cnt FROM click_log "
+        "GROUP BY project_id, title ORDER BY cnt DESC LIMIT 20"
+    ).fetchall()
+    conn.close()
+    return render_template(
+        "click_log.html",
+        recent_clicks=recent,
+        action_counts=action_counts,
+        source_counts=source_counts,
+        top_projects=top_projects,
+    )
 
 
 @app.route("/api/jbexport/list", methods=["POST"])

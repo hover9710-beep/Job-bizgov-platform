@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>클릭 로그</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif; max-width: 960px; margin: 24px auto; padding: 0 16px; color: #111827; }
+        h1 { font-size: 1.4rem; margin: 0 0 8px; }
+        .muted { color: #64748b; font-size: 14px; margin-bottom: 20px; }
+        .back { display: inline-block; margin-bottom: 20px; color: #1d4ed8; font-weight: 600; text-decoration: none; }
+        .back:hover { text-decoration: underline; }
+        h2 { font-size: 1.05rem; margin: 24px 0 10px; color: #374151; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 8px; }
+        th, td { border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; vertical-align: top; }
+        th { background: #f8fafc; font-weight: 600; color: #374151; }
+        tr:nth-child(even) { background: #fafafa; }
+        .num { text-align: right; font-variant-numeric: tabular-nums; }
+        .title-cell { max-width: 280px; word-break: break-word; }
+    </style>
+</head>
+<body>
+    <h1>클릭 로그</h1>
+    <p class="muted">브라우저에서 상세보기·신청 버튼 클릭 시 서버 DB(<code>click_log</code>)에 기록됩니다. 이 페이지는 확인용입니다.</p>
+    <a class="back" href="{{ url_for('index') }}">← 공고목록으로 돌아가기</a>
+
+    <h2>action별 카운트</h2>
+    <table>
+        <thead><tr><th>action</th><th class="num">건수</th></tr></thead>
+        <tbody>
+        {% for row in action_counts %}
+            <tr><td>{{ row[0] or '(빈값)' }}</td><td class="num">{{ row[1] }}</td></tr>
+        {% else %}
+            <tr><td colspan="2">기록 없음</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>source별 카운트</h2>
+    <table>
+        <thead><tr><th>source</th><th class="num">건수</th></tr></thead>
+        <tbody>
+        {% for row in source_counts %}
+            <tr><td>{{ row[0] or '(빈값)' }}</td><td class="num">{{ row[1] }}</td></tr>
+        {% else %}
+            <tr><td colspan="2">기록 없음</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>인기 공고 TOP 20 (project_id · title)</h2>
+    <table>
+        <thead><tr><th>project_id</th><th class="title-cell">title</th><th class="num">클릭</th></tr></thead>
+        <tbody>
+        {% for row in top_projects %}
+            <tr><td>{{ row[0] or '-' }}</td><td class="title-cell">{{ row[1] or '-' }}</td><td class="num">{{ row[2] }}</td></tr>
+        {% else %}
+            <tr><td colspan="3">기록 없음</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>최근 클릭 100건</h2>
+    <table>
+        <thead>
+            <tr><th>id</th><th>project_id</th><th>action</th><th>source</th><th>title</th><th>created_at</th></tr>
+        </thead>
+        <tbody>
+        {% for row in recent_clicks %}
+            <tr>
+                <td>{{ row[0] }}</td>
+                <td>{{ row[1] or '-' }}</td>
+                <td>{{ row[2] or '-' }}</td>
+                <td>{{ row[3] or '-' }}</td>
+                <td class="title-cell">{{ row[4] or '-' }}</td>
+                <td>{{ row[5] or '-' }}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="6">기록 없음</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
