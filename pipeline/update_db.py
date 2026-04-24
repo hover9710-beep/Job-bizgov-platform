@@ -75,6 +75,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
         "ministry",
         "executing_agency",
         "period_text",
+        "attachments_json",
     ):
         _ensure_column(conn, "biz_projects", col)
     _ensure_column(conn, "projects", "source")
@@ -83,6 +84,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "projects", "ministry")
     _ensure_column(conn, "projects", "executing_agency")
     _ensure_column(conn, "projects", "period_text")
+    _ensure_column(conn, "projects", "attachments_json")
     conn.execute(
         """
         UPDATE biz_projects
@@ -145,6 +147,23 @@ def _load_items() -> List[Dict[str, Any]]:
     if not isinstance(data, list):
         return []
     return [x for x in data if isinstance(x, dict)]
+
+
+def _is_empty_attachments_json(val: Any) -> bool:
+    if val is None:
+        return True
+    s = str(val).strip()
+    return s == "" or s == "[]"
+
+
+def _normalize_attachments_json_field(raw: Any) -> str:
+    if raw is None:
+        return ""
+    if isinstance(raw, str):
+        return raw.strip()
+    if isinstance(raw, (list, dict)):
+        return json.dumps(raw, ensure_ascii=False)
+    return str(raw).strip()
 
 
 def _jbexport_style_junk_title(title: str) -> bool:
@@ -215,6 +234,7 @@ def _prepare_row(item: Dict[str, Any]) -> Tuple[Dict[str, Any], str, str]:
             break
     if status == "확인 필요":
         status = infer_status(period_text, sd, ed, date.today().isoformat())
+    attachments_json = _normalize_attachments_json_field(item.get("attachments_json"))
     row = {
         "title": title,
         "organization": organization,
@@ -229,6 +249,7 @@ def _prepare_row(item: Dict[str, Any]) -> Tuple[Dict[str, Any], str, str]:
         "source": source,
         "collected_at": collected_at,
         "period_text": period_text,
+        "attachments_json": attachments_json,
     }
     return row, title, url
 
@@ -286,10 +307,10 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
             INSERT INTO biz_projects (
                 title, organization, ministry, executing_agency, source,
                 start_date, end_date, status, url, description, site,
-                ai_result, pdf_path, collected_at, period_text,
+                ai_result, pdf_path, collected_at, period_text, attachments_json,
                 created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """,
             (
                 row["title"],
@@ -307,18 +328,23 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
                 pdf_path if pdf_path is not None else None,
                 row["collected_at"],
                 row["period_text"],
+                row["attachments_json"] or None,
             ),
         )
         return
 
     cur = conn.execute(
-        "SELECT ai_result, pdf_path FROM biz_projects WHERE id = ?",
+        "SELECT ai_result, pdf_path, attachments_json FROM biz_projects WHERE id = ?",
         (eid,),
     ).fetchone()
-    old_ai, old_pdf = (cur or (None, None))
+    old_ai, old_pdf, old_aj = (cur or (None, None, None))
 
     new_ai = old_ai if ai_result is None else ai_result
     new_pdf = old_pdf if pdf_path is None else pdf_path
+
+    merged_aj = row["attachments_json"]
+    if _is_empty_attachments_json(merged_aj) and not _is_empty_attachments_json(old_aj):
+        merged_aj = str(old_aj).strip()
 
     conn.execute(
         """
@@ -326,7 +352,7 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
         SET title = ?, organization = ?, ministry = ?, executing_agency = ?,
             source = ?, start_date = ?, end_date = ?, status = ?, url = ?,
             description = ?, site = ?, ai_result = ?, pdf_path = ?,
-            collected_at = ?, period_text = ?, updated_at = CURRENT_TIMESTAMP
+            collected_at = ?, period_text = ?, attachments_json = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
         """,
         (
@@ -345,6 +371,7 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
             new_pdf,
             row["collected_at"],
             row["period_text"],
+            merged_aj or None,
             eid,
         ),
     )

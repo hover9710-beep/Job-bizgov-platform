@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import calendar
 import html
+import json
 import re
 import sqlite3
 import sys
@@ -155,6 +156,11 @@ def _ensure_period_text_column(conn: sqlite3.Connection) -> bool:
     return "period_text" in cols
 
 
+def _ensure_attachments_json_column(conn: sqlite3.Connection) -> bool:
+    cols = {str(c[1]) for c in conn.execute("PRAGMA table_info(biz_projects)").fetchall()}
+    return "attachments_json" in cols
+
+
 def load_db_rows(db_path: Path = DB_PATH) -> List[Dict[str, Any]]:
     """biz_projects 전체 행을 dict 리스트로 반환. period_text 컬럼 유무 자동 대응."""
     if not db_path.exists():
@@ -166,11 +172,18 @@ def load_db_rows(db_path: Path = DB_PATH) -> List[Dict[str, Any]]:
     try:
         has_pt = _ensure_period_text_column(conn)
         pt_expr = "COALESCE(period_text, '') AS period_text" if has_pt else "'' AS period_text"
+        has_aj = _ensure_attachments_json_column(conn)
+        aj_expr = (
+            "COALESCE(attachments_json, '') AS attachments_json"
+            if has_aj
+            else "'' AS attachments_json"
+        )
         sql = f"""
             SELECT
                 id, title, organization, source,
                 start_date, end_date, status, url, description,
-                {pt_expr}
+                {pt_expr},
+                {aj_expr}
             FROM biz_projects
         """
         rows = conn.execute(sql).fetchall()
@@ -189,6 +202,52 @@ def load_db_rows(db_path: Path = DB_PATH) -> List[Dict[str, Any]]:
 
 def _today_str() -> str:
     return date.today().isoformat()
+
+
+def _parse_attachments(row: Any) -> List[Any]:
+    """attachments_json / 첨부 메타 → 리스트. 파싱 실패·빈값은 []."""
+    if not isinstance(row, dict):
+        return []
+    val = row.get("attachments_json")
+    if val is None:
+        val = row.get("attachments")
+    if val is None:
+        return []
+    if isinstance(val, list):
+        return val
+    if isinstance(val, dict):
+        return [val]
+    s = str(val).strip()
+    if not s or s == "[]":
+        return []
+    try:
+        parsed = json.loads(s)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if isinstance(parsed, dict):
+        return [parsed]
+    if isinstance(parsed, list):
+        return parsed
+    return []
+
+
+def _attachment_summary_text(parsed: List[Any]) -> str:
+    """첨부 메타 리스트 → '파일명' 또는 '첫파일 외 n건'. 이름 없으면 ''."""
+    names: List[str] = []
+    for x in parsed:
+        if isinstance(x, dict):
+            n = str(x.get("name") or "").strip()
+            if n:
+                names.append(n)
+        elif isinstance(x, str):
+            t = x.strip()
+            if t:
+                names.append(t)
+    if not names:
+        return ""
+    if len(names) == 1:
+        return names[0]
+    return f"{names[0]} 외 {len(names) - 1}건"
 
 
 def to_mail_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, Any]:
@@ -214,6 +273,9 @@ def to_mail_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, 
     raw_url = str(row.get("url") or "").strip()
     url = _KSTARTUP_FALLBACK_URL if src == "kstartup" else raw_url
 
+    att_parsed = _parse_attachments(row)
+    att_summary = _attachment_summary_text(att_parsed)
+
     return {
         "id": row.get("id"),
         "title": str(row.get("title") or "").strip(),
@@ -228,6 +290,7 @@ def to_mail_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, 
         "raw_url": raw_url,
         "description": str(row.get("description") or "").strip(),
         "status": infer_status(period_text, start_date, end_date, t),
+        "attachment_summary": att_summary,
     }
 
 
@@ -496,20 +559,28 @@ def _render_mail_card(item: Dict[str, Any], *, urgent: bool = False) -> str:
     org = _esc_html_txt(item.get("organization") or "-")
     sd = _esc_html_txt(item.get("start_date") or "-")
     ed = _esc_html_txt(item.get("end_date") or "-")
+    att_summ = str(item.get("attachment_summary") or "").strip()
+    att_block = ""
+    if att_summ:
+        att_block = (
+            f'<div style="font-size:12px; color:#6b7280;">'
+            f"📎 첨부: {_esc_html_txt(att_summ)}"
+            f"</div><br>\n"
+        )
     if urgent:
         badge = _esc_html_txt(item.get("deadline_badge") or "")
         return f"""
 <div style="margin-bottom:14px; padding:10px; border:1px solid #fee2e2; border-radius:6px;">
   <a href="{href}" style="font-size:15px; font-weight:bold; color:#111827; text-decoration:none;">{title}</a><br>
   <span style="font-size:12px; color:#6b7280;">{org} | {sd} ~ {ed}</span><br>
-  <span style="font-size:12px; color:#b91c1c; font-weight:bold;">{badge}</span>
+  {att_block}  <span style="font-size:12px; color:#b91c1c; font-weight:bold;">{badge}</span>
 </div>"""
     status = _esc_html_txt(item.get("display_status") or "")
     return f"""
 <div style="margin-bottom:12px; padding:8px; border-bottom:1px solid #e5e7eb;">
   <a href="{href}" style="font-size:15px; font-weight:bold; color:#111827; text-decoration:none;">{title}</a><br>
   <span style="font-size:12px; color:#6b7280;">{org} | {sd} ~ {ed}</span><br>
-  <span style="font-size:12px; color:#16a34a;">{status}</span>
+  {att_block}  <span style="font-size:12px; color:#16a34a;">{status}</span>
 </div>"""
 
 
@@ -600,6 +671,7 @@ def _enrich_for_html_template(it: Dict[str, Any], today_iso: str) -> Dict[str, A
         "url": u,
         "deadline_badge": _mail_deadline_badge(it, today_iso),
         "display_status": str(it.get("status") or ""),
+        "attachment_summary": str(it.get("attachment_summary") or "").strip(),
     }
 
 

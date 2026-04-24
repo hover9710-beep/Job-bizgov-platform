@@ -895,12 +895,21 @@ def enrich_new_items_with_files(new_items: List[Dict[str, Any]]) -> List[Dict[st
 
         if not sp_seq or not detail_url:
             item["files"] = []
+            item["attachments_json"] = ""
             continue
 
         attachments = get_attachments(sp_seq, detail_url)
         downloaded_files: List[Dict[str, Any]] = []
+        meta_for_db: List[Dict[str, str]] = []
 
         for att in attachments:
+            meta_for_db.append(
+                {
+                    "name": str(att.get("name") or "").strip(),
+                    "fileUUID": str(att.get("fileUUID") or "").strip(),
+                    "pathNum": str(att.get("pathNum") or "").strip(),
+                }
+            )
             file_uuid = str(att.get("fileUUID") or "").strip()
             path_num = str(att.get("pathNum") or "6").strip()
             name = str(att.get("name") or "").strip()
@@ -912,6 +921,9 @@ def enrich_new_items_with_files(new_items: List[Dict[str, Any]]) -> List[Dict[st
             downloaded_files.append(file_info)
 
         item["files"] = downloaded_files
+        item["attachments_json"] = (
+            json.dumps(meta_for_db, ensure_ascii=False) if meta_for_db else ""
+        )
 
     return new_items
 

@@ -99,6 +99,12 @@ def load_db_rows(
             if has_pt
             else "'' AS period_text"
         )
+        has_aj = _has_column(conn, table, "attachments_json")
+        select_parts.append(
+            "COALESCE(attachments_json, '') AS attachments_json"
+            if has_aj
+            else "'' AS attachments_json"
+        )
 
         sql = f"SELECT {', '.join(select_parts)} FROM {table}"
         rows = conn.execute(sql).fetchall()
@@ -237,6 +243,54 @@ def _compute_deadline_badge(
     if d <= _DEADLINE_WARN_DAYS:
         return (f"D-{d}", "deadline-warn")
     return ("", "")
+
+
+def _parse_attachments_row(it: Dict[str, Any]) -> List[Any]:
+    """DB/UI dict에서 첨부 메타 리스트. mail_view._parse_attachments 와 동일 규칙."""
+    if not isinstance(it, dict):
+        return []
+    val = it.get("attachments_json")
+    if val is None:
+        val = it.get("attachments")
+    if val is None:
+        return []
+    if isinstance(val, list):
+        return val
+    if isinstance(val, dict):
+        return [val]
+    s = str(val).strip()
+    if not s or s == "[]":
+        return []
+    try:
+        parsed = json.loads(s)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if isinstance(parsed, dict):
+        return [parsed]
+    if isinstance(parsed, list):
+        return parsed
+    return []
+
+
+def _attachment_summary_for_ui(parsed: List[Any]) -> Tuple[int, str, bool]:
+    if not parsed:
+        return 0, "", False
+    names: List[str] = []
+    for x in parsed:
+        if isinstance(x, dict):
+            n = str(x.get("name") or "").strip()
+            if n:
+                names.append(n)
+        elif isinstance(x, str):
+            t = x.strip()
+            if t:
+                names.append(t)
+    count = len(parsed)
+    if not names:
+        return count, "", True
+    if len(names) == 1:
+        return count, names[0], True
+    return count, f"{names[0]} 외 {len(names) - 1}건", True
 
 
 def _apply_ui_labels(it: Dict[str, Any], today: date) -> None:
@@ -413,6 +467,11 @@ def prepare_db_rows_for_ui(
         it.setdefault("source_badge", (it.get("_db_source_snapshot") or "").lower() or "unknown")
         _apply_display_url(it)
         _apply_ui_labels(it, t_date)
+        att_parsed = _parse_attachments_row(it)
+        acount, asumm, has_att = _attachment_summary_for_ui(att_parsed)
+        it["attachment_count"] = acount
+        it["attachment_summary"] = asumm
+        it["has_attachments"] = has_att
     # 4) 정렬
     items = sort_items(items, key=sort)
     for i, it in enumerate(items, start=1):

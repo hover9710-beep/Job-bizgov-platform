@@ -297,8 +297,14 @@ def run_post_update_and_notify(args: argparse.Namespace) -> int:
     rc = _post_merge_steps(args)
     if rc != 0 and not args.test:
         return rc
-    _section("4e) Attachment text extract")
-    _run([PY, "-m", "pipeline.attachment_text_pipeline"])
+    _section("4e) Attachment text extract (non-fatal)")
+    att_rc = _run([PY, "-m", "pipeline.attachment_text_pipeline"])
+    if att_rc != 0:
+        print(
+            f"[run_all] non-fatal: attachment_text_pipeline exit {att_rc}, "
+            "메일·알림 단계 계속",
+            flush=True,
+        )
     return _run_mail_chain(args)
 
 
