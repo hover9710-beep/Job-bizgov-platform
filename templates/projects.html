@@ -65,6 +65,7 @@
         .title-cell {
             width: 42%;
             min-width: 320px;
+            max-width: 400px;
             font-size: 15px;
             font-weight: 700;
             color: #111827;
@@ -259,7 +260,13 @@
             {% for row in rows %}
             {% set st = row.get('display_status') or row.get('status') or '—' %}
             <tr class="{% if row.dday is defined and row.dday is not none %}{% if row.dday <= 3 %}row-urgent{% elif row.dday <= 7 %}row-soon{% endif %}{% endif %}">
-                <td class="title-cell">{{ row.get('title') or '' }}</td>
+                <td class="title-cell">
+                    <a href="/project/{{ row.id }}"
+                       onclick="logClick('{{ row.id }}','detail','{{ row.source|e }}','{{ row.title|e }}')"
+                       class="title-link">
+                        {{ row.title }}
+                    </a>
+                </td>
                 <td class="org-cell">{{ row.get('organization') or '—' }}</td>
                 <td class="status-cell">
                     {% if st in ['접수중', '진행'] %}
@@ -289,5 +296,16 @@
         </tbody>
     </table>
     </div>
+<script>
+function logClick(projectId, action, source, title) {
+  try {
+    fetch("/api/click", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({project_id: projectId||"", action: action||"", source: source||"", title: title||""})
+    }).catch(function(){});
+  } catch(e) {}
+}
+</script>
 </body>
 </html>
