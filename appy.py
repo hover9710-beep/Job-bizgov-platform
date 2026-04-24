@@ -417,6 +417,17 @@ def clean_display_title(title: Any, fallback: str = "공고 상세보기") -> st
     return s
 
 
+def clean_admin_title(title: Any, fallback: str = "공고 상세보기") -> str:
+    s = str(title or "").strip()
+    if not s:
+        return fallback
+    if s.lower().startswith("spseq="):
+        return fallback
+    if "spseq=" in s.lower() and len(s) < 100:
+        return fallback
+    return s
+
+
 def load_top_clicked_projects(limit: int = 5) -> list:
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -517,20 +528,40 @@ def admin_clicks():
     _init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    recent = cur.execute(
-        "SELECT id, project_id, action, source, title, created_at "
-        "FROM click_log ORDER BY id DESC LIMIT 100"
+    recent_raw = cur.execute(
+        """
+        SELECT cl.id, cl.project_id, cl.action,
+            COALESCE(NULLIF(bp.source,''), cl.source) AS source,
+            COALESCE(NULLIF(bp.title,''), cl.title) AS title,
+            cl.created_at
+        FROM click_log cl
+        LEFT JOIN biz_projects bp
+            ON CAST(bp.id AS TEXT) = CAST(cl.project_id AS TEXT)
+        ORDER BY cl.id DESC LIMIT 100
+        """
     ).fetchall()
+    recent = [
+        (r[0], r[1], r[2], r[3], clean_admin_title(r[4]), r[5]) for r in recent_raw
+    ]
     action_counts = cur.execute(
         "SELECT action, COUNT(*) AS cnt FROM click_log GROUP BY action ORDER BY cnt DESC"
     ).fetchall()
     source_counts = cur.execute(
         "SELECT source, COUNT(*) AS cnt FROM click_log GROUP BY source ORDER BY cnt DESC"
     ).fetchall()
-    top_projects = cur.execute(
-        "SELECT project_id, title, COUNT(*) AS cnt FROM click_log "
-        "GROUP BY project_id, title ORDER BY cnt DESC LIMIT 20"
+    top_raw = cur.execute(
+        """
+        SELECT cl.project_id,
+            COALESCE(NULLIF(bp.title,''), cl.title) AS title,
+            COUNT(*) AS cnt
+        FROM click_log cl
+        LEFT JOIN biz_projects bp
+            ON CAST(bp.id AS TEXT) = CAST(cl.project_id AS TEXT)
+        GROUP BY cl.project_id, COALESCE(NULLIF(bp.title,''), cl.title)
+        ORDER BY cnt DESC LIMIT 20
+        """
     ).fetchall()
+    top_projects = [(r[0], clean_admin_title(r[1]), r[2]) for r in top_raw]
     conn.close()
     return render_template(
         "click_log.html",
