@@ -34,9 +34,10 @@
         .detail-cta-box {
             margin: 16px 0 18px;
             padding: 14px;
-            border: 1px solid #dbeafe;
+            border: 2px solid #2563eb;
             border-radius: 14px;
             background: #eff6ff;
+            box-shadow: 0 4px 16px rgba(37, 99, 235, 0.15);
         }
         .deadline-line {
             font-size: 14px;
@@ -58,7 +59,7 @@
             box-sizing: border-box;
         }
         .primary-cta:active {
-            transform: scale(0.98);
+            transform: scale(0.97);
         }
 
         @media (max-width: 700px) {
@@ -156,6 +157,8 @@
             .detail-cta-box {
                 margin: 16px 0 18px !important;
                 padding: 16px !important;
+                border: 2px solid #2563eb !important;
+                box-shadow: 0 6px 18px rgba(37,99,235,0.2) !important;
             }
             .deadline-line {
                 font-size: 15px !important;
@@ -197,14 +200,14 @@
     <div class="detail-cta-box">
         <div class="deadline-line">
             {% if item.get('deadline_badge') %}
-                ⏰ 마감 {{ item.deadline_badge }}
+                🔥 마감 임박 {{ item.deadline_badge }}
             {% elif item.get('end_date') %}
                 ⏰ 마감일 {{ item.end_date }}
             {% endif %}
         </div>
         {% if item.get('url') %}
         <a href="{{ item.url }}" target="_blank" rel="noopener" class="btn-apply primary-cta">
-            원문/신청 페이지 열기
+            👉 지금 신청하기
         </a>
         {% endif %}
     </div>
