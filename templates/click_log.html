@@ -11,12 +11,26 @@
         .back { display: inline-block; margin-bottom: 20px; color: #1d4ed8; font-weight: 600; text-decoration: none; }
         .back:hover { text-decoration: underline; }
         h2 { font-size: 1.05rem; margin: 24px 0 10px; color: #374151; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 8px; }
-        th, td { border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; vertical-align: top; }
+        .table-wrap { width:100%; overflow-x:auto; }
+        table { width:100%; border-collapse:collapse; font-size: 13px; margin-bottom: 8px; }
+        th, td { padding:10px 12px; border:1px solid #e5e7eb; vertical-align:top; white-space:nowrap; text-align: left; }
         th { background: #f8fafc; font-weight: 600; color: #374151; }
         tr:nth-child(even) { background: #fafafa; }
         .num { text-align: right; font-variant-numeric: tabular-nums; }
-        .title-cell { max-width: 280px; word-break: break-word; }
+        td.title-cell, th.title-cell {
+            min-width:260px; max-width:420px;
+            white-space:normal; word-break:keep-all;
+            overflow-wrap:anywhere; line-height:1.45;
+        }
+        @media (max-width: 700px) {
+            body { font-size:15px; }
+            .table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+            table { min-width:760px; }
+            td.title-cell, th.title-cell {
+                min-width:280px; white-space:normal;
+                word-break:keep-all; overflow-wrap:break-word;
+            }
+        }
     </style>
 </head>
 <body>
@@ -49,6 +63,7 @@
     </table>
 
     <h2>인기 공고 TOP 20 (project_id · title)</h2>
+    <div class="table-wrap">
     <table>
         <thead><tr><th>project_id</th><th class="title-cell">title</th><th class="num">클릭</th></tr></thead>
         <tbody>
@@ -59,11 +74,13 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
 
     <h2>최근 클릭 100건</h2>
+    <div class="table-wrap">
     <table>
         <thead>
-            <tr><th>id</th><th>project_id</th><th>action</th><th>source</th><th>title</th><th>created_at</th></tr>
+            <tr><th>id</th><th>project_id</th><th>action</th><th>source</th><th class="title-cell">title</th><th>created_at</th></tr>
         </thead>
         <tbody>
         {% for row in recent_clicks %}
@@ -80,5 +97,6 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
 </body>
 </html>
