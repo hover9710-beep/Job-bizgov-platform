@@ -107,6 +107,18 @@ def load_db_rows(
             if has_aj
             else "'' AS attachments_json"
         )
+        has_as = _has_column(conn, table, "ai_summary")
+        has_as_at = _has_column(conn, table, "ai_summary_at")
+        select_parts.append(
+            "COALESCE(ai_summary, '') AS ai_summary"
+            if has_as
+            else "'' AS ai_summary"
+        )
+        select_parts.append(
+            "COALESCE(ai_summary_at, '') AS ai_summary_at"
+            if has_as_at
+            else "'' AS ai_summary_at"
+        )
 
         sql = f"SELECT {', '.join(select_parts)} FROM {table}"
         rows = conn.execute(sql).fetchall()
@@ -156,6 +168,9 @@ def sqlite_row_to_item(row: Any) -> Dict[str, Any]:
         else (canonical_notice_source(d) or "unknown").upper()
     )
     _apply_display_url(d)
+    # presenter.normalize_display_item 이 ai_summary 를 덮어쓰므로 DB 원본 보존용
+    d["_db_ai_summary"] = str(d.get("ai_summary") or "").strip()
+    d["_db_ai_summary_at"] = str(d.get("ai_summary_at") or "").strip()
     return d
 
 
@@ -193,6 +208,11 @@ def to_ui_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, An
     d["display_status"] = infer_status(period_text, sd, ed, t)
     d["source_badge"] = (d.get("_db_source_snapshot") or "").lower() or "unknown"
     _apply_display_url(d)
+    asum = str(d.get("_db_ai_summary") or "").strip()
+    asat = str(d.get("_db_ai_summary_at") or "").strip()
+    d["ai_summary"] = asum
+    d["ai_summary_at"] = asat
+    d["has_ai_summary"] = bool(asum)
     return d
 
 
@@ -474,6 +494,11 @@ def prepare_db_rows_for_ui(
         it["attachment_count"] = acount
         it["attachment_summary"] = asumm
         it["has_attachments"] = has_att
+        asum = str(it.get("_db_ai_summary") or "").strip()
+        asat = str(it.get("_db_ai_summary_at") or "").strip()
+        it["ai_summary"] = asum
+        it["ai_summary_at"] = asat
+        it["has_ai_summary"] = bool(asum)
     # 4) 정렬
     items = sort_items(items, key=sort)
     for i, it in enumerate(items, start=1):

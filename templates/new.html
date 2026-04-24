@@ -71,6 +71,16 @@
         .title-link { color: #111827; text-decoration: none; }
         .title-link:hover { color: #1d4ed8; text-decoration: underline; }
 
+        .ai-summary-line {
+            margin-top: 3px;
+            font-size: 11px;
+            color: #64748b;
+            font-style: italic;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         /* --- 마감일 배지 (D-3 / D-7 / 마감) --- */
         .deadline-badge { display: inline-block; margin-left: 4px; font-weight: 700; font-size: 11px; padding: 2px 5px; border-radius: 6px; line-height: 1.2; }
         .deadline-danger { background: #fee2e2; color: #b91c1c; }
@@ -299,6 +309,12 @@
                 </a>
               {% else %}
                 {{ item.title }}
+              {% endif %}
+
+              {% if item.ai_summary %}
+                <div class="ai-summary-line">
+                  {{ item.ai_summary }}
+                </div>
               {% endif %}
             </td>
             <td class="org-col" title="{{ item.organization or '-' }}">
