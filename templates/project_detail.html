@@ -2,22 +2,33 @@
 <html lang="ko">
 <head>
     <meta charset="utf-8">
-    <title>{{ row["title"] or "공고 상세" }}</title>
+    <title>{{ item.get('title') or '공고 상세' }}</title>
     <style>
-        body { font-family: sans-serif; max-width: 900px; margin: 24px auto; padding: 0 16px; }
-        h1 { font-size: 1.35rem; }
-        section { margin-top: 1.5rem; }
-        .label { color: #555; font-size: 0.9rem; margin-bottom: 0.25rem; }
-        .box { background: #f7f7f7; padding: 12px; border-radius: 6px; white-space: pre-wrap; }
-        .btn {
-            display: inline-block; padding: 10px 18px; background: #2563eb; color: #fff;
-            text-decoration: none; border-radius: 6px; font-weight: 600;
-        }
-        .btn:disabled, .btn.muted { background: #9ca3af; pointer-events: none; }
-        a.url { word-break: break-all; }
-        .topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; color: #111827; }
+        h2 { font-size: 1.35rem; margin: 0 0 12px; line-height: 1.35; }
+        .topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 20px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
         .topnav a { text-decoration: none; color: #1d4ed8; font-weight: 600; }
         .topnav a:hover { text-decoration: underline; }
+        .meta-row { font-size: 14px; color: #374151; margin: 8px 0; }
+        .meta-row strong { color: #64748b; font-weight: 600; margin-right: 6px; }
+        .block { margin-top: 18px; padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; line-height: 1.55; }
+        .block-label { font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.02em; }
+        .ai-summary { color: #475569; font-style: italic; }
+        .recommend-label { color: #2563eb; font-weight: 600; }
+        .recommend-reason { color: #334155; }
+        .actions { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .btn-detail, .btn-apply {
+            display: inline-block;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+        }
+        .btn-detail { border: 1px solid #cbd5e1; color: #334155; background: #ffffff; }
+        .btn-apply { border: 1px solid #2563eb; color: #ffffff; background: #2563eb; }
+        .btn-apply:hover { background: #1d4ed8; }
+        .btn-detail:hover { background: #f1f5f9; }
     </style>
 </head>
 <body>
@@ -30,70 +41,56 @@
         <a href="{{ url_for('run_pipeline_route') }}">파이프라인 실행</a>
     </nav>
 
-    <h1>{{ row["title"] or "(제목 없음)" }}</h1>
+    {% set st = item.get('display_status') or item.get('status') or '-' %}
+    {% set src_key = (item.get('source') or item.get('source_badge') or '')|lower %}
+    {% set src_label = item.get('source_label')
+        or (source_labels|default({})).get(src_key)
+        or src_key or '-' %}
 
-    <section>
-        <div class="label">소관부처</div>
-        <div>{{ row["ministry"] if row["ministry"] else "정보 없음" }}</div>
-    </section>
+    <h2>{{ item.get('title') or '(제목 없음)' }}</h2>
 
-    <section>
-        <div class="label">사업수행기관</div>
-        <div>{{ row["executing_agency"] if row["executing_agency"] else "정보 없음" }}</div>
-    </section>
+    <div class="meta-row"><strong>기관</strong> {{ item.get('organization') or '-' }}</div>
+    <div class="meta-row"><strong>상태</strong> {{ st }}</div>
+    <div class="meta-row"><strong>기간</strong>
+        {% if item.get('start_date') or item.get('end_date') %}
+            {{ item.get('start_date') or '—' }} ~ {{ item.get('end_date') or '—' }}
+        {% else %}—{% endif %}
+    </div>
+    <div class="meta-row"><strong>소스</strong> {{ src_label }}</div>
 
-    <section>
-        <div class="label">지원기관</div>
-        <div>{{ row["organization"] if row["organization"] else "-" }}</div>
-    </section>
+    {% if item.get('ai_summary') %}
+    <div class="block">
+        <div class="block-label">AI 요약</div>
+        <div class="ai-summary">{{ item.ai_summary }}</div>
+    </div>
+    {% endif %}
 
-    <section>
-        <div class="label">기간</div>
-        <div>
-            {% if row["start_date"] or row["end_date"] %}
-                {{ row["start_date"] or "—" }} ~ {{ row["end_date"] or "—" }}
-            {% else %}
-                —
-            {% endif %}
-        </div>
-    </section>
+    {% if item.get('recommend_label') %}
+    <div class="block">
+        <div class="block-label">추천 라벨</div>
+        <div class="recommend-label">{{ item.recommend_label }}</div>
+    </div>
+    {% endif %}
 
-    <section>
-        <div class="label">공고 설명</div>
-        <div class="box">{{ row["description"] or "—" }}</div>
-    </section>
+    {% if item.get('recommend_reason') %}
+    <div class="block">
+        <div class="block-label">추천 이유</div>
+        <div class="recommend-reason">{{ item.recommend_reason }}</div>
+    </div>
+    {% endif %}
 
-    <section>
-        <div class="label">AI 분석 결과 (ai_summary)</div>
-        <div class="box">{{ ai_summary if ai_summary else "아직 AI 분석이 없습니다. 아래에서 분석을 실행할 수 있습니다." }}</div>
-    </section>
+    {% if item.get('attachment_summary') or item.get('has_attachments') %}
+    <div class="block">
+        <div class="block-label">첨부 요약</div>
+        <div>{{ item.get('attachment_summary') or ('첨부 ' ~ (item.get('attachment_count') or 0) ~ '건') }}</div>
+    </div>
+    {% endif %}
 
-    <section>
-        <div class="label">PDF</div>
-        {% if row["pdf_path"] %}
-        <a class="btn" href="{{ url_for('download', fname=row['pdf_path']) }}" download>PDF 다운로드</a>
-        {% else %}
-        <span class="btn muted">PDF 없음</span>
+    <div class="actions">
+        {% if item.get('url') %}
+        <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply">원문/신청 페이지 열기</a>
         {% endif %}
-    </section>
-
-    <section>
-        <div class="label">원문 URL</div>
-        {% if row["url"] %}
-        <a class="url" href="{{ row['url'] }}" target="_blank" rel="noopener noreferrer">{{ row["url"] }}</a>
-        {% else %}
-        <span>—</span>
-        {% endif %}
-    </section>
-
-    <section>
-        <p>
-            <a href="{{ url_for('analyze', pid=row['id']) }}">AI 분석 실행</a>
-            {% if row["pdf_path"] %}
-            &nbsp;|&nbsp;
-            <a href="{{ url_for('send_email_route', pid=row['id']) }}">이메일 발송</a>
-            {% endif %}
-        </p>
-    </section>
+        <a href="{{ url_for('index') }}" class="btn-detail">목록으로 돌아가기</a>
+    </div>
 </body>
 </html>

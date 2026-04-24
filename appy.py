@@ -81,6 +81,7 @@ from pipeline.flask_ui_audit import (
 )
 from pipeline.presenter import normalize_display_item
 from pipeline.ui_view import (
+    build_recommend_reason,
     filter_items,
     prepare_db_rows_for_ui,
     sort_recommend_items,
@@ -618,8 +619,9 @@ def project_detail(pid):
         flash("해당 공고를 찾을 수 없습니다.", "warning")
         return redirect(url_for("projects_list"))
 
-    ai_summary = row["ai_result"] if row["ai_result"] is not None else ""
-    row_ui = normalize_display_item(_prepare_detail_row_for_template(row))
+    items = prepare_db_rows_for_ui([dict(row)], audit=False)
+    item = items[0]
+    item["recommend_reason"] = build_recommend_reason(item)
     if audit_ui_enabled():
         log_detail_consistency(
             get_db(),
@@ -629,8 +631,8 @@ def project_detail(pid):
         )
     return render_template(
         "project_detail.html",
-        row=row_ui,
-        ai_summary=ai_summary,
+        item=item,
+        source_labels=SOURCE_LABELS,
     )
 
 

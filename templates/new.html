@@ -207,6 +207,18 @@
             margin-top: 6px;
             line-height: 1.5;
         }
+        .action-col { text-align: center; white-space: nowrap; }
+        .btn-detail, .btn-apply {
+            display: inline-block;
+            padding: 4px 7px;
+            border-radius: 6px;
+            font-size: 11px;
+            text-decoration: none;
+            margin: 1px;
+        }
+        .btn-detail { border: 1px solid #cbd5e1; color: #334155; background: #ffffff; }
+        .btn-apply { border: 1px solid #2563eb; color: #ffffff; background: #2563eb; }
+        .top-recommend-actions { margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -376,6 +388,12 @@
         <div class="top-recommend-summary">{{ top.ai_summary }}</div>
         {% endif %}
         <div class="top-recommend-meta">마감일: {{ top.end_date or '-' }}</div>
+        <div class="top-recommend-actions">
+            <a href="{{ url_for('project_detail', pid=top.id) }}" class="btn-detail">상세보기</a>
+            {% if top.url %}
+            <a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply">신청 바로가기</a>
+            {% endif %}
+        </div>
     </div>
     {% endif %}
 
@@ -391,12 +409,13 @@
     <table class="table-main">
         <colgroup>
             <col style="width:40px">
-            <col style="width:48%">
-            <col style="width:12%">
+            <col style="width:38%">
+            <col style="width:13%">
             <col style="width:60px">
             <col style="width:90px">
-            <col style="width:110px">
+            <col style="width:100px">
             <col style="width:70px">
+            <col style="width:130px">
         </colgroup>
         <thead>
         <tr>
@@ -407,6 +426,7 @@
             <th>시작일</th>
             <th>마감일</th>
             <th>소스</th>
+            <th>액션</th>
         </tr>
         </thead>
         <tbody>
@@ -423,13 +443,9 @@
         <tr>
             <td class="num-col">{{ loop.index }}</td>
             <td class="title-col" title="{{ item.title }}">
-              {% if item.url %}
-                <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer" class="title-link">
-                  {{ item.title }}
-                </a>
-              {% else %}
+              <a href="{{ url_for('project_detail', pid=item.id) }}" class="title-link">
                 {{ item.title }}
-              {% endif %}
+              </a>
 
               {% if item.ai_summary %}
                 <div class="ai-summary-line">
@@ -459,6 +475,12 @@
                 {% endif %}
             </td>
             <td class="source-col"><span class="source-tag">{{ src_label }}</span></td>
+            <td class="action-col">
+                <a class="btn-detail" href="{{ url_for('project_detail', pid=item.id) }}">상세보기</a>
+                {% if item.url %}
+                <a class="btn-apply" href="{{ item.url }}" target="_blank" rel="noopener noreferrer">신청 바로가기</a>
+                {% endif %}
+            </td>
         </tr>
         {% endfor %}
         </tbody>
