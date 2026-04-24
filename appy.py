@@ -1,4 +1,8 @@
+"""BizGovPlanner Flask app: UI reads persisted rows from biz.db.
 
+DB-centered: request handlers do not run crawlers, remote attachment fetches, or on-demand text extraction.
+Background collection: POST /api/run spawns subprocess run_all.py only.
+"""
 import json
 import os
 import re
@@ -39,7 +43,7 @@ BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-# ── UI 크롤링 실행 패널 (/api/run*) ─────────────────────────────────────────
+# ── 백그라운드 파이프라인 패널: POST /api/run → subprocess run_all.py (/api/run*) ──
 RUN_STATE: dict = {
     "running": False,
     "mode": None,
@@ -69,8 +73,6 @@ REPORTS_DIR = BASE_DIR / "reports"
 PIPELINE_SCRIPT = BASE_DIR / "pipeline" / "run_pipeline.py"
 
 LOG_TAIL_CHARS = 6000
-
-ALL_JB_JSON = BASE_DIR / "data" / "all_jb" / "all_jb.json"
 
 # UI 표기용 소스 한글 라벨. pipeline/ui_view.SOURCE_LABELS 와 동일 매핑.
 # 템플릿 필터/요약카드에서 키 → 한글 변환시 사용.
@@ -203,19 +205,6 @@ def _run_pipeline_background(mode: str) -> None:
     threading.Thread(target=worker, daemon=True).start()
 
 
-def load_all_items() -> List[dict]:
-    """data/all_jb/all_jb.json 에서 공고 목록 로드."""
-    try:
-        if not ALL_JB_JSON.exists():
-            return []
-        raw = json.loads(ALL_JB_JSON.read_text(encoding="utf-8"))
-        if isinstance(raw, list):
-            return [x for x in raw if isinstance(x, dict)]
-        return []
-    except Exception:
-        return []
-
-
 def extract_spseq(item: dict) -> str:
     """spSeq 필드 또는 URL 쿼리에서 추출."""
     for k in ("spSeq", "SP_SEQ", "sp_seq"):
@@ -230,19 +219,6 @@ def extract_spseq(item: dict) -> str:
         if m:
             return m.group(1).strip()
     return ""
-
-
-def filter_jbexport_items(items: List[dict]) -> List[dict]:
-    """canonical 기준 jbexport만(URL 우선)."""
-    from pipeline.project_quality import canonical_notice_source
-
-    out: List[dict] = []
-    for it in items:
-        if not isinstance(it, dict):
-            continue
-        if canonical_notice_source(it) == "jbexport":
-            out.append(it)
-    return out
 
 
 def _jbexport_period_str(item: dict) -> str:
@@ -414,7 +390,7 @@ def _prepare_detail_row_for_template(row: sqlite3.Row) -> dict:
 
 @app.route("/api/jbexport/list", methods=["POST"])
 def api_jbexport_list():
-    """JBEXPORT 목록 (DataTables 형식). jbexport_daily.py POST 호환."""
+    """JBEXPORT 목록 (DataTables 형식). DB biz_projects 의 jbexport 행만 사용."""
     draw = 1
     try:
         body = request.get_json(silent=True) or {}
@@ -426,8 +402,17 @@ def api_jbexport_list():
         if length > 10000:
             length = 10000
 
-        items = load_all_items()
-        jb = filter_jbexport_items(items)
+        db = get_db()
+        cur = db.execute(
+            """
+            SELECT title, status, url, start_date, end_date,
+                   receipt_start, receipt_end, raw_status
+            FROM biz_projects
+            WHERE LOWER(TRIM(COALESCE(source, ''))) = 'jbexport'
+            ORDER BY id DESC
+            """
+        )
+        jb = [dict(r) for r in cur.fetchall()]
         rows = build_jbexport_api_rows(jb)
         total = len(rows)
         page = rows[start : start + length]

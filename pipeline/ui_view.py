@@ -15,6 +15,8 @@ DB row → UI 전용 가공 레이어.
 메일 뷰(pipeline/mail_view.py)와 짝을 이루는 "UI 뷰" 계층 — status 단일 진입점은
 pipeline/normalize_project.infer_status() 이며 presenter 의 display_* 포맷팅과 합류한다.
 """
+# UI pipeline transforms DB rows only.
+# No crawling, downloading, or text extraction here.
 from __future__ import annotations
 
 import json

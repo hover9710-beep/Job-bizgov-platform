@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""첨부 파일(data/**/files) 순회 → data/text 에 .txt 저장."""
+"""첨부 파일(data/**/files) 순회 → data/text 에 .txt 저장.
+
+Background-only attachment text extraction.
+UI and mail should consume saved DB/text results, not call this module directly.
+"""
 from __future__ import annotations
 
 import argparse

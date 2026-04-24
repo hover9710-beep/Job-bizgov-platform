@@ -47,3 +47,18 @@ pipeline/normalize_project.py infer_status() 참조
 - source = unknown 저장 금지
 - end_date < start_date 저장 금지
 - None과 "" 혼용 금지 (항상 "" 통일)
+
+## DB-Centered Service Flow
+
+**영문:**
+- Crawling, attachment download, and text extraction are background jobs.
+- The UI must never crawl directly.
+- Email generation must never crawl directly.
+- Crawlers write normalized rows into the DB.
+- UI and mail pipelines read only from the DB.
+- Logs show the collection process; UI shows only saved results.
+
+**한국어:**
+- 크롤링은 백그라운드에서 수행하고, 결과는 DB에 저장한다.
+- UI와 메일은 DB 결과만 읽는다.
+- UI에서 직접 크롤링/다운로드/텍스트추출을 수행하지 않는다.

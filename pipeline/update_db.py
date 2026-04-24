@@ -4,6 +4,9 @@ data/all_jb/all_jb.json → db/biz.db 의 biz_projects upsert
 
 실행(프로젝트 루트):
   py pipeline\\update_db.py
+
+update_db persists crawler outputs.
+Attachment metadata is stored here; file download/text extraction is handled by background pipeline.
 """
 from __future__ import annotations
 

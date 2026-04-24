@@ -17,6 +17,17 @@ Run the full pipeline in order (project root = cwd for each subprocess).
   --skip-crawl      : 크롤 3종 스킵, 병합·알림만
   --only-mail       : make_mail → mailer 만
 """
+# DB-centered flow:
+# Crawlers write to DB. UI and mail read from DB only.
+# Do not call crawlers from UI or mail modules.
+#
+# Execution order (full --mode all, after crawlers when not --skip-crawl):
+# 1. source crawling
+# 2. merge / normalize
+# 3. update_db
+# 4. attachment text extraction
+# 5. mail body generation
+# 6. mail send / kakao notify
 from __future__ import annotations
 
 import argparse
@@ -309,7 +320,7 @@ def run_post_update_and_notify(args: argparse.Namespace) -> int:
 
 
 def run_all(args: argparse.Namespace) -> int:
-    """전체: jbexport → bizinfo → kstartup → 병합·알림."""
+    """전체: (1) 소스 크롤 → (2) 병합·정규화 → (3) update_db → (4) 첨부 텍스트 추출 → (5~6) 메일/카카오."""
     if not args.skip_crawl:
         r = run_jbexport()
         if r != 0 and not args.test:

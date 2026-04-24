@@ -15,6 +15,8 @@ DB row → 메일 전용 가공 레이어.
 UI 가공(정렬·디버그·빈값 허용)과는 별도 모듈.
 실행 시 data/mail/mail_body.txt 파일로 바로 본문 저장.
 """
+# Mail pipeline reads DB rows only.
+# It must not crawl or download attachments.
 from __future__ import annotations
 
 import argparse
@@ -754,6 +756,7 @@ def build_mail_body(
     new_days: int = 7,
     ending_days: int = 7,
 ) -> str:
+    # Mail pipeline reads DB rows only. No crawl or attachment download.
     """
     소스별(jbexport → bizinfo → kstartup) 블록 구조로 메일 본문을 생성한다.
     각 소스 안에서 신규 / 마감임박 / 전체 접수중 3 서브섹션이 이어진다.
