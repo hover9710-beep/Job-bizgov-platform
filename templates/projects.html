@@ -30,6 +30,7 @@
 
         .project-table {
             width: 100%;
+            table-layout: fixed;
             border-collapse: collapse;
             background: #fff;
             font-size: 15px;
@@ -57,8 +58,8 @@
         }
 
         .title-cell {
-            width: 44%;
-            min-width: 360px;
+            width: 42%;
+            min-width: 320px;
             font-size: 15px;
             font-weight: 700;
             color: #111827;
@@ -67,20 +68,24 @@
         }
 
         .org-cell {
-            min-width: 180px;
+            width: 22%;
+            min-width: 160px;
+            text-align: center;
             color: #4b5563;
             font-size: 14px;
-            text-align: center;
         }
 
         .status-cell {
+            width: 8%;
             min-width: 70px;
             text-align: center;
             font-size: 14px;
-            color: #4b5563;
+            color: #16a34a;
+            font-weight: 700;
         }
 
         .date-cell {
+            width: 10%;
             min-width: 90px;
             text-align: center;
             font-size: 14px;
@@ -88,6 +93,7 @@
         }
 
         .deadline-cell {
+            width: 10%;
             min-width: 100px;
             text-align: center;
             font-size: 14px;
@@ -96,8 +102,19 @@
         }
 
         .action-cell {
+            width: 8%;
             min-width: 80px;
             text-align: center;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: #dcfce7;
+            color: #15803d;
+            font-size: 12px;
+            font-weight: 800;
         }
 
         .btn-detail {
@@ -157,7 +174,7 @@
             }
 
             .project-table {
-                min-width: 760px;
+                min-width: 820px;
                 font-size: 14px;
             }
 
@@ -200,20 +217,27 @@
             <tr>
                 <th>제목</th>
                 <th>기관</th>
+                <th>상태</th>
                 <th>시작일</th>
                 <th>마감일</th>
-                <th>상태</th>
-                <th>상세보기</th>
+                <th>액션</th>
             </tr>
         </thead>
         <tbody>
             {% for row in rows %}
+            {% set st = row.get('display_status') or row.get('status') or '—' %}
             <tr>
-                <td class="title-cell">{{ row["title"] or "" }}</td>
-                <td class="org-cell">{{ row["organization"] or "—" }}</td>
-                <td class="date-cell">{{ row["start_date"] or "—" }}</td>
-                <td class="deadline-cell">{{ row["end_date"] or "—" }}</td>
-                <td class="status-cell">{{ row["status"] or "—" }}</td>
+                <td class="title-cell">{{ row.get('title') or '' }}</td>
+                <td class="org-cell">{{ row.get('organization') or '—' }}</td>
+                <td class="status-cell">
+                    {% if st in ['접수중', '진행'] %}
+                    <span class="status-badge">{{ st }}</span>
+                    {% else %}
+                    {{ st }}
+                    {% endif %}
+                </td>
+                <td class="date-cell">{{ row.get('start_date') or '—' }}</td>
+                <td class="deadline-cell">{{ row.get('end_date') or '—' }}</td>
                 <td class="action-cell"><a href="{{ url_for('project_detail', pid=row['id']) }}" class="btn-detail">보기</a></td>
             </tr>
             {% endfor %}
