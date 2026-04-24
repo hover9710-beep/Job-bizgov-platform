@@ -246,36 +246,91 @@
         .top-recommend-actions { margin-top: 10px; }
 
         @media (max-width: 700px) {
-          /* 테이블 카드형 전환 */
+          /* 테이블 카드형 */
           .project-table, .project-table thead, .project-table tbody,
           .project-table th, .project-table td, .project-table tr {
             display: block;
           }
           .project-table thead { display: none; }
           .project-table tr {
-            margin-bottom: 12px; padding: 12px;
-            border: 1px solid #e5e7eb; border-radius: 12px; background: #ffffff;
+            margin-bottom: 14px;
+            padding: 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: #ffffff;
           }
           .project-table td { border-bottom: none; padding: 4px 0; text-align: left; }
           .num-col, .source-col { display: none; }
           .title-cell { max-width: none; }
-          .title-main, .title-link { -webkit-line-clamp: 3; font-size: 15px; line-height: 1.45; }
-          .center-cell { text-align: left; font-size: 12px; }
+          .title-main, .title-link {
+            -webkit-line-clamp: 3;
+            font-size: 17px;
+            line-height: 1.5;
+            font-weight: 600;
+          }
+          .center-cell { text-align: left; font-size: 13px; }
           .status-col, .date-col { display: inline-block; margin-right: 8px; }
-          .action-col { display: flex; gap: 6px; margin-top: 8px; }
-          .btn-detail, .btn-apply { flex: 1; text-align: center; padding: 8px 10px; font-size: 12px; }
+          .action-col {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+          }
+          .btn-detail, .btn-apply {
+            width: 100%;
+            text-align: center;
+            padding: 10px 12px;
+            font-size: 14px;
+            box-sizing: border-box;
+          }
 
-          /* 필터 가로 스크롤 */
+          /* 필터 */
           .filter-row {
-            overflow-x: auto; white-space: nowrap; padding-bottom: 4px;
+            overflow-x: auto;
+            white-space: nowrap;
+            padding-bottom: 6px;
           }
-          .filter-row .filter-btn, .filter-row a {
-            display: inline-block; margin-bottom: 6px;
+          .filter-row a, .filter-btn {
+            display: inline-block;
+            padding: 7px 12px;
+            font-size: 13px;
+            margin-bottom: 6px;
           }
 
-          /* 요약 카드 2열 */
-          .summary-grid { grid-template-columns: repeat(2, 1fr); }
-          .top-recommend-card { padding: 12px; }
+          /* 요약 카드 1열 */
+          .summary-grid {
+            grid-template-columns: 1fr;
+            gap: 8px;
+          }
+
+          /* TOP 추천 카드 */
+          .top-recommend-card {
+            padding: 16px;
+          }
+          .top-recommend-card .btn-detail,
+          .top-recommend-card .btn-apply {
+            display: block;
+            width: 100%;
+            margin: 4px 0;
+            text-align: center;
+            box-sizing: border-box;
+          }
+
+          /* 크롤링 패널 */
+          .run-panel {
+            flex-direction: column;
+          }
+          .run-panel-left {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+          }
+          .run-btn {
+            width: 100%;
+            padding: 10px;
+            font-size: 14px;
+            text-align: center;
+          }
         }
     </style>
 </head>
