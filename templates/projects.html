@@ -57,6 +57,11 @@
             background: #f1f5f9;
         }
 
+        tbody tr.row-urgent td { background: #fff1f2 !important; }
+        tbody tr.row-soon td { background: #fffbeb !important; }
+        tbody tr.row-urgent:hover td { background: #ffe4e6 !important; }
+        tbody tr.row-soon:hover td { background: #fef3c7 !important; }
+
         .title-cell {
             width: 42%;
             min-width: 320px;
@@ -135,12 +140,22 @@
 
         .deadline-wrapper { display:flex; flex-direction:column; align-items:center; }
         .deadline-date { font-size:13px; color:#6b7280; }
-        .deadline-badge { display:inline-block; margin-top:6px; padding:4px 10px; border-radius:999px; font-size:13px; font-weight:800; }
-        .deadline-badge.urgent { background:#fee2e2; color:#dc2626; }
-        .deadline-badge.soon { background:#fef3c7; color:#d97706; }
+        .deadline-badge {
+            display:inline-block; margin-top:6px; border-radius:999px; font-size:13px;
+            font-weight: 900 !important;
+            padding: 5px 11px !important;
+        }
+        .deadline-badge.urgent {
+            background: #fecaca !important;
+            color: #b91c1c !important;
+            border: 1px solid #fca5a5;
+        }
+        .deadline-badge.soon {
+            background: #fde68a !important;
+            color: #92400e !important;
+            border: 1px solid #fbbf24;
+        }
         .deadline-badge.normal { background:#e5e7eb; color:#374151; }
-        .row-urgent { background:#fff7f7; }
-        .row-soon { background:#fffbeb; }
         .project-table td:last-child { padding-right:16px; }
 
         .nav,
