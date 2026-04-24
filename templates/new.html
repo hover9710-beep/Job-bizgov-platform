@@ -354,6 +354,24 @@
             font-size: 14px;
             text-align: center;
           }
+
+          #filter-box { display: none; }
+          .filter-toggle-btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #f8fafc;
+            cursor: pointer;
+          }
+        }
+
+        @media (min-width: 701px) {
+          .filter-toggle-btn { display: none; }
+          #filter-box { display: block !important; }
         }
     </style>
 </head>
@@ -379,6 +397,8 @@
     {% set hrec = has_recommend_label|default('', true) %}
     {% set hatt = has_attachments|default('', true) %}
     {% set cat = category|default('', true) %}
+    <button type="button" onclick="toggleFilter()" class="filter-toggle-btn">🔽 필터 열기</button>
+    <div id="filter-box">
     <div class="filterbar filter-stack">
         <div class="filter-row">
             <span class="label">상태:</span>
@@ -456,6 +476,7 @@
         <input type="search" name="q" value="{{ q|default('', true) }}" placeholder="제목·기관 검색" aria-label="검색어">
         <button type="submit">검색</button>
     </form>
+    </div>
 
     <div class="run-panel" id="run-panel">
         <div class="run-panel-header">
@@ -624,6 +645,18 @@
     {% endif %}
 
 <script>
+function toggleFilter() {
+  const box = document.getElementById("filter-box");
+  const btn = document.querySelector(".filter-toggle-btn");
+  if (box.style.display === "none" || box.style.display === "") {
+    box.style.display = "block";
+    btn.textContent = "🔼 필터 닫기";
+  } else {
+    box.style.display = "none";
+    btn.textContent = "🔽 필터 열기";
+  }
+}
+
 (function () {
   /* [7] 크롤링 패널 — POST /api/run, GET /api/run/status 폴링 */
   var pollTimer = null;
