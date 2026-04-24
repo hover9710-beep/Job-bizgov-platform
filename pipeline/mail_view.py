@@ -34,6 +34,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from pipeline.ai_summary import get_project_summary
 from pipeline.normalize_project import infer_status
 from pipeline.url_utils import canonical_url
 
@@ -277,6 +278,12 @@ def to_mail_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, 
 
     att_parsed = _parse_attachments(row)
     att_summary = _attachment_summary_text(att_parsed)
+    att_names: List[str] = []
+    for x in att_parsed:
+        if isinstance(x, dict):
+            n = str(x.get("name") or "").strip()
+            if n:
+                att_names.append(n)
 
     return {
         "id": row.get("id"),
@@ -293,6 +300,7 @@ def to_mail_item(row: Dict[str, Any], today: Optional[str] = None) -> Dict[str, 
         "description": str(row.get("description") or "").strip(),
         "status": infer_status(period_text, start_date, end_date, t),
         "attachment_summary": att_summary,
+        "attachment_names": att_names,
     }
 
 
@@ -569,20 +577,27 @@ def _render_mail_card(item: Dict[str, Any], *, urgent: bool = False) -> str:
             f"📎 첨부: {_esc_html_txt(att_summ)}"
             f"</div><br>\n"
         )
+    ai_one_line = get_project_summary(item).strip()
+    summary_block = ""
+    if ai_one_line:
+        summary_block = (
+            '<div style="font-size:12px; color:#374151; margin-top:4px; font-style:italic;">'
+            f"{_esc_html_txt(ai_one_line)}</div><br>\n"
+        )
     if urgent:
         badge = _esc_html_txt(item.get("deadline_badge") or "")
         return f"""
 <div style="margin-bottom:14px; padding:10px; border:1px solid #fee2e2; border-radius:6px;">
   <a href="{href}" style="font-size:15px; font-weight:bold; color:#111827; text-decoration:none;">{title}</a><br>
   <span style="font-size:12px; color:#6b7280;">{org} | {sd} ~ {ed}</span><br>
-  {att_block}  <span style="font-size:12px; color:#b91c1c; font-weight:bold;">{badge}</span>
+  {att_block}{summary_block}  <span style="font-size:12px; color:#b91c1c; font-weight:bold;">{badge}</span>
 </div>"""
     status = _esc_html_txt(item.get("display_status") or "")
     return f"""
 <div style="margin-bottom:12px; padding:8px; border-bottom:1px solid #e5e7eb;">
   <a href="{href}" style="font-size:15px; font-weight:bold; color:#111827; text-decoration:none;">{title}</a><br>
   <span style="font-size:12px; color:#6b7280;">{org} | {sd} ~ {ed}</span><br>
-  {att_block}  <span style="font-size:12px; color:#16a34a;">{status}</span>
+  {att_block}{summary_block}  <span style="font-size:12px; color:#16a34a;">{status}</span>
 </div>"""
 
 
