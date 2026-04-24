@@ -31,6 +31,36 @@
         .btn-apply:hover { background: #1d4ed8; }
         .btn-detail:hover { background: #f1f5f9; }
 
+        .detail-cta-box {
+            margin: 16px 0 18px;
+            padding: 14px;
+            border: 1px solid #dbeafe;
+            border-radius: 14px;
+            background: #eff6ff;
+        }
+        .deadline-line {
+            font-size: 14px;
+            font-weight: 700;
+            color: #b91c1c;
+            margin-bottom: 10px;
+        }
+        .primary-cta {
+            display: block;
+            width: 100%;
+            text-align: center;
+            padding: 14px 12px;
+            border-radius: 12px;
+            background: #2563eb;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 700;
+            text-decoration: none;
+            box-sizing: border-box;
+        }
+        .primary-cta:active {
+            transform: scale(0.98);
+        }
+
         @media (max-width: 700px) {
             body {
                 font-size: 16px !important;
@@ -122,6 +152,18 @@
                 border: 1px solid #ddd;
                 color: #444;
             }
+
+            .detail-cta-box {
+                margin: 16px 0 18px !important;
+                padding: 16px !important;
+            }
+            .deadline-line {
+                font-size: 15px !important;
+            }
+            .primary-cta {
+                font-size: 17px !important;
+                padding: 16px 12px !important;
+            }
         }
     </style>
 </head>
@@ -152,6 +194,21 @@
     </div>
     <div class="meta-row"><strong>소스</strong> {{ src_label }}</div>
 
+    <div class="detail-cta-box">
+        <div class="deadline-line">
+            {% if item.get('deadline_badge') %}
+                ⏰ 마감 {{ item.deadline_badge }}
+            {% elif item.get('end_date') %}
+                ⏰ 마감일 {{ item.end_date }}
+            {% endif %}
+        </div>
+        {% if item.get('url') %}
+        <a href="{{ item.url }}" target="_blank" rel="noopener" class="btn-apply primary-cta">
+            원문/신청 페이지 열기
+        </a>
+        {% endif %}
+    </div>
+
     {% if item.get('ai_summary') %}
     <div class="block">
         <div class="block-label">AI 요약</div>
@@ -181,9 +238,6 @@
     {% endif %}
 
     <div class="actions">
-        {% if item.get('url') %}
-        <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply">원문/신청 페이지 열기</a>
-        {% endif %}
         <a href="{{ url_for('index') }}" class="btn-detail">목록으로 돌아가기</a>
     </div>
 </body>
