@@ -8,6 +8,11 @@
 body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#f9fafb; padding:24px; margin:0; }
 .box { max-width:520px; margin:0 auto; background:#fff; border-radius:20px; padding:32px; border:1px solid #e5e7eb; box-shadow:0 8px 24px rgba(0,0,0,0.06); }
 h1 { font-size:24px; font-weight:800; margin:0 0 20px; color:#111827; }
+.topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
+.topnav a { text-decoration: none; color: #1d4ed8; font-weight: 600; }
+.topnav a:hover { text-decoration: underline; }
+.hidden { display: none; }
+#industryOtherBox { margin-top: 10px; }
 .notice-box { padding:14px 16px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; font-size:13px; color:#1e40af; line-height:1.6; margin-bottom:24px; }
 label { display:block; font-size:14px; font-weight:700; color:#374151; margin:16px 0 5px; }
 input, select { width:100%; padding:11px 14px; border:1px solid #d1d5db; border-radius:10px; font-size:15px; box-sizing:border-box; color:#111827; background:#fff; }
@@ -36,6 +41,16 @@ input:focus, select:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0
 </head>
 <body>
   <div class="box">
+    <nav class="topnav">
+      <a href="{{ url_for('index') }}">공고목록</a>
+      <a href="{{ url_for('new_announcements') }}">신규공고</a>
+      <a href="{{ url_for('projects_list') }}">전체공고</a>
+      <a href="{{ url_for('company') }}">회사정보</a>
+      <a href="{{ url_for('recommend') }}">맞춤추천</a>
+      {% if is_admin|default(false) %}
+      <a href="/admin/pipeline">파이프라인 실행</a>
+      {% endif %}
+    </nav>
     <h1>🏢 AI 추천을 위한 회사정보</h1>
 
     <div class="notice-box">
@@ -48,8 +63,18 @@ input:focus, select:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0
       <label for="company_name">회사명 *</label>
       <input id="company_name" name="company_name" placeholder="예: (주)전북수출" required>
 
-      <label for="industry">업종</label>
-      <input id="industry" name="industry" placeholder="예: 제조, IT, 서비스">
+      <div class="form-group">
+        <label class="title">업종</label>
+        <label class="chip"><input type="radio" name="industry" value="제조"> 제조</label>
+        <label class="chip"><input type="radio" name="industry" value="IT·서비스"> IT·서비스</label>
+        <label class="chip"><input type="radio" name="industry" value="유통·도소매"> 유통·도소매</label>
+        <label class="chip"><input type="radio" name="industry" value="기타"> 기타</label>
+      </div>
+      <div id="industryOtherBox" class="form-group hidden">
+        <label class="title">기타 업종 직접 입력</label>
+        <input type="text" name="industry_other" id="industryOtherInput"
+          placeholder="예: 화장품, 기계부품, 식품가공">
+      </div>
 
       <label for="region">지역</label>
       <input id="region" name="region" placeholder="예: 전북, 전주" value="전북">
@@ -106,5 +131,28 @@ input:focus, select:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0
       ※ 현재 무료 테스트 운영 중 · 추천 조회는 12시간 5회 제한
     </div>
   </div>
+  <script>
+  (function () {
+    const industryInputs = document.querySelectorAll('input[name="industry"]');
+    const otherBox = document.getElementById("industryOtherBox");
+    const otherInput = document.getElementById("industryOtherInput");
+
+    function syncIndustryOther() {
+      const checked = document.querySelector('input[name="industry"]:checked');
+      const isOther = checked && checked.value === "기타";
+      if (!otherBox) return;
+      if (isOther) {
+        otherBox.classList.remove("hidden");
+        if (otherInput) otherInput.required = true;
+      } else {
+        otherBox.classList.add("hidden");
+        if (otherInput) { otherInput.required = false; otherInput.value = ""; }
+      }
+    }
+
+    industryInputs.forEach(input => input.addEventListener("change", syncIndustryOther));
+    syncIndustryOther();
+  })();
+  </script>
 </body>
 </html>

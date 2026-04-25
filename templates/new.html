@@ -495,7 +495,9 @@
         <a href="{{ url_for('projects_list') }}">전체공고</a>
         <a href="{{ url_for('company') }}">회사정보</a>
         <a href="{{ url_for('recommend') }}">맞춤추천</a>
-        <a href="{{ url_for('run_pipeline_route') }}">파이프라인 실행</a>
+        {% if is_admin|default(false) %}
+        <a href="/admin/pipeline">파이프라인 실행</a>
+        {% endif %}
     </nav>
 
     {# 필터: pipeline.ui_view.filter_items. index_url 은 현재 쿼리를 유지한 채 / 로 이동. #}

@@ -978,7 +978,7 @@ def company():
 
 @app.route("/company/form", methods=["GET"])
 def company_form_page():
-    return render_template("company_form.html")
+    return render_template("company_form.html", is_admin=False)
 
 
 @app.route("/company/save", methods=["POST"])
@@ -988,7 +988,11 @@ def save_company():
     company_name = (request.form.get("company_name") or "").strip()
     if not company_name:
         return redirect("/company/form")
-    industry = (request.form.get("industry") or "").strip() or None
+    industry = request.form.get("industry") or ""
+    industry_other = (request.form.get("industry_other") or "").strip()
+    if industry == "기타" and industry_other:
+        industry = industry_other
+    industry = (industry or "").strip() or None
     region = (request.form.get("region") or "").strip() or None
     try:
         export_flag = int(request.form.get("export_flag", 0) or 0)
@@ -1067,7 +1071,7 @@ def projects_list():
     rows_ui = prepare_db_rows_for_ui(rows)
     if audit_ui_enabled():
         log_source_mismatch_and_parser(rows_ui[:10], label="GET /projects (목록 10)")
-    return render_template("projects.html", rows=rows_ui)
+    return render_template("projects.html", rows=rows_ui, is_admin=False)
 
 
 @app.route("/project/<int:pid>")
@@ -1102,6 +1106,7 @@ def project_detail(pid):
         "project_detail.html",
         item=item,
         source_labels=SOURCE_LABELS,
+        is_admin=False,
     )
 
 
