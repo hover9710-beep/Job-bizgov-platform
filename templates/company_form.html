@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>회사정보 입력</title>
+  <style>
+    body { font-family:-apple-system,sans-serif; background:#f9fafb; padding:24px; }
+    .box { max-width:500px; margin:0 auto; background:#fff; border-radius:16px; padding:28px; border:1px solid #e5e7eb; }
+    h1 { font-size:22px; margin-bottom:20px; }
+    label { display:block; font-size:14px; font-weight:700; margin:14px 0 4px; }
+    input, select { width:100%; padding:10px 12px; border:1px solid #d1d5db; border-radius:10px; font-size:15px; box-sizing:border-box; }
+    .consent-row { display:flex; gap:10px; align-items:center; margin:18px 0; }
+    .btn { width:100%; padding:14px; background:#2563eb; color:#fff; border:none; border-radius:12px; font-size:16px; font-weight:800; cursor:pointer; margin-top:8px; }
+    .notice { font-size:12px; color:#6b7280; margin-top:14px; line-height:1.6; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>🏢 AI 추천을 위한 회사정보</h1>
+    <form method="POST" action="/company/save">
+      <label>회사명</label>
+      <input name="company_name" placeholder="예: (주)전북수출" required>
+      <label>업종</label>
+      <input name="industry" placeholder="예: 제조, IT, 서비스">
+      <label>지역</label>
+      <input name="region" placeholder="예: 전북, 전주" value="전북">
+      <label>수출 여부</label>
+      <select name="export_flag">
+        <option value="1">수출기업</option>
+        <option value="0">내수기업</option>
+      </select>
+      <label>관심 키워드</label>
+      <input name="interest_keywords" placeholder="예: 수출, 마케팅, R&D">
+      <div class="consent-row">
+        <input type="checkbox" name="consent" id="consent" required style="width:auto">
+        <label for="consent" style="margin:0;font-weight:500;">기업정보 수집 및 AI 추천 이용에 동의합니다</label>
+      </div>
+      <button class="btn" type="submit">AI 추천 받기</button>
+    </form>
+    <div class="notice">
+      입력하신 정보는 지원사업 추천 목적으로만 사용됩니다.<br>
+      자동 신청이나 외부 제출은 하지 않습니다.
+    </div>
+  </div>
+</body>
+</html>

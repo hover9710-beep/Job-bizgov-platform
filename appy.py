@@ -404,6 +404,22 @@ def _init_db():
     )
     _ensure_column(conn, "companies", "export_amount", "TEXT")
     _ensure_column(conn, "companies", "business_number", "TEXT")
+    _ensure_column(conn, "companies", "visitor_id", "TEXT")
+    _ensure_column(conn, "companies", "interest_keywords", "TEXT")
+    _ensure_column(conn, "companies", "consent_accepted", "INTEGER DEFAULT 0")
+    _ensure_column(conn, "companies", "consent_version", "TEXT")
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS consent_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            visitor_id TEXT,
+            company_id INTEGER,
+            consent_text TEXT,
+            accepted_at TEXT DEFAULT (datetime('now', 'localtime')),
+            user_ip TEXT
+        )
+        """
+    )
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS user_request_log (
@@ -471,6 +487,13 @@ def get_or_create_visitor_id() -> str:
     if raw and str(raw).strip():
         return str(raw).strip()
     return str(uuid.uuid4())
+
+
+def get_visitor_id() -> str:
+    vid = request.cookies.get("visitor_id")
+    if not vid or not str(vid).strip():
+        return str(uuid.uuid4())
+    return str(vid).strip()
 
 
 def get_usage_status(
@@ -878,6 +901,61 @@ def company():
     return redirect(url_for("recommend", company_id=new_cid) if new_cid else url_for("recommend"))
 
 
+@app.route("/company/form", methods=["GET"])
+def company_form_page():
+    return render_template("company_form.html")
+
+
+@app.route("/company/save", methods=["POST"])
+def save_company():
+    _init_db()
+    vid = get_visitor_id()
+    company_name = (request.form.get("company_name") or "").strip()
+    if not company_name:
+        return redirect("/company/form")
+    industry = (request.form.get("industry") or "").strip() or None
+    region = (request.form.get("region") or "").strip() or None
+    try:
+        export_flag = int(request.form.get("export_flag", 0) or 0)
+    except (TypeError, ValueError):
+        export_flag = 0
+    keywords = (request.form.get("interest_keywords") or "").strip() or None
+    consent = 1 if request.form.get("consent") else 0
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO companies
+        (visitor_id, company_name, industry, region, export_flag,
+         interest_keywords, consent_accepted, consent_version)
+        VALUES (?,?,?,?,?,?,?,?)
+        """,
+        (vid, company_name, industry, region, export_flag, keywords, consent, "v1"),
+    )
+    company_id = int(cur.lastrowid or 0)
+    xf = (request.headers.get("X-Forwarded-For") or "").strip()
+    if xf:
+        user_ip = xf.split(",")[0].strip()
+    else:
+        user_ip = (request.remote_addr or "").strip()
+    cur.execute(
+        """
+        INSERT INTO consent_logs (visitor_id, company_id, consent_text, user_ip)
+        VALUES (?,?,?,?)
+        """,
+        (vid, company_id, "AI 추천을 위한 기업정보 수집 동의", user_ip),
+    )
+    conn.commit()
+    conn.close()
+
+    resp = make_response(redirect("/recommend"))
+    resp.set_cookie(
+        "visitor_id", vid, max_age=60 * 60 * 24 * 30, httponly=True, samesite="Lax"
+    )
+    return resp
+
+
 @app.route("/projects")
 def projects_list():
     rows = get_db().execute(
@@ -1100,8 +1178,12 @@ def _calc_score(company: Any, proj: Any) -> Tuple[int, List[str]]:
             score += 2
             reasons.append("업종 키워드가 공고 설명·제목과 일치하여 추천")
 
-    export_flag = str(company["export_flag"] or "").strip()
-    if export_flag == "예":
+    _ef = company["export_flag"]
+    is_export = False
+    if _ef is not None:
+        s = str(_ef).strip()
+        is_export = s == "예" or s in ("1", "true", "True") or _ef == 1
+    if is_export:
         export_kws = ("수출", "해외", "바이어", "전시회")
         if any(k in desc for k in export_kws):
             score += 2
@@ -1118,21 +1200,28 @@ def _calc_score(company: Any, proj: Any) -> Tuple[int, List[str]]:
 
 
 def _recommend_data(
-    db: Any, company_id: Optional[int] = None
+    db: Any,
+    company_id: Optional[int] = None,
+    visitor_id: Optional[str] = None,
 ) -> Tuple[Optional[Any], List[dict], str]:
     """
     추천 목록: recommendations 테이블이 있으면 우선 사용, 없으면 규칙 기반 즉시 계산(레거시).
     반환: (company_row | None, items, state)
     state: no_company | no_projects | ok
     """
+    _cols = (
+        "id, company_name, industry, region, employee_count, revenue, export_flag, created_at, "
+        "visitor_id, interest_keywords, consent_accepted, consent_version"
+    )
     cnt = db.execute("SELECT COUNT(*) AS c FROM companies").fetchone()["c"]
     if cnt == 0:
         return None, [], "no_company"
 
+    company: Any = None
     if company_id is not None:
         company = db.execute(
-            """
-            SELECT id, company_name, industry, region, employee_count, revenue, export_flag, created_at
+            f"""
+            SELECT {_cols}
             FROM companies
             WHERE id = ?
             """,
@@ -1140,15 +1229,28 @@ def _recommend_data(
         ).fetchone()
         if company is None:
             return None, [], "no_company"
-    else:
+    elif visitor_id and str(visitor_id).strip():
         company = db.execute(
-            """
-            SELECT id, company_name, industry, region, employee_count, revenue, export_flag, created_at
+            f"""
+            SELECT {_cols}
+            FROM companies
+            WHERE visitor_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (str(visitor_id).strip(),),
+        ).fetchone()
+    if company is None:
+        company = db.execute(
+            f"""
+            SELECT {_cols}
             FROM companies
             ORDER BY id DESC
             LIMIT 1
             """
         ).fetchone()
+    if company is None:
+        return None, [], "no_company"
 
     recs = db.execute(
         """
@@ -1320,7 +1422,17 @@ def _format_recommend_email_body(company: Any, top_items: List[dict]) -> str:
 @app.route("/recommend/<int:company_id>")
 def recommend(company_id: Optional[int] = None):
     db = get_db()
-    company, items, state = _recommend_data(db, company_id=company_id)
+    raw_vid0 = request.cookies.get("visitor_id")
+    if raw_vid0 and str(raw_vid0).strip():
+        visitor_id = str(raw_vid0).strip()
+        visitor_cookie_new = False
+    else:
+        visitor_id = str(uuid.uuid4())
+        visitor_cookie_new = True
+
+    company, items, state = _recommend_data(
+        db, company_id=company_id, visitor_id=visitor_id
+    )
     urgent_count = 0
     ai_count = 0
     if state == "no_company":
@@ -1342,13 +1454,6 @@ def recommend(company_id: Optional[int] = None):
             limit=5,
         )
 
-    raw_vid = request.cookies.get("visitor_id")
-    if raw_vid and str(raw_vid).strip():
-        visitor_id = str(raw_vid).strip()
-        visitor_cookie_new = False
-    else:
-        visitor_id = str(uuid.uuid4())
-        visitor_cookie_new = True
     xfwd = (request.headers.get("X-Forwarded-For") or "").strip()
     if xfwd:
         user_ip = xfwd.split(",")[0].strip()
@@ -1509,7 +1614,9 @@ def recommend_send():
     """추천 상위 10건을 MAIL_TO로 발송 (관리자용)."""
     db = get_db()
     cid = request.form.get("company_id", type=int) if request.method == "POST" else None
-    company, items, state = _recommend_data(db, company_id=cid)
+    company, items, state = _recommend_data(
+        db, company_id=cid, visitor_id=get_visitor_id()
+    )
     if state == "no_company":
         flash("등록된 회사 정보가 없어 메일을 보낼 수 없습니다.", "warning")
         return redirect(url_for("recommend"))
