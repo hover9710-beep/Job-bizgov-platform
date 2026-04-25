@@ -278,6 +278,12 @@
         .btn-apply { border: 1px solid #2563eb; color: #ffffff; background: #2563eb; }
         .top-recommend-actions { margin-top: 10px; }
 
+        .usage-mini-card { margin: 14px 0 18px; padding: 14px 16px; border: 1px solid #bfdbfe; border-radius: 14px; background: #eff6ff; color: #1e3a8a; }
+        .usage-mini-title { font-size: 13px; font-weight: 800; margin-bottom: 6px; }
+        .usage-mini-row { display: flex; justify-content: space-between; align-items: center; font-size: 15px; font-weight: 700; }
+        .usage-mini-row strong { color: #2563eb; font-size: 18px; }
+        .usage-mini-sub { margin-top: 6px; font-size: 12px; color: #64748b; }
+
         @media (max-width: 700px) {
           /* 테이블 카드형 */
           .project-table, .project-table thead, .project-table tbody,
@@ -401,6 +407,10 @@
           .top-recommend-card .btn-apply {
             margin: 0;
           }
+
+          .usage-mini-card { margin: 12px 0 16px; padding: 14px; }
+          .usage-mini-row { font-size: 14px; }
+          .usage-mini-row strong { font-size: 17px; }
 
           .top-clicked-box { margin:14px 0; padding:14px; }
           .top-clicked-title { font-size:16px; }
@@ -651,6 +661,18 @@
     {% if err %}
     <p class="err">오류: {{ err }}</p>
     {% else %}
+    {% if usage %}
+    <div class="usage-mini-card">
+        <div class="usage-mini-title">무료 추천 조회</div>
+        <div class="usage-mini-row">
+            <span>사용 {{ usage.used_count }} / {{ usage.limit }}</span>
+            <strong>남은 {{ usage.remaining }}회</strong>
+        </div>
+        <div class="usage-mini-sub">
+            {{ usage.window_hours }}시간 기준 · 공고 목록 조회는 제한 없음
+        </div>
+    </div>
+    {% endif %}
     <h3>{% if tb == 'recommend' %}추천 공고 {{ count }}건{% else %}공고 {{ count }}건{% endif %}</h3>
 
     <table class="project-table">

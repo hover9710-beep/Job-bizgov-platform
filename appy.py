@@ -466,6 +466,40 @@ def save_user_request_log(
     conn.commit()
 
 
+def get_or_create_visitor_id() -> str:
+    raw = request.cookies.get("visitor_id")
+    if raw and str(raw).strip():
+        return str(raw).strip()
+    return str(uuid.uuid4())
+
+
+def get_usage_status(
+    conn: sqlite3.Connection,
+    visitor_id: str,
+    user_ip: str,
+    action: str = "recommend",
+    limit: int = 5,
+    window_hours: int = 12,
+) -> dict:
+    row = conn.execute(
+        """
+        SELECT COUNT(*) FROM user_request_log
+        WHERE created_at >= datetime('now', 'localtime', ?)
+          AND action = ?
+          AND (visitor_id = ? OR user_ip = ?)
+        """,
+        (f"-{window_hours} hours", action, visitor_id, user_ip),
+    ).fetchone()
+    used_count = row[0] if row else 0
+    remaining = max(0, limit - used_count)
+    return {
+        "used_count": used_count,
+        "remaining": remaining,
+        "limit": limit,
+        "window_hours": window_hours,
+    }
+
+
 def clean_display_title(title: Any, fallback: str = "공고 상세보기") -> str:
     s = str(title or "").strip()
     if not s:
@@ -757,27 +791,47 @@ def index():
                     normalize_item=normalize_display_item,
                 )
     top_clicked = load_top_clicked_projects(limit=5)
-    return render_template(
-        "new.html",
-        items=rows_ui,
-        rows=rows_ui,
-        count=len(rows_ui),
-        err=None,
-        status=status,
-        source=source,
-        q=query,
-        deadline=deadline,
-        recent=recent,
-        has_ai_summary=has_ai_summary,
-        has_recommend_label=has_recommend_label,
-        has_attachments=has_attachments,
-        category=category,
-        tab=tab,
-        fq=fq,
-        summary=summary,
-        source_labels=SOURCE_LABELS,
-        top_clicked=top_clicked,
+    visitor_id = get_or_create_visitor_id()
+    user_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    if user_ip and "," in user_ip:
+        user_ip = user_ip.split(",")[0].strip()
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        usage = get_usage_status(conn, visitor_id, user_ip)
+    finally:
+        conn.close()
+    resp = make_response(
+        render_template(
+            "new.html",
+            items=rows_ui,
+            rows=rows_ui,
+            count=len(rows_ui),
+            err=None,
+            status=status,
+            source=source,
+            q=query,
+            deadline=deadline,
+            recent=recent,
+            has_ai_summary=has_ai_summary,
+            has_recommend_label=has_recommend_label,
+            has_attachments=has_attachments,
+            category=category,
+            tab=tab,
+            fq=fq,
+            summary=summary,
+            source_labels=SOURCE_LABELS,
+            top_clicked=top_clicked,
+            usage=usage,
+        )
     )
+    resp.set_cookie(
+        "visitor_id",
+        visitor_id,
+        max_age=60 * 60 * 24 * 365,
+        httponly=True,
+        samesite="Lax",
+    )
+    return resp
 
 
 @app.route("/company", methods=["GET", "POST"])
@@ -1681,27 +1735,47 @@ def new_announcements():
                     normalize_item=normalize_display_item,
                 )
     top_clicked = load_top_clicked_projects(limit=5)
-    return render_template(
-        "new.html",
-        items=rows_ui,
-        rows=rows_ui,
-        count=len(rows_ui),
-        err=None,
-        status=status,
-        source=source,
-        q=query,
-        deadline=deadline,
-        recent=recent,
-        has_ai_summary=has_ai_summary,
-        has_recommend_label=has_recommend_label,
-        has_attachments=has_attachments,
-        category=category,
-        tab=(request.args.get("tab") or "").strip(),
-        fq=fq,
-        summary=summary,
-        source_labels=SOURCE_LABELS,
-        top_clicked=top_clicked,
+    visitor_id = get_or_create_visitor_id()
+    user_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    if user_ip and "," in user_ip:
+        user_ip = user_ip.split(",")[0].strip()
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        usage = get_usage_status(conn, visitor_id, user_ip)
+    finally:
+        conn.close()
+    resp = make_response(
+        render_template(
+            "new.html",
+            items=rows_ui,
+            rows=rows_ui,
+            count=len(rows_ui),
+            err=None,
+            status=status,
+            source=source,
+            q=query,
+            deadline=deadline,
+            recent=recent,
+            has_ai_summary=has_ai_summary,
+            has_recommend_label=has_recommend_label,
+            has_attachments=has_attachments,
+            category=category,
+            tab=(request.args.get("tab") or "").strip(),
+            fq=fq,
+            summary=summary,
+            source_labels=SOURCE_LABELS,
+            top_clicked=top_clicked,
+            usage=usage,
+        )
     )
+    resp.set_cookie(
+        "visitor_id",
+        visitor_id,
+        max_age=60 * 60 * 24 * 365,
+        httponly=True,
+        samesite="Lax",
+    )
+    return resp
 
 
 @app.route("/api/run", methods=["POST"])
