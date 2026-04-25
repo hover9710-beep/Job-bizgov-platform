@@ -1283,6 +1283,9 @@ def recommend(company_id: Optional[int] = None):
             company_id_param=company_id,
             urgent_count=0,
             ai_count=0,
+            used_count=0,
+            remaining=5,
+            limit=5,
         )
 
     raw_vid = request.cookies.get("visitor_id")
@@ -1326,6 +1329,7 @@ def recommend(company_id: Optional[int] = None):
                 samesite="Lax",
             )
             return resp
+        remaining = max(0, 5 - used_count)
         save_user_request_log(conn, visitor_id, user_ip, action="recommend")
     finally:
         conn.close()
@@ -1340,6 +1344,9 @@ def recommend(company_id: Optional[int] = None):
             company_id_param=company_id,
             urgent_count=0,
             ai_count=0,
+            used_count=used_count,
+            remaining=remaining,
+            limit=5,
         )
         if visitor_cookie_new:
             resp = make_response(tmpl)
@@ -1368,6 +1375,9 @@ def recommend(company_id: Optional[int] = None):
         company_id_param=company_id,
         urgent_count=urgent_count,
         ai_count=ai_count,
+        used_count=used_count,
+        remaining=remaining,
+        limit=5,
     )
     if visitor_cookie_new:
         resp = make_response(tmpl)

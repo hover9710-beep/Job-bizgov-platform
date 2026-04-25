@@ -59,6 +59,21 @@
         .company-bar-tags { display: flex; flex-wrap: wrap; gap: 6px; }
         .company-tag { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e0e7ff; color: #3730a3; }
 
+        .usage-box {
+            margin: 14px 0 18px;
+            padding: 14px 16px;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 12px;
+            color: #1d4ed8;
+            font-weight: 700;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .usage-box strong { font-size: 16px; }
+
         .summary-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -218,11 +233,22 @@
             }
             .recommend-table .action-col .btn-apply:last-child { margin-bottom: 0; }
             .mail-row .btn { width: 100%; box-sizing: border-box; text-align: center; }
+
+            .usage-box {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+                font-size: 14px;
+            }
         }
     </style>
 </head>
 <body>
     <h1>맞춤 추천 공고</h1>
+    <div class="usage-box">
+        <div>오늘 사용: <strong>{{ used_count }}</strong> / {{ limit }}</div>
+        <div>남은 횟수: <strong>{{ remaining }}</strong>회</div>
+    </div>
     <nav class="topnav">
         <a href="{{ url_for('index') }}">공고목록</a>
         <a href="{{ url_for('new_announcements') }}">신규공고</a>
