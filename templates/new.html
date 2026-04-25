@@ -282,6 +282,7 @@
         .usage-mini-title { font-size: 13px; font-weight: 800; margin-bottom: 6px; }
         .usage-mini-row { display: flex; justify-content: space-between; align-items: center; font-size: 15px; font-weight: 700; }
         .usage-mini-row strong { color: #2563eb; font-size: 18px; }
+        .usage-zero { color: #dc2626; font-weight: 900; font-size: 18px; }
         .usage-mini-sub { margin-top: 6px; font-size: 12px; color: #64748b; }
 
         .ai-disclaimer {
@@ -682,7 +683,11 @@
         <div class="usage-mini-title">무료 추천 조회</div>
         <div class="usage-mini-row">
             <span>사용 {{ usage.used_count }} / {{ usage.limit }}</span>
-            <strong>남은 {{ usage.remaining }}회</strong>
+            {% if usage.remaining == 0 %}
+                <span class="usage-zero">남은 0회</span>
+            {% else %}
+                <strong>남은 {{ usage.remaining }}회</strong>
+            {% endif %}
         </div>
         <div class="usage-mini-sub">
             {{ usage.window_hours }}시간 기준 · 공고 목록 조회는 제한 없음
