@@ -737,6 +737,11 @@ def render_mail_html(
     parts.append(
         """
   <hr style="margin-top:20px;">
+  <div style="margin:16px 0;padding:12px 14px;border:1px solid #fde68a;background:#fffbeb;color:#92400e;border-radius:10px;font-size:13px;line-height:1.6;">
+    <strong>주의</strong>
+    AI는 보조적 판단수단이며, 사실이 아닌 내용을 생성할 수 있습니다.
+    최종 판단과 공고 원문 확인은 반드시 사용자의 책임입니다.
+  </div>
   <div style="font-size:11px; color:#9ca3af;">본 메일은 JB BizGov Tracker 자동 발송입니다.</div>
 </div>"""
     )
