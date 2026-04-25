@@ -431,6 +431,19 @@ def _init_db():
         )
         """
     )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS favorite_projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            visitor_id TEXT,
+            project_id TEXT,
+            title TEXT,
+            source TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(visitor_id, project_id)
+        )
+        """
+    )
     conn.commit()
     conn.close()
 
@@ -637,6 +650,40 @@ def api_click():
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route("/api/favorite", methods=["POST"])
+def api_favorite():
+    data = request.get_json(silent=True) or {}
+    visitor_id = request.cookies.get("visitor_id")
+    if not visitor_id:
+        visitor_id = str(uuid.uuid4())
+    project_id = str(data.get("project_id") or "")
+    title = data.get("title") or ""
+    source = data.get("source") or ""
+    if not project_id:
+        return jsonify({"ok": False, "error": "missing_project_id"})
+    _init_db()
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO favorite_projects
+        (visitor_id, project_id, title, source)
+        VALUES (?, ?, ?, ?)
+        """,
+        (visitor_id, project_id, title, source),
+    )
+    conn.commit()
+    conn.close()
+    resp = make_response(jsonify({"ok": True}))
+    resp.set_cookie(
+        "visitor_id",
+        visitor_id,
+        max_age=60 * 60 * 24 * 365,
+        httponly=True,
+        samesite="Lax",
+    )
+    return resp
 
 
 @app.route("/admin/clicks")

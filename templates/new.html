@@ -276,6 +276,8 @@
         }
         .btn-detail { border: 1px solid #cbd5e1; color: #334155; background: #ffffff; }
         .btn-apply { border: 1px solid #2563eb; color: #ffffff; background: #2563eb; }
+        .btn-favorite { height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid #facc15; background: #fffbeb; color: #92400e; font-weight: 800; font-size: 14px; cursor: pointer; }
+        .mobile-search-guide { display: none; }
         .top-recommend-actions { margin-top: 10px; }
 
         .usage-mini-card { max-width: 520px; margin: 14px 0 18px; padding: 14px 16px; border: 1px solid #bfdbfe; border-radius: 14px; background: #eff6ff; color: #1e3a8a; }
@@ -369,6 +371,9 @@
             justify-content: center;
             flex: 1 1 auto;
           }
+
+          .btn-favorite { width: 100%; height: 44px; margin-top: 8px; font-size: 14px; }
+          .mobile-search-guide { display: block; margin: 10px 0 6px; font-size: 13px; color: #64748b; font-weight: 700; }
 
           /* 모바일에서 불필요한 컬럼 숨김 */
           .project-table th:nth-child(1),
@@ -569,7 +574,7 @@
                 <input type="hidden" name="{{ k }}" value="{{ v }}">
             {% endif %}
         {% endfor %}
-        <input type="search" name="q" value="{{ q|default('', true) }}" placeholder="제목·기관 검색" aria-label="검색어">
+        <input type="search" name="q" value="{{ q|default('', true) }}" placeholder="제목 또는 기관으로 검색" aria-label="검색어">
         <button type="submit">검색</button>
     </form>
     </div>
@@ -807,6 +812,20 @@ function logClick(projectId, action, source, title) {
       body: JSON.stringify({project_id: projectId||"", action: action||"", source: source||"", title: title||""})
     }).catch(function(){});
   } catch(e) {}
+}
+
+function saveFavorite(projectId, title, source) {
+  fetch("/api/favorite", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({project_id: projectId, title: title, source: source})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) { alert("즐겨찾기에 저장했습니다."); }
+    else { alert("즐겨찾기 저장에 실패했습니다."); }
+  })
+  .catch(() => { alert("즐겨찾기 저장 중 오류가 발생했습니다."); });
 }
 
 (function () {
