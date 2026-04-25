@@ -56,6 +56,18 @@
         .btn-apply:hover { background: #1d4ed8; }
         .btn-detail:hover { background: #f1f5f9; }
 
+        .ai-disclaimer {
+            margin: 18px 0;
+            padding: 12px 14px;
+            border: 1px solid #fde68a;
+            background: #fffbeb;
+            color: #92400e;
+            border-radius: 12px;
+            font-size: 13px;
+            line-height: 1.55;
+        }
+        .ai-disclaimer strong { margin-right: 6px; font-weight: 900; }
+
         .detail-cta-box {
             margin: 16px 0 18px;
             padding: 14px;
@@ -200,6 +212,8 @@
                 font-size: 17px !important;
                 padding: 16px 12px !important;
             }
+
+            .ai-disclaimer { font-size: 12px; margin: 14px 0; }
         }
     </style>
 </head>
@@ -260,6 +274,11 @@
     <div class="block">
         <div class="block-label">AI 요약</div>
         <div class="ai-summary">{{ item.ai_summary }}</div>
+    </div>
+    <div class="ai-disclaimer">
+        <strong>주의</strong>
+        AI는 보조적 판단수단이며, 사실이 아닌 내용을 생성할 수 있습니다.
+        최종 판단과 공고 원문 확인은 반드시 사용자의 책임입니다.
     </div>
     {% endif %}
 
