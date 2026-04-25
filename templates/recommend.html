@@ -74,6 +74,20 @@
         }
         .usage-box strong { font-size: 16px; }
 
+        .usage-bar {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 10px 14px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #374151;
+        }
+        .usage-bar strong { color: #2563eb; font-size: 15px; }
+
         .summary-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -306,6 +320,16 @@
         <div class="summary-card">
             <div class="summary-label">AI요약 포함</div>
             <div class="summary-value">{{ ai_count|default(0) }}건</div>
+        </div>
+    </div>
+
+    <div class="usage-bar">
+        <div>오늘 사용 <strong>{{ used_count }}</strong> / {{ limit }}</div>
+        <div>
+            남은 <strong>{{ remaining }}</strong>회
+            {% if remaining == 1 %}
+                <span style="color:red;"> ⚠ 마지막 1회</span>
+            {% endif %}
         </div>
     </div>
 
