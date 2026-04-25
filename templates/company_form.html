@@ -5,42 +5,70 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>회사정보 입력</title>
   <style>
-    body { font-family:-apple-system,sans-serif; background:#f9fafb; padding:24px; }
-    .box { max-width:500px; margin:0 auto; background:#fff; border-radius:16px; padding:28px; border:1px solid #e5e7eb; }
-    h1 { font-size:22px; margin-bottom:20px; }
-    label { display:block; font-size:14px; font-weight:700; margin:14px 0 4px; }
-    input, select { width:100%; padding:10px 12px; border:1px solid #d1d5db; border-radius:10px; font-size:15px; box-sizing:border-box; }
-    .consent-row { display:flex; gap:10px; align-items:center; margin:18px 0; }
-    .btn { width:100%; padding:14px; background:#2563eb; color:#fff; border:none; border-radius:12px; font-size:16px; font-weight:800; cursor:pointer; margin-top:8px; }
-    .notice { font-size:12px; color:#6b7280; margin-top:14px; line-height:1.6; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#f9fafb; padding:24px; margin:0; }
+.box { max-width:520px; margin:0 auto; background:#fff; border-radius:20px; padding:32px; border:1px solid #e5e7eb; box-shadow:0 8px 24px rgba(0,0,0,0.06); }
+h1 { font-size:24px; font-weight:800; margin:0 0 20px; color:#111827; }
+.notice-box { padding:14px 16px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; font-size:13px; color:#1e40af; line-height:1.6; margin-bottom:24px; }
+label { display:block; font-size:14px; font-weight:700; color:#374151; margin:16px 0 5px; }
+input, select { width:100%; padding:11px 14px; border:1px solid #d1d5db; border-radius:10px; font-size:15px; box-sizing:border-box; color:#111827; background:#fff; }
+input:focus, select:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,0.1); }
+.consent-row { display:flex; align-items:flex-start; gap:10px; margin:20px 0 6px; padding:14px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; }
+.consent-row input[type=checkbox] { width:18px; height:18px; margin-top:2px; flex-shrink:0; cursor:pointer; }
+.consent-row label { margin:0; font-size:14px; font-weight:600; color:#374151; cursor:pointer; line-height:1.5; }
+.btn-submit { width:100%; padding:15px; background:#2563eb; color:#fff; border:none; border-radius:14px; font-size:17px; font-weight:800; cursor:pointer; margin-top:20px; letter-spacing:-0.3px; }
+.btn-submit:hover { background:#1d4ed8; }
+.footer-note { margin-top:16px; font-size:12px; color:#9ca3af; line-height:1.6; text-align:center; }
+
+@media (max-width:700px) {
+  body { padding:16px; }
+  .box { padding:24px; border-radius:16px; }
+  h1 { font-size:22px; }
+  .btn-submit { font-size:16px; padding:14px; }
+}
   </style>
 </head>
 <body>
   <div class="box">
     <h1>🏢 AI 추천을 위한 회사정보</h1>
+
+    <div class="notice-box">
+      📋 입력한 회사정보는 지원사업 추천을 위한 용도로만 사용됩니다.<br>
+      자동 신청이나 외부 제출은 하지 않습니다.<br>
+      AI 추천은 참고용이며, 최종 신청 여부는 사용자가 직접 확인해야 합니다.
+    </div>
+
     <form method="POST" action="/company/save">
-      <label>회사명</label>
-      <input name="company_name" placeholder="예: (주)전북수출" required>
-      <label>업종</label>
-      <input name="industry" placeholder="예: 제조, IT, 서비스">
-      <label>지역</label>
-      <input name="region" placeholder="예: 전북, 전주" value="전북">
-      <label>수출 여부</label>
-      <select name="export_flag">
+      <label for="company_name">회사명 *</label>
+      <input id="company_name" name="company_name" placeholder="예: (주)전북수출" required>
+
+      <label for="industry">업종</label>
+      <input id="industry" name="industry" placeholder="예: 제조, IT, 서비스">
+
+      <label for="region">지역</label>
+      <input id="region" name="region" placeholder="예: 전북, 전주" value="전북">
+
+      <label for="export_flag">수출 여부</label>
+      <select id="export_flag" name="export_flag">
         <option value="1">수출기업</option>
         <option value="0">내수기업</option>
       </select>
-      <label>관심 키워드</label>
-      <input name="interest_keywords" placeholder="예: 수출, 마케팅, R&D">
+
+      <label for="interest_keywords">관심 키워드</label>
+      <input id="interest_keywords" name="interest_keywords" placeholder="예: 수출, 마케팅, R&D">
+
       <div class="consent-row">
-        <input type="checkbox" name="consent" id="consent" required style="width:auto">
-        <label for="consent" style="margin:0;font-weight:500;">기업정보 수집 및 AI 추천 이용에 동의합니다</label>
+        <input type="checkbox" name="consent" id="consent" required>
+        <label for="consent">
+          기업정보 수집 및 AI 추천 이용에 동의합니다.<br>
+          <span style="font-weight:400;color:#6b7280;">수집 목적: 맞춤 지원사업 추천</span>
+        </label>
       </div>
-      <button class="btn" type="submit">AI 추천 받기</button>
+
+      <button class="btn-submit" type="submit">AI 추천 받기 →</button>
     </form>
-    <div class="notice">
-      입력하신 정보는 지원사업 추천 목적으로만 사용됩니다.<br>
-      자동 신청이나 외부 제출은 하지 않습니다.
+
+    <div class="footer-note">
+      ※ 현재 무료 테스트 운영 중 · 추천 조회는 12시간 5회 제한
     </div>
   </div>
 </body>
