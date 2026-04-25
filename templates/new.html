@@ -278,12 +278,14 @@
         .btn-apply { border: 1px solid #2563eb; color: #ffffff; background: #2563eb; }
         .top-recommend-actions { margin-top: 10px; }
 
-        .usage-mini-card { margin: 14px 0 18px; padding: 14px 16px; border: 1px solid #bfdbfe; border-radius: 14px; background: #eff6ff; color: #1e3a8a; }
-        .usage-mini-title { font-size: 13px; font-weight: 800; margin-bottom: 6px; }
-        .usage-mini-row { display: flex; justify-content: space-between; align-items: center; font-size: 15px; font-weight: 700; }
-        .usage-mini-row strong { color: #2563eb; font-size: 18px; }
-        .usage-zero { color: #dc2626; font-weight: 900; font-size: 18px; }
-        .usage-mini-sub { margin-top: 6px; font-size: 12px; color: #64748b; }
+        .usage-mini-card { max-width: 520px; margin: 14px 0 18px; padding: 14px 16px; border: 1px solid #bfdbfe; border-radius: 14px; background: #eff6ff; color: #1e3a8a; }
+        .usage-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+        .usage-label { font-size: 14px; font-weight: 900; }
+        .usage-remain { display: inline-flex; align-items: center; justify-content: center; padding: 5px 10px; border-radius: 999px; background: #dbeafe; color: #2563eb; font-size: 13px; font-weight: 900; white-space: nowrap; }
+        .usage-remain.is-zero { background: #fee2e2; color: #dc2626; }
+        .usage-progress { font-size: 18px; font-weight: 900; color: #1d4ed8; margin-bottom: 6px; }
+        .usage-sub { font-size: 12px; color: #64748b; line-height: 1.5; }
+        .usage-upgrade { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #bfdbfe; font-size: 12px; color: #1e40af; font-weight: 700; line-height: 1.5; }
 
         .ai-disclaimer {
             margin: 18px 0;
@@ -423,9 +425,9 @@
             margin: 0;
           }
 
-          .usage-mini-card { margin: 12px 0 16px; padding: 14px; }
-          .usage-mini-row { font-size: 14px; }
-          .usage-mini-row strong { font-size: 17px; }
+          .usage-mini-card { max-width: none; margin: 12px 0 16px; padding: 14px; }
+          .usage-head { align-items: flex-start; }
+          .usage-progress { font-size: 17px; }
 
           .top-clicked-box { margin:14px 0; padding:14px; }
           .top-clicked-title { font-size:16px; }
@@ -637,38 +639,6 @@
     </section>
     {% endif %}
 
-    {% if not err and tb == 'recommend' and items %}
-    {% set top = items[0] %}
-    <div class="top-recommend-card">
-        <div class="top-recommend-title">🎯 귀사 기준 추천 공고</div>
-        {% if top.url %}
-        <a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="top-recommend-link">
-            {{ top.title }}
-        </a>
-        {% else %}
-        <span class="top-recommend-link">{{ top.title }}</span>
-        {% endif %}
-        {% if top.recommend_label %}
-        <div class="top-recommend-label">👉 추천: {{ top.recommend_label }}</div>
-        {% endif %}
-        {% if top.recommend_reason %}
-        <div class="top-recommend-reason">
-            {{ top.recommend_reason }}
-        </div>
-        {% endif %}
-        {% if top.ai_summary %}
-        <div class="top-recommend-summary">{{ top.ai_summary }}</div>
-        {% endif %}
-        <div class="top-recommend-meta">마감일: {{ top.end_date or '-' }}</div>
-        <div class="top-recommend-actions">
-            <a href="{{ url_for('project_detail', pid=top.id) }}" class="btn-detail" onclick="logClick('{{ top.id }}', 'detail', '{{ top.source|e }}', '{{ (top.display_title or top.title)|e }}')">상세보기</a>
-            {% if top.url %}
-            <a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply" onclick="logClick('{{ top.id }}', 'apply', '{{ top.source|e }}', '{{ (top.display_title or top.title)|e }}')">신청 바로가기</a>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
-
     <div class="ai-disclaimer main-disclaimer">
         <strong>주의</strong>
         AI는 보조적 판단수단이며, 사실이 아닌 내용을 생성할 수 있습니다.
@@ -679,21 +649,25 @@
     <p class="err">오류: {{ err }}</p>
     {% else %}
     {% if usage %}
-    <div class="usage-mini-card">
-        <div class="usage-mini-title">무료 추천 조회</div>
-        <div class="usage-mini-row">
-            <span>사용 {{ usage.used_count }} / {{ usage.limit }}</span>
-            {% if usage.remaining == 0 %}
-                <span class="usage-zero">남은 0회</span>
-            {% else %}
-                <strong>남은 {{ usage.remaining }}회</strong>
-            {% endif %}
+    <div class="usage-mini-card compact">
+        <div class="usage-head">
+            <span class="usage-label">무료 추천 조회</span>
+            <span class="usage-remain {% if usage.remaining == 0 %}is-zero{% endif %}">
+                남은 {{ usage.remaining }}회
+            </span>
         </div>
-        <div class="usage-mini-sub">
-            {{ usage.window_hours }}시간 기준 · 공고 목록 조회는 제한 없음
+        <div class="usage-progress">
+            사용 {{ usage.used_count }} / {{ usage.limit }}
+        </div>
+        <div class="usage-sub">
+            무료는 {{ usage.window_hours }}시간 기준 {{ usage.limit }}회까지 이용 가능 · 공고 목록 조회는 제한 없음
+        </div>
+        <div class="usage-upgrade">
+            더 많은 추천 조회가 필요하면 유료/기관용 확장으로 전환할 수 있습니다.
         </div>
     </div>
     {% endif %}
+
     <h3>{% if tb == 'recommend' %}추천 공고 {{ count }}건{% else %}공고 {{ count }}건{% endif %}</h3>
 
     <table class="project-table">
@@ -775,11 +749,38 @@
         {% endfor %}
         </tbody>
     </table>
-    <div class="ai-disclaimer">
-        <strong>주의</strong>
-        AI는 보조적 판단수단이며, 사실이 아닌 내용을 생성할 수 있습니다.
-        최종 판단과 공고 원문 확인은 반드시 사용자의 책임입니다.
+
+    {% if not err and tb == 'recommend' and items %}
+    {% set top = items[0] %}
+    <div class="top-recommend-card">
+        <div class="top-recommend-title">🎯 귀사 기준 추천 공고</div>
+        {% if top.url %}
+        <a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="top-recommend-link">
+            {{ top.title }}
+        </a>
+        {% else %}
+        <span class="top-recommend-link">{{ top.title }}</span>
+        {% endif %}
+        {% if top.recommend_label %}
+        <div class="top-recommend-label">👉 추천: {{ top.recommend_label }}</div>
+        {% endif %}
+        {% if top.recommend_reason %}
+        <div class="top-recommend-reason">
+            {{ top.recommend_reason }}
+        </div>
+        {% endif %}
+        {% if top.ai_summary %}
+        <div class="top-recommend-summary">{{ top.ai_summary }}</div>
+        {% endif %}
+        <div class="top-recommend-meta">마감일: {{ top.end_date or '-' }}</div>
+        <div class="top-recommend-actions">
+            <a href="{{ url_for('project_detail', pid=top.id) }}" class="btn-detail" onclick="logClick('{{ top.id }}', 'detail', '{{ top.source|e }}', '{{ (top.display_title or top.title)|e }}')">상세보기</a>
+            {% if top.url %}
+            <a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply" onclick="logClick('{{ top.id }}', 'apply', '{{ top.source|e }}', '{{ (top.display_title or top.title)|e }}')">신청 바로가기</a>
+            {% endif %}
+        </div>
     </div>
+    {% endif %}
     {% endif %}
 
 <script>
