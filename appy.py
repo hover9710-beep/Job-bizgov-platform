@@ -11,6 +11,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from collections import deque
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -21,6 +22,7 @@ from flask import (
     flash,
     g,
     jsonify,
+    make_response,
     redirect,
     render_template,
     request,
@@ -402,8 +404,66 @@ def _init_db():
     )
     _ensure_column(conn, "companies", "export_amount", "TEXT")
     _ensure_column(conn, "companies", "business_number", "TEXT")
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_request_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            visitor_id TEXT,
+            user_ip TEXT,
+            action TEXT,
+            created_at TEXT
+        )
+        """
+    )
     conn.commit()
     conn.close()
+
+
+def check_window_limit(
+    conn: sqlite3.Connection,
+    visitor_id: str,
+    user_ip: str,
+    action: str = "recommend",
+    limit: int = 5,
+    window_hours: int = 12,
+) -> Tuple[bool, int, Optional[str]]:
+    rows = conn.execute(
+        """
+        SELECT created_at FROM user_request_log
+        WHERE created_at >= datetime('now', 'localtime', ?)
+          AND action = ?
+          AND (visitor_id = ? OR user_ip = ?)
+        ORDER BY created_at ASC
+        """,
+        (f"-{window_hours} hours", action, visitor_id, user_ip),
+    ).fetchall()
+
+    count = len(rows)
+    if count < limit:
+        return True, count, None
+
+    oldest = rows[0][0]
+    reset_row = conn.execute(
+        "SELECT datetime(?, ?)", (oldest, f"+{window_hours} hours")
+    ).fetchone()
+    reset_at = reset_row[0] if reset_row else None
+    return False, count, reset_at
+
+
+def save_user_request_log(
+    conn: sqlite3.Connection,
+    visitor_id: str,
+    user_ip: str,
+    action: str = "recommend",
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO user_request_log (visitor_id, user_ip, action, created_at)
+        VALUES (?, ?, ?, datetime('now', 'localtime'))
+        """,
+        (visitor_id, user_ip, action),
+    )
+    conn.commit()
 
 
 def clean_display_title(title: Any, fallback: str = "공고 상세보기") -> str:
@@ -1224,8 +1284,54 @@ def recommend(company_id: Optional[int] = None):
             urgent_count=0,
             ai_count=0,
         )
+
+    raw_vid = request.cookies.get("visitor_id")
+    if raw_vid and str(raw_vid).strip():
+        visitor_id = str(raw_vid).strip()
+        visitor_cookie_new = False
+    else:
+        visitor_id = str(uuid.uuid4())
+        visitor_cookie_new = True
+    xfwd = (request.headers.get("X-Forwarded-For") or "").strip()
+    if xfwd:
+        user_ip = xfwd.split(",")[0].strip()
+    else:
+        user_ip = (request.remote_addr or "").strip()
+
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        allowed, used_count, reset_at = check_window_limit(
+            conn,
+            visitor_id,
+            user_ip,
+            action="recommend",
+            limit=5,
+            window_hours=12,
+        )
+        if not allowed:
+            resp = make_response(
+                render_template(
+                    "limit_exceeded.html",
+                    used_count=used_count,
+                    limit=5,
+                    reset_at=reset_at,
+                    window_hours=12,
+                )
+            )
+            resp.set_cookie(
+                "visitor_id",
+                visitor_id,
+                max_age=60 * 60 * 24 * 365,
+                httponly=True,
+                samesite="Lax",
+            )
+            return resp
+        save_user_request_log(conn, visitor_id, user_ip, action="recommend")
+    finally:
+        conn.close()
+
     if state == "no_projects":
-        return render_template(
+        tmpl = render_template(
             "recommend.html",
             no_company=False,
             no_projects=True,
@@ -1235,13 +1341,25 @@ def recommend(company_id: Optional[int] = None):
             urgent_count=0,
             ai_count=0,
         )
+        if visitor_cookie_new:
+            resp = make_response(tmpl)
+            resp.set_cookie(
+                "visitor_id",
+                visitor_id,
+                max_age=60 * 60 * 24 * 365,
+                httponly=True,
+                samesite="Lax",
+            )
+            return resp
+        return tmpl
+
     items = _enrich_recommend_items_for_ui(db, items)
     urgent_badges = ("D-0", "D-1", "D-2", "D-3", "D-Day")
     urgent_count = sum(
         1 for x in items if (x.get("deadline_badge") or "") in urgent_badges
     )
     ai_count = sum(1 for x in items if str(x.get("ai_summary") or "").strip())
-    return render_template(
+    tmpl = render_template(
         "recommend.html",
         no_company=False,
         no_projects=False,
@@ -1251,6 +1369,17 @@ def recommend(company_id: Optional[int] = None):
         urgent_count=urgent_count,
         ai_count=ai_count,
     )
+    if visitor_cookie_new:
+        resp = make_response(tmpl)
+        resp.set_cookie(
+            "visitor_id",
+            visitor_id,
+            max_age=60 * 60 * 24 * 365,
+            httponly=True,
+            samesite="Lax",
+        )
+        return resp
+    return tmpl
 
 
 @app.route("/recommend/pdf/<int:company_id>/<int:project_id>")
