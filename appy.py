@@ -1199,14 +1199,110 @@ def _calc_score(company: Any, proj: Any) -> Tuple[int, List[str]]:
     return score, reasons
 
 
+def _company_export_int(company: Any) -> int:
+    ef = company["export_flag"] if company is not None else None
+    if ef is None:
+        return 0
+    if isinstance(ef, int):
+        return 1 if ef == 1 else 0
+    s = str(ef).strip()
+    if s in ("1", "예", "true", "True"):
+        return 1
+    return 0
+
+
+def _recommend_score_projects_top20(
+    company: Any, db: Any
+) -> Tuple[List[dict], int, int, str]:
+    """
+    접수중 공고만 조회 → 점수/이유 → 전체 후보 수·TOP 20.
+    state: 'ok' | 'no_projects'
+    """
+    rows = db.execute(
+        """
+        SELECT id, title, organization, status, end_date, source,
+               description, ai_summary, url
+        FROM biz_projects
+        WHERE status = '접수중'
+        LIMIT 500
+        """
+    ).fetchall()
+    if not rows:
+        return [], 0, 0, "no_projects"
+
+    results: List[dict] = []
+    for p in rows:
+        score = 0
+        reasons: List[str] = []
+        text = " ".join(
+            [
+                str(p["title"] or ""),
+                str(p["description"] or ""),
+                str(p["ai_summary"] or ""),
+                str(p["organization"] or ""),
+            ]
+        )
+        c = company
+        if c:
+            reg = (c["region"] or "") if c["region"] is not None else ""
+            if reg and reg in text:
+                score += 30
+                reasons.append(f"{reg} 지역 관련 공고")
+
+            if _company_export_int(c) == 1 and any(
+                k in text for k in ("수출", "해외", "바이어", "FTA", "무역")
+            ):
+                score += 30
+                reasons.append("수출기업 관련 공고")
+
+            ind = (c["industry"] or "") if c["industry"] is not None else ""
+            if ind and ind in text:
+                score += 20
+                reasons.append(f"{ind} 업종 관련 공고")
+
+            ikw = c["interest_keywords"] if c["interest_keywords"] is not None else None
+            if ikw:
+                for kw in str(ikw).replace(",", " ").split():
+                    if kw and kw in text:
+                        score += 10
+                        reasons.append(f"관심 키워드 '{kw}' 포함")
+                        break
+
+        score = min(score, 100)
+        if not reasons:
+            reasons.append("기본 조건 기준 검토 대상")
+        t = p["title"] or ""
+        results.append(
+            {
+                "id": p["id"],
+                "title": t,
+                "display_title": t,
+                "organization": p["organization"] or "",
+                "status": p["status"] or "",
+                "end_date": p["end_date"] or "",
+                "score": score,
+                "reasons": reasons[:3],
+                "reason": " · ".join(reasons[:3]),
+                "source": p["source"] or "",
+                "url": p["url"] or "",
+            }
+        )
+
+    total_candidates = len(results)
+    results.sort(key=lambda x: x.get("score", 0), reverse=True)
+    results = results[:20]
+    shown_count = len(results)
+    return results, total_candidates, shown_count, "ok"
+
+
 def _recommend_data(
     db: Any,
     company_id: Optional[int] = None,
     visitor_id: Optional[str] = None,
-) -> Tuple[Optional[Any], List[dict], str]:
+) -> Tuple[Optional[Any], List[dict], str, int, int]:
     """
     추천 목록: recommendations 테이블이 있으면 우선 사용, 없으면 규칙 기반 즉시 계산(레거시).
-    반환: (company_row | None, items, state)
+    반환: (company_row | None, items, state, total_candidates, shown_count)
     state: no_company | no_projects | ok
     """
     _cols = (
@@ -1215,7 +1311,7 @@ def _recommend_data(
     )
     cnt = db.execute("SELECT COUNT(*) AS c FROM companies").fetchone()["c"]
     if cnt == 0:
-        return None, [], "no_company"
+        return None, [], "no_company", 0, 0
 
     company: Any = None
     if company_id is not None:
@@ -1228,7 +1324,7 @@ def _recommend_data(
             (int(company_id),),
         ).fetchone()
         if company is None:
-            return None, [], "no_company"
+            return None, [], "no_company", 0, 0
     elif visitor_id and str(visitor_id).strip():
         company = db.execute(
             f"""
@@ -1250,7 +1346,7 @@ def _recommend_data(
             """
         ).fetchone()
     if company is None:
-        return None, [], "no_company"
+        return None, [], "no_company", 0, 0
 
     recs = db.execute(
         """
@@ -1263,6 +1359,8 @@ def _recommend_data(
             p.start_date,
             p.end_date,
             p.url,
+            p.source,
+            p.status,
             r.score,
             r.reason
         FROM recommendations r
@@ -1277,69 +1375,43 @@ def _recommend_data(
     if recs:
 
         def _item_from_rec(row: Any) -> dict:
+            reason_str = (row["reason"] or "").strip()
+            parts = [x.strip() for x in reason_str.split(" / ")] if reason_str else []
+            parts = [x for x in parts if x]
+            if not parts:
+                parts = ["기본 조건 기준 검토 대상"]
+            rsn = parts[:3]
             sd = str(row["start_date"] or "").strip()
             ed = str(row["end_date"] or "").strip()
             period = f"{sd or '—'} ~ {ed or '—'}" if (sd or ed) else "—"
+            t = row["title"] or ""
             return {
                 "id": row["id"],
-                "title": row["title"] or "",
+                "title": t,
+                "display_title": t,
                 "organization": row["organization"] or "",
                 "ministry": row["ministry"] or "",
                 "executing_agency": row["executing_agency"] or "",
                 "period": period,
                 "score": int(row["score"] or 0),
-                "reason": row["reason"] or "",
+                "reason": " · ".join(rsn),
+                "reasons": rsn,
+                "source": str(row["source"] or ""),
                 "url": row["url"] or "",
                 "pdf_path": None,
-                "status": "",
+                "status": str(row["status"] or ""),
+                "end_date": str(row["end_date"] or ""),
             }
 
-        return company, [_item_from_rec(r) for r in recs], "ok"
+        n_all = len(recs)
+        rec_list = [_item_from_rec(r) for r in recs]
+        rec_list = rec_list[:20]
+        return company, rec_list, "ok", n_all, len(rec_list)
 
-    projects = db.execute(
-        """
-        SELECT id, title, organization, ministry, executing_agency, start_date, end_date, status,
-               description, pdf_path, url
-        FROM biz_projects
-        ORDER BY id DESC
-        """
-    ).fetchall()
-
-    if not projects:
-        return company, [], "no_projects"
-
-    items: List[dict] = []
-    for proj in projects:
-        sc, rs = _calc_score(company, proj)
-        sd = str(proj["start_date"] or "").strip()
-        ed = str(proj["end_date"] or "").strip()
-        if sd or ed:
-            period = f"{sd or '—'} ~ {ed or '—'}"
-        else:
-            period = "—"
-        reason_text = " / ".join(rs) if rs else "이번에 맞는 추천 조건이 없습니다."
-        items.append(
-            {
-                "id": proj["id"],
-                "title": proj["title"] or "",
-                "organization": proj["organization"] or "",
-                "ministry": str(proj["ministry"] or "")
-                if "ministry" in proj.keys()
-                else "",
-                "executing_agency": str(proj["executing_agency"] or "")
-                if "executing_agency" in proj.keys()
-                else "",
-                "period": period,
-                "status": proj["status"] or "",
-                "score": sc,
-                "reason": reason_text,
-                "pdf_path": (proj["pdf_path"] or "").strip() or None,
-                "url": str(proj["url"] or ""),
-            }
-        )
-
-    items.sort(key=lambda x: (-x["score"], x["id"]))
-    return company, items, "ok"
+    items, total_candidates, shown_count, st = _recommend_score_projects_top20(company, db)
+    if st == "no_projects":
+        return company, [], "no_projects", 0, 0
+    return company, items, "ok", total_candidates, shown_count
 
 
 def sort_company_recommend_items(items: List[dict]) -> List[dict]:
@@ -1413,7 +1485,8 @@ def _format_recommend_email_body(company: Any, top_items: List[dict]) -> str:
     for i, it in enumerate(top_items, start=1):
         lines.append(f"{i}. 제목: {it['title']}")
         lines.append(f"   기관: {it['organization']}")
-        lines.append(f"   이유: {it['reason']}")
+        rtxt = it.get("reason") or " · ".join(it.get("reasons") or [])
+        lines.append(f"   이유: {rtxt}")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -1430,7 +1503,7 @@ def recommend(company_id: Optional[int] = None):
         visitor_id = str(uuid.uuid4())
         visitor_cookie_new = True
 
-    company, items, state = _recommend_data(
+    company, items, state, total_candidates, shown_count = _recommend_data(
         db, company_id=company_id, visitor_id=visitor_id
     )
     urgent_count = 0
@@ -1452,6 +1525,8 @@ def recommend(company_id: Optional[int] = None):
             used_count=0,
             remaining=5,
             limit=5,
+            total_candidates=0,
+            shown_count=0,
         )
 
     xfwd = (request.headers.get("X-Forwarded-For") or "").strip()
@@ -1506,6 +1581,8 @@ def recommend(company_id: Optional[int] = None):
             used_count=used_count,
             remaining=remaining,
             limit=5,
+            total_candidates=0,
+            shown_count=0,
         )
         if visitor_cookie_new:
             resp = make_response(tmpl)
@@ -1519,7 +1596,6 @@ def recommend(company_id: Optional[int] = None):
             return resp
         return tmpl
 
-    items = _enrich_recommend_items_for_ui(db, items)
     urgent_badges = ("D-0", "D-1", "D-2", "D-3", "D-Day")
     urgent_count = sum(
         1 for x in items if (x.get("deadline_badge") or "") in urgent_badges
@@ -1537,6 +1613,8 @@ def recommend(company_id: Optional[int] = None):
         used_count=used_count,
         remaining=remaining,
         limit=5,
+        total_candidates=total_candidates,
+        shown_count=shown_count,
     )
     if visitor_cookie_new:
         resp = make_response(tmpl)
@@ -1614,7 +1692,7 @@ def recommend_send():
     """추천 상위 10건을 MAIL_TO로 발송 (관리자용)."""
     db = get_db()
     cid = request.form.get("company_id", type=int) if request.method == "POST" else None
-    company, items, state = _recommend_data(
+    company, items, state, _tc, _sc = _recommend_data(
         db, company_id=cid, visitor_id=get_visitor_id()
     )
     if state == "no_company":

@@ -223,6 +223,59 @@
         .btn-apply:hover { background: #1d4ed8; }
         .mail-row { margin: 12px 0 8px; }
 
+        .recommend-summary {
+            margin: 18px 0;
+            padding: 16px;
+            border: 1px solid #bfdbfe;
+            background: #eff6ff;
+            border-radius: 14px;
+            color: #1e3a8a;
+            font-weight: 700;
+        }
+        .recommend-card {
+            margin: 16px 0;
+            padding: 18px;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            background: #fff;
+        }
+        .rank-badge {
+            display: inline-block;
+            margin-bottom: 8px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: #2563eb;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 800;
+        }
+        .recommend-score {
+            display: inline-block;
+            margin: 8px 0;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #dcfce7;
+            color: #15803d;
+            font-weight: 900;
+            font-size: 13px;
+        }
+        .rec-title { font-size: 17px; font-weight: 700; line-height: 1.4; margin: 8px 0; }
+        .rec-title a { color: #0f172a; text-decoration: none; }
+        .rec-title a:hover { color: #2563eb; text-decoration: underline; }
+        .reason-list { margin: 10px 0 14px; padding-left: 18px; color: #4b5563; line-height: 1.6; }
+        .reason-list li { margin-bottom: 4px; }
+        .recommend-actions { display: flex; gap: 8px; margin-top: 12px; }
+        .recommend-actions a {
+            flex: 1;
+            text-align: center;
+            padding: 11px 14px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 800;
+        }
+        .recommend-card .btn-detail { border: 1px solid #d1d5db; color: #374151; background: #fff; }
+        .recommend-card .btn-apply { background: #2563eb; color: #fff; border: 1px solid #2563eb; }
+
         @media (max-width: 700px) {
             .summary-grid { grid-template-columns: 1fr; }
             .top-recommend-box { padding: 14px; }
@@ -268,6 +321,9 @@
                 gap: 4px;
                 font-size: 14px;
             }
+
+            .recommend-card { padding: 16px; border-radius: 15px; }
+            .recommend-actions a { font-size: 14px; padding: 12px 10px; }
         }
     </style>
 </head>
@@ -318,23 +374,12 @@
             {% if company["region"] %}<span class="company-tag">{{ company["region"] }}</span>{% endif %}
         </div>
     </div>
-    <p class="muted">추천 목록은 <code>py pipeline/recommend_projects.py</code> 실행 후 DB에 저장됩니다. 저장 전에는 규칙 기반으로 즉시 계산된 결과를 보여 줍니다.</p>
     {% endif %}
 
     {% if items %}
-    <div class="summary-grid">
-        <div class="summary-card">
-            <div class="summary-label">추천 지원사업</div>
-            <div class="summary-value">{{ items|length }}건</div>
-        </div>
-        <div class="summary-card">
-            <div class="summary-label">마감임박 (D-0~D-3)</div>
-            <div class="summary-value">{{ urgent_count|default(0) }}건</div>
-        </div>
-        <div class="summary-card">
-            <div class="summary-label">AI요약 포함</div>
-            <div class="summary-value">{{ ai_count|default(0) }}건</div>
-        </div>
+    <div class="recommend-summary">
+        추천 후보 {{ total_candidates|default(0) }}건 중<br>
+        귀사 기준 <strong>TOP {{ shown_count|default(0) }}건</strong>을 선별했습니다.
     </div>
 
     <div class="usage-bar">
@@ -347,19 +392,26 @@
         </div>
     </div>
 
-    {% set top = items[0] %}
-    <div class="top-recommend-box">
-        <div class="top-label">🎯 귀사 맞춤 1순위</div>
-        <div class="top-title"><a href="{{ url_for('project_detail', pid=top.id) }}">{{ top.title }}</a></div>
-        {% if top.recommend_label %}<div class="top-tag">⭐ {{ top.recommend_label }}</div>{% endif %}
-        {% if top.recommend_reason %}<div class="top-reason">{{ top.recommend_reason }}</div>
-        {% elif top.ai_summary %}<div class="top-reason">{{ top.ai_summary }}</div>{% endif %}
-        <div class="top-meta">{% if top.organization %}{{ top.organization }}{% else %}-{% endif %} · {{ top.display_status or top.status or '-' }} · 마감 {{ top.end_date or '-' }}</div>
-        <div class="top-actions">
-            <a href="{{ url_for('project_detail', pid=top.id) }}" class="btn-detail" onclick="logClick('{{ top.id }}', 'detail', '{{ top.source|e }}', '{{ top.title|e }}')">상세보기</a>
-            {% if top.url %}<a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply" onclick="logClick('{{ top.id }}', 'apply', '{{ top.source|e }}', '{{ top.title|e }}')">신청 바로가기</a>{% endif %}
+    {% for item in items %}
+    <div class="recommend-card">
+        <div class="rank-badge">TOP {{ loop.index }}</div>
+        <div class="recommend-score">추천도 {{ item.score }}점</div>
+        <div class="rec-title">
+            <a href="{{ url_for('project_detail', pid=item.id) }}">{{ item.display_title or item.title }}</a>
+        </div>
+        <ul class="reason-list">
+            {% for reason in item.reasons or [] %}
+            <li>{{ reason }}</li>
+            {% endfor %}
+        </ul>
+        <div class="recommend-actions">
+            <a href="{{ url_for('project_detail', pid=item.id) }}" class="btn-detail" onclick="logClick('{{ item.id }}', 'detail', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">상세보기</a>
+            {% if item.url %}
+            <a href="{{ item.url }}" target="_blank" rel="noopener" class="btn-apply" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">신청 바로가기</a>
+            {% endif %}
         </div>
     </div>
+    {% endfor %}
 
     <div class="mail-row">
         <form method="post" action="{{ url_for('recommend_send') }}" style="display:inline;">
@@ -371,42 +423,6 @@
         <span class="muted" style="margin-left:8px;">(상위 10건 · 수신: MAIL_TO 환경변수)</span>
     </div>
 
-    <table class="recommend-table">
-        <thead>
-            <tr>
-                <th class="num-col">#</th>
-                <th>공고명</th>
-                <th class="org-col">기관</th>
-                <th class="status-col">상태</th>
-                <th class="end-col">마감일</th>
-                <th class="score-col">점수</th>
-                <th class="action-col">액션</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for it in items %}
-            {% set st = it.get('display_status') or it.get('status') or '' %}
-            {% set org = (it.get('organization') or '') | trim %}
-            <tr>
-                <td class="num-col">{{ loop.index }}</td>
-                <td class="title-cell">
-                    <a href="{{ url_for('project_detail', pid=it.id) }}" class="title-link">{{ it.title }}</a>
-                    {% if it.ai_summary %}<div class="ai-summary-line">{{ it.ai_summary }}</div>{% endif %}
-                    {% if it.recommend_label %}<div class="recommend-label-line">🏷 {{ it.recommend_label }}</div>{% endif %}
-                    {% if it.recommend_reason %}<div class="recommend-reason-line">{{ it.recommend_reason }}</div>{% endif %}
-                </td>
-                <td class="org-col">{% if org %}{{ org }}{% else %}-{% endif %}</td>
-                <td class="status-col">{{ st or '-' }}</td>
-                <td class="end-col">{{ it.end_date or '-' }}</td>
-                <td class="score-col"><span class="score-badge">{{ it.score | default(0) }}</span></td>
-                <td class="action-col">
-                    <a href="{{ url_for('project_detail', pid=it.id) }}" class="btn-detail" onclick="logClick('{{ it.id }}', 'detail', '{{ it.source|e }}', '{{ it.title|e }}')">상세보기</a>
-                    {% if it.url %}<a href="{{ it.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply" onclick="logClick('{{ it.id }}', 'apply', '{{ it.source|e }}', '{{ it.title|e }}')">신청</a>{% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
     <div class="ai-disclaimer">
         <strong>주의</strong>
         AI는 보조적 판단수단이며, 사실이 아닌 내용을 생성할 수 있습니다.
