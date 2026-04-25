@@ -27,6 +27,7 @@ input:focus, select:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0
 .form-group { margin: 20px 0; }
 .form-group .title { display:block; font-size:14px; font-weight:700; color:#374151; margin:0 0 8px; }
 .form-group small { display:block; font-size:12px; color:#6b7280; margin-top:6px; }
+.helper-text { font-size:13px; color:#64748b; margin-top:4px; }
 .chip input { display:none; }
 .chip { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:0 14px; margin:4px; border:1px solid #d1d5db; border-radius:999px; background:#fff; color:#374151; font-weight:700; cursor:pointer; }
 .chip:has(input:checked) { background:#2563eb; color:#fff; border-color:#2563eb; }
@@ -85,20 +86,31 @@ input:focus, select:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0
         <option value="0">내수기업</option>
       </select>
 
+      <label for="interest_keywords">관심 키워드</label>
+      <input id="interest_keywords" name="interest_keywords" placeholder="예: 수출, 마케팅, R&D">
+
+      <label for="business_number">사업자번호</label>
+      <input id="business_number" name="business_number" type="text" inputmode="numeric" placeholder="선택 · 하이픈 없이 입력" maxlength="12">
+
+      <div class="form-group">
+        <label class="title">추천 가점 정보</label>
+        <div class="helper-text">
+          선택 입력입니다. 추천 정확도 보정을 위해서만 사용됩니다.
+        </div>
+      </div>
+
       <div class="form-group">
         <label class="title">인증 보유 개수</label>
         <input type="number" name="cert_count" min="0" max="5" value="0" placeholder="0~5개">
-        <small>최대 5개까지 추천 점수에 반영됩니다.</small>
       </div>
 
       <div class="form-group">
         <label class="title">외국어 카탈로그 보유 개수</label>
         <input type="number" name="catalog_count" min="0" max="5" value="0" placeholder="0~5개">
-        <small>최대 5개까지 추천 점수에 반영됩니다.</small>
       </div>
 
       <div class="form-group">
-        <label class="title">가점 조건</label>
+        <label class="title">해당 조건 선택</label>
         <label class="chip">
           <input type="checkbox" name="social_enterprise" value="1">
           사회적기업
@@ -112,9 +124,6 @@ input:focus, select:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0
           최근 3년 백만불 수출의 탑
         </label>
       </div>
-
-      <label for="interest_keywords">관심 키워드</label>
-      <input id="interest_keywords" name="interest_keywords" placeholder="예: 수출, 마케팅, R&D">
 
       <div class="consent-row">
         <input type="checkbox" name="consent" id="consent" required>
