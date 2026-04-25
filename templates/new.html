@@ -222,18 +222,24 @@
         .run-log-pre {
             margin: 0;
             padding: 12px;
-            max-height: 280px;
-            overflow: auto;
             background: #0f172a;
             color: #e2e8f0;
             font-size: 11px;
             line-height: 1.45;
             font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-            border-radius: 8px;
             white-space: pre-wrap;
             word-break: break-word;
         }
         .run-log-panel.collapsed .run-log-pre { display: none; }
+
+        .pipeline-log, .run-log, .log-box, #runLog, .run-log-pre {
+            max-width: 720px;
+            max-height: 180px;
+            overflow-y: auto;
+            overflow-x: auto;
+            border-radius: 12px;
+            box-sizing: border-box;
+        }
 
         /* --- 반응형: 좁은 화면에서 요약 카드 열 수 조정 --- */
         @media (max-width: 900px) {
@@ -303,6 +309,10 @@
         .main-disclaimer { margin-top: 16px; margin-bottom: 18px; }
 
         @media (max-width: 700px) {
+          .pipeline-log, .run-log, .log-box, #runLog, .run-log-pre {
+            max-width: 100%;
+            max-height: 160px;
+          }
           .ai-disclaimer { font-size: 12px; margin: 14px 0; padding: 12px 13px; }
           /* 테이블 카드형 */
           .project-table, .project-table thead, .project-table tbody,
@@ -579,6 +589,7 @@
     </form>
     </div>
 
+    {% if is_admin %}
     <div class="run-panel" id="run-panel">
         <div class="run-panel-header">
             <strong>크롤링 · 파이프라인 실행</strong>
@@ -596,6 +607,7 @@
             <pre class="run-log-pre" id="run-log-pre" aria-label="실행 로그"></pre>
         </div>
     </div>
+    {% endif %}
 
     {# 요약 대시보드 — appy.index()._compute_ui_summary() 결과.
        필터가 적용된 후의 결과 집합 기준 카운트. urgent = 접수중 & 오늘~D+3. #}
@@ -829,7 +841,8 @@ function saveFavorite(projectId, title, source) {
 }
 
 (function () {
-  /* [7] 크롤링 패널 — POST /api/run, GET /api/run/status 폴링 */
+  /* [7] 크롤링 패널 — POST /api/run, GET /api/run/status 폴링 (관리용 화면만) */
+  if (!document.getElementById("run-panel")) { return; }
   var pollTimer = null;
 
   function setRunButtonsDisabled(disabled) {
@@ -842,6 +855,7 @@ function saveFavorite(projectId, title, source) {
     var badge = document.getElementById("run-status-badge");
     var meta = document.getElementById("run-meta");
     var pre = document.getElementById("run-log-pre");
+    if (!badge || !meta || !pre) { return; }
     try {
       var r = await fetch("/api/run/status", { cache: "no-store" });
       var d = await r.json();

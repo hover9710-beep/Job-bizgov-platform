@@ -313,6 +313,14 @@ def _ensure_column(conn: sqlite3.Connection, table: str, column: str, col_type: 
         cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
 
 
+def clamp_int(value, min_value=0, max_value=5):
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        n = 0
+    return max(min_value, min(max_value, n))
+
+
 def _init_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
@@ -408,6 +416,11 @@ def _init_db():
     _ensure_column(conn, "companies", "interest_keywords", "TEXT")
     _ensure_column(conn, "companies", "consent_accepted", "INTEGER DEFAULT 0")
     _ensure_column(conn, "companies", "consent_version", "TEXT")
+    _ensure_column(conn, "companies", "cert_count", "INTEGER DEFAULT 0")
+    _ensure_column(conn, "companies", "catalog_count", "INTEGER DEFAULT 0")
+    _ensure_column(conn, "companies", "social_enterprise", "INTEGER DEFAULT 0")
+    _ensure_column(conn, "companies", "female_ceo", "INTEGER DEFAULT 0")
+    _ensure_column(conn, "companies", "export_tower", "INTEGER DEFAULT 0")
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS consent_logs (
@@ -892,6 +905,7 @@ def index():
             source_labels=SOURCE_LABELS,
             top_clicked=top_clicked,
             usage=usage,
+            is_admin=False,
         )
     )
     resp.set_cookie(
@@ -902,6 +916,20 @@ def index():
         samesite="Lax",
     )
     return resp
+
+
+@app.route("/admin/pipeline")
+def admin_pipeline():
+    return render_template(
+        "new.html",
+        items=[],
+        tab="",
+        fq={},
+        count=0,
+        top_clicked=[],
+        usage=None,
+        is_admin=True,
+    )
 
 
 @app.route("/company", methods=["GET", "POST"])
@@ -969,16 +997,37 @@ def save_company():
     keywords = (request.form.get("interest_keywords") or "").strip() or None
     consent = 1 if request.form.get("consent") else 0
 
+    cert_count = clamp_int(request.form.get("cert_count"), 0, 5)
+    catalog_count = clamp_int(request.form.get("catalog_count"), 0, 5)
+    social_enterprise = 1 if request.form.get("social_enterprise") else 0
+    female_ceo = 1 if request.form.get("female_ceo") else 0
+    export_tower = 1 if request.form.get("export_tower") else 0
+
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute(
         """
         INSERT INTO companies
         (visitor_id, company_name, industry, region, export_flag,
-         interest_keywords, consent_accepted, consent_version)
-        VALUES (?,?,?,?,?,?,?,?)
+         interest_keywords, consent_accepted, consent_version,
+         cert_count, catalog_count, social_enterprise, female_ceo, export_tower)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
-        (vid, company_name, industry, region, export_flag, keywords, consent, "v1"),
+        (
+            vid,
+            company_name,
+            industry,
+            region,
+            export_flag,
+            keywords,
+            consent,
+            "v1",
+            cert_count,
+            catalog_count,
+            social_enterprise,
+            female_ceo,
+            export_tower,
+        ),
     )
     company_id = int(cur.lastrowid or 0)
     xf = (request.headers.get("X-Forwarded-For") or "").strip()
@@ -1998,6 +2047,7 @@ def new_announcements():
             source_labels=SOURCE_LABELS,
             top_clicked=top_clicked,
             usage=usage,
+            is_admin=False,
         )
     )
     resp.set_cookie(
