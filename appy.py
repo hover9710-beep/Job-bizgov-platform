@@ -1356,37 +1356,37 @@ def recommend(company_id: Optional[int] = None):
         user_ip = (request.remote_addr or "").strip()
 
     conn = sqlite3.connect(DB_PATH)
-    try:
-        allowed, used_count, reset_at = check_window_limit(
-            conn,
-            visitor_id,
-            user_ip,
-            action="recommend",
-            limit=5,
-            window_hours=12,
+    allowed, used_count, reset_at = check_window_limit(
+        conn,
+        visitor_id,
+        user_ip,
+        action="recommend",
+        limit=5,
+        window_hours=12,
+    )
+    if not allowed:
+        resp = make_response(
+            render_template(
+                "limit_exceeded.html",
+                used_count=used_count,
+                limit=5,
+                reset_at=reset_at,
+                window_hours=12,
+                kakao_url="",
+            )
         )
-        if not allowed:
-            resp = make_response(
-                render_template(
-                    "limit_exceeded.html",
-                    used_count=used_count,
-                    limit=5,
-                    reset_at=reset_at,
-                    window_hours=12,
-                )
-            )
-            resp.set_cookie(
-                "visitor_id",
-                visitor_id,
-                max_age=60 * 60 * 24 * 365,
-                httponly=True,
-                samesite="Lax",
-            )
-            return resp
-        remaining = max(0, 5 - used_count)
-        save_user_request_log(conn, visitor_id, user_ip, action="recommend")
-    finally:
+        resp.set_cookie(
+            "visitor_id",
+            visitor_id,
+            max_age=60 * 60 * 24 * 365,
+            httponly=True,
+            samesite="Lax",
+        )
         conn.close()
+        return resp
+    remaining = max(0, 5 - used_count)
+    save_user_request_log(conn, visitor_id, user_ip, action="recommend")
+    conn.close()
 
     if state == "no_projects":
         tmpl = render_template(
