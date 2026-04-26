@@ -571,6 +571,14 @@ def clean_admin_title(title: Any, fallback: str = "공고 상세보기") -> str:
     return s
 
 
+def resolve_click_log_title(project_title: Any, log_title: Any) -> str:
+    """biz_projects.title 우선, 없을 때만 click_log.title 정리(spSeq 등) 후 fallback."""
+    pt = str(project_title or "").strip()
+    if pt:
+        return pt
+    return clean_admin_title(log_title)
+
+
 def load_top_clicked_projects(limit: int = 5) -> list:
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -707,9 +715,11 @@ def admin_clicks():
     cur = conn.cursor()
     recent_raw = cur.execute(
         """
-        SELECT cl.id, cl.project_id, cl.action,
-            COALESCE(NULLIF(bp.source,''), cl.source) AS source,
-            COALESCE(NULLIF(bp.title,''), cl.title) AS title,
+        SELECT
+            cl.id, cl.project_id, cl.action,
+            COALESCE(NULLIF(bp.source, ''), cl.source) AS source,
+            bp.title AS project_title,
+            cl.title AS log_title,
             cl.created_at
         FROM click_log cl
         LEFT JOIN biz_projects bp
@@ -717,8 +727,16 @@ def admin_clicks():
         ORDER BY cl.id DESC LIMIT 100
         """
     ).fetchall()
-    recent = [
-        (r[0], r[1], r[2], r[3], clean_admin_title(r[4]), r[5]) for r in recent_raw
+    recent_clicks = [
+        {
+            "id": r[0],
+            "project_id": r[1],
+            "action": r[2] or "",
+            "source": r[3] or "",
+            "display_title": resolve_click_log_title(r[4], r[5]),
+            "created_at": r[6],
+        }
+        for r in recent_raw
     ]
     action_counts = cur.execute(
         "SELECT action, COUNT(*) AS cnt FROM click_log GROUP BY action ORDER BY cnt DESC"
@@ -728,21 +746,32 @@ def admin_clicks():
     ).fetchall()
     top_raw = cur.execute(
         """
-        SELECT cl.project_id,
-            COALESCE(NULLIF(bp.title,''), cl.title) AS title,
+        SELECT
+            cl.project_id,
+            (SELECT p.title FROM biz_projects p
+             WHERE CAST(p.id AS TEXT) = CAST(cl.project_id AS TEXT) LIMIT 1) AS project_title,
+            (SELECT c2.title FROM click_log c2
+             WHERE CAST(c2.project_id AS TEXT) = CAST(cl.project_id AS TEXT)
+             ORDER BY c2.id DESC LIMIT 1) AS log_title,
             COUNT(*) AS cnt
         FROM click_log cl
-        LEFT JOIN biz_projects bp
-            ON CAST(bp.id AS TEXT) = CAST(cl.project_id AS TEXT)
-        GROUP BY cl.project_id, COALESCE(NULLIF(bp.title,''), cl.title)
-        ORDER BY cnt DESC LIMIT 20
+        GROUP BY cl.project_id
+        ORDER BY cnt DESC
+        LIMIT 20
         """
     ).fetchall()
-    top_projects = [(r[0], clean_admin_title(r[1]), r[2]) for r in top_raw]
+    top_projects = [
+        {
+            "project_id": r[0],
+            "display_title": resolve_click_log_title(r[1], r[2]),
+            "cnt": r[3],
+        }
+        for r in top_raw
+    ]
     conn.close()
     return render_template(
-        "click_log.html",
-        recent_clicks=recent,
+        "admin_clicks.html",
+        recent_clicks=recent_clicks,
         action_counts=action_counts,
         source_counts=source_counts,
         top_projects=top_projects,
