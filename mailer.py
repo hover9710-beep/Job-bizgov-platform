@@ -13,6 +13,7 @@ import argparse
 import json
 import re
 import smtplib
+import sqlite3
 import sys
 from email.message import EmailMessage
 from email.header import Header
@@ -45,6 +46,33 @@ def _utf8_stdio() -> None:
                 stream.reconfigure(encoding="utf-8")
             except Exception:
                 pass
+
+
+def load_email_recipients_from_users(db_path: str = "db/biz.db") -> List[Dict[str, Any]]:
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        """
+        SELECT email, name, company_name, region, industry
+        FROM users
+        WHERE email_enabled = 1
+          AND consent_accepted = 1
+          AND email IS NOT NULL
+          AND email != ''
+        ORDER BY id DESC
+    """
+    ).fetchall()
+    conn.close()
+
+    recipients: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for r in rows:
+        email = str(r["email"] or "").strip()
+        if not email or "@" not in email or email in seen:
+            continue
+        seen.add(email)
+        recipients.append(dict(r))
+    return recipients
 
 
 def load_recommended() -> List[Dict[str, Any]]:
@@ -184,50 +212,41 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    mail_to = (os.environ.get("MAIL_TO") or "").strip()
     smtp_user = (os.environ.get("SMTP_USER") or "").strip()
     smtp_pass = (os.environ.get("SMTP_PASS") or "").strip()
     smtp_server = (os.environ.get("SMTP_SERVER") or "smtp.gmail.com").strip()
     smtp_port = int(os.environ.get("SMTP_PORT") or "587")
-    company_name = (os.environ.get("COMPANY_NAME") or "고객사").strip() or "고객사"
 
     stats = {
         "sent": 0,
         "failed": 0,
-        "skipped_zero": 0,
-        "skipped_no_mailto": 0,
+        "skipped_no_recipients": 0,
         "dry_run": 0,
     }
 
-    print("[mailer] BizGovPlanner 알림", flush=True)
-    print(f"[mailer] recommended: {RECOMMENDED_JSON}", flush=True)
+    print("[mailer] BizGovPlanner 알림 (users DB 수신자)", flush=True)
 
-    items = load_recommended()
-    matched_count = len(items)
+    recipients = load_email_recipients_from_users(str(ROOT / "db" / "biz.db"))
 
-    # ── 메일 본문: 파일 우선 (상대 경로는 프로젝트 루트 기준) ──────────────
-    _mail_body_path = ROOT / MAIL_BODY_FILE
-    if _mail_body_path.exists():
-        body = _mail_body_path.read_text(encoding="utf-8")
-        print(f"[mailer] 본문 파일 사용: {MAIL_BODY_FILE}")
-    else:
-        print("[mailer] 본문 파일 없음 → 기존 로직 사용")
-        body = None
+    subject = "정부지원사업 추천 서비스 안내"
+    body = """안녕하세요.
+정부지원사업 추천 서비스를 안내드립니다.
 
-    if body is None:
-        if matched_count == 0:
-            stats["skipped_zero"] = 1
-            print("[mailer] 매칭 0건 → 메일 생략", flush=True)
-            _print_summary(stats)
-            return 0
-        subject, body, _n = build_subject_and_body(company_name, items)
-    else:
-        today = datetime.now().strftime("%Y-%m-%d")
-        subject = f"[전북지원사업 메일자동알림서비스] 신규·마감임박·전체 접수중 공고 안내 ({today})"
+아래 링크에서 회사정보를 입력하면 맞춤 공고를 확인할 수 있습니다.
+
+서비스 바로가기:
+https://barista-raging-fraction.ngrok-free.dev
+
+[주의]
+AI 추천은 참고용이며, 최종 신청 여부와 공고 원문 확인은 사용자 책임입니다.
+"""
 
     if args.dry_run:
         stats["dry_run"] = 1
         print("", flush=True)
+        print("--- [미리보기] 수신자 ---", flush=True)
+        for user in recipients:
+            print(f"  - {user.get('email')} ({user.get('name') or ''})", flush=True)
         print("--- [미리보기] 제목 ---", flush=True)
         print(subject, flush=True)
         print("--- [미리보기] 본문 ---", flush=True)
@@ -236,10 +255,10 @@ def main() -> int:
         _print_summary(stats)
         return 0
 
-    if not mail_to:
-        stats["skipped_no_mailto"] = 1
+    if not recipients:
+        stats["skipped_no_recipients"] = 1
         print(
-            "[mailer] [경고] MAIL_TO 미설정 → 수신처 없음, 중단",
+            "[mailer] [경고] users DB에서 발송 대상 없음(email_enabled·consent) → 중단",
             file=sys.stderr,
             flush=True,
         )
@@ -262,34 +281,34 @@ def main() -> int:
     print("SMTP_SERVER:", smtp_server, flush=True)
     print("SMTP_PORT:", smtp_port, flush=True)
 
-    try:
-        send_gmail_plain(
-            mail_to=mail_to,
-            smtp_user=smtp_user,
-            smtp_pass=smtp_pass,
-            subject=subject,
-            body=body,
-            smtp_server=smtp_server,
-            smtp_port=smtp_port,
-        )
-        stats["sent"] = 1
-        print(f"[mailer] 발송 완료 → {mail_to}", flush=True)
-    except Exception as exc:
-        stats["failed"] = 1
-        print(f"[mailer] [실패] SMTP: {exc}", file=sys.stderr, flush=True)
-        _print_summary(stats)
-        return 1
+    for user in recipients:
+        email = str(user["email"] or "").strip()
+        name = user.get("name") or ""
+        try:
+            send_gmail_plain(
+                mail_to=email,
+                smtp_user=smtp_user,
+                smtp_pass=smtp_pass,
+                subject=subject,
+                body=body,
+                smtp_server=smtp_server,
+                smtp_port=smtp_port,
+            )
+            stats["sent"] += 1
+            print(f"[MAIL] sent to {email}", flush=True)
+        except Exception as e:
+            stats["failed"] += 1
+            print(f"[MAIL ERROR] {email}: {e}", file=sys.stderr, flush=True)
 
     _print_summary(stats)
-    return 0
+    return 0 if stats["failed"] == 0 else 1
 
 
 def _print_summary(stats: Dict[str, int]) -> None:
     print("[mailer] --- 요약 ---", flush=True)
     print(f"  성공(발송): {stats['sent']}", flush=True)
     print(f"  실패: {stats['failed']}", flush=True)
-    print(f"  생략(0건): {stats['skipped_zero']}", flush=True)
-    print(f"  생략(MAIL_TO 없음): {stats['skipped_no_mailto']}", flush=True)
+    print(f"  생략(수신자 없음): {stats['skipped_no_recipients']}", flush=True)
     print(f"  dry-run 미리보기: {stats['dry_run']}", flush=True)
 
 
