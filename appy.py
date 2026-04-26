@@ -241,6 +241,18 @@ def _init_db():
 
 ensure_db_file()
 _init_db()
+with sqlite3.connect(DB_PATH) as _conn:
+    _cur = _conn.cursor()
+
+    def _safe_add(table, column, coltype):
+        try:
+            _cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+        except Exception:
+            pass
+
+    _safe_add("biz_projects", "ai_summary", "TEXT")
+    _safe_add("biz_projects", "ai_summary_at", "TEXT")
+    _conn.commit()
 
 
 @app.context_processor
