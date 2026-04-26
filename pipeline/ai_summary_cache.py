@@ -39,6 +39,7 @@ def _norm_filter_arg(val: Optional[str]) -> Optional[str]:
 def load_by_filter(
     source: Optional[str] = None,
     status: Optional[str] = None,
+    end_date_from: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
@@ -51,6 +52,12 @@ def load_by_filter(
         if status:
             query += " AND status = ?"
             params.append(status)
+        if end_date_from:
+            query += (
+                " AND end_date IS NOT NULL AND TRIM(end_date) != '' "
+                "AND end_date >= ?"
+            )
+            params.append(end_date_from)
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
     finally:
@@ -96,9 +103,14 @@ def _collect_candidates(
     *,
     source: Optional[str],
     status: Optional[str],
+    end_date_from: Optional[str],
 ) -> List[Dict[str, Any]]:
-    if source or status:
-        rows = load_by_filter(source=source, status=status)
+    if source or status or end_date_from:
+        rows = load_by_filter(
+            source=source,
+            status=status,
+            end_date_from=end_date_from,
+        )
         return [to_mail_item(r, today=today) for r in rows]
     return _collect_mail_candidates(today)
 
@@ -110,13 +122,19 @@ def run_ai_summary_cache(
     overwrite: bool,
     source: Optional[str] = None,
     status: Optional[str] = None,
+    end_date_from: Optional[str] = None,
 ) -> int:
     if not dry_run and not os.environ.get("OPENAI_API_KEY", "").strip():
         print("[ai-summary] OPENAI_API_KEY 없음, skip", flush=True)
         return 0
 
     today = _today_str()
-    candidates = _collect_candidates(today, source=source, status=status)
+    candidates = _collect_candidates(
+        today,
+        source=source,
+        status=status,
+        end_date_from=end_date_from,
+    )
     need_list = [
         c
         for c in candidates
@@ -125,8 +143,10 @@ def run_ai_summary_cache(
     missing_n = len(need_list)
 
     extra = ""
-    if source or status:
-        extra = f" source={source!r} status={status!r}"
+    if source or status or end_date_from:
+        extra = (
+            f" source={source!r} status={status!r} end_date_from={end_date_from!r}"
+        )
     print(
         f"[ai-summary] target={len(candidates)} missing={missing_n} limit={limit}{extra}",
         flush=True,
@@ -217,18 +237,29 @@ def main() -> int:
     )
     parser.add_argument("--source", default=None)
     parser.add_argument("--status", default=None)
+    parser.add_argument(
+        "--end-date-from",
+        default=None,
+        metavar="DATE",
+        help="end_date >= DATE (YYYY-MM-DD). 'today' 는 오늘 날짜. --source 등과 조합.",
+    )
     args = parser.parse_args()
     lim = args.limit if args.limit is not None else DEFAULT_LIMIT
     if lim < 0:
         lim = 0
     src = _norm_filter_arg(args.source)
     st = _norm_filter_arg(args.status)
+    edf_raw = _norm_filter_arg(args.end_date_from)
+    edf: Optional[str] = None
+    if edf_raw is not None:
+        edf = _today_str() if edf_raw.lower() == "today" else edf_raw
     return run_ai_summary_cache(
         limit=lim,
         dry_run=args.dry_run,
         overwrite=args.overwrite,
         source=src,
         status=st,
+        end_date_from=edf,
     )
 
 
