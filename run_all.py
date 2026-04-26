@@ -31,6 +31,7 @@ Run the full pipeline in order (project root = cwd for each subprocess).
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -47,6 +48,32 @@ load_dotenv(ROOT / ".env")
 PY = sys.executable
 
 LOG_DIR = ROOT / "logs"
+
+BIZINFO_OUT_JSON = ROOT / "data" / "bizinfo" / "json" / "bizinfo_all.json"
+ALL_JB_OUT_JSON = ROOT / "data" / "all_jb" / "all_jb.json"
+
+
+def _log_json_list_count(tag: str, path: Path) -> None:
+    """파이프라인 산출물 JSON 배열 건수( dict 항목만 카운트 ). Render 로그에서 수집·병합 단계 확인용."""
+    if not path.is_file():
+        print(f"[run_all] {tag}: 파일 없음 → {path}", flush=True)
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"[run_all] {tag}: JSON 파싱 실패 {path}: {exc!s}", flush=True)
+        return
+    if isinstance(data, list):
+        n = len([x for x in data if isinstance(x, dict)])
+        print(
+            f"[run_all] {tag}: {n}건 (배열 길이 {len(data)}) ← {path}",
+            flush=True,
+        )
+    else:
+        print(
+            f"[run_all] {tag}: 루트가 배열 아님 (type={type(data).__name__}) ← {path}",
+            flush=True,
+        )
 
 
 def is_jbexport_proxy_alive(base_url="http://127.0.0.1:5001", timeout=2):
@@ -124,9 +151,12 @@ def _run(cmd: list[str]) -> int:
     Task Scheduler 환경에서 콘솔을 못 잡아도 run_all_*.log 에 모든 출력이 남는다.
     """
     print(f"$ {' '.join(cmd)}", flush=True)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.path.dirname(os.path.abspath(__file__))
     proc = subprocess.Popen(
         cmd,
         cwd=str(ROOT),
+        env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         encoding="utf-8",
@@ -184,7 +214,10 @@ def run_jbexport() -> int:
 def run_bizinfo() -> int:
     """bizinfo: connector_bizinfo 단일 실행."""
     _section("2) BIZINFO crawler")
-    return _run([PY, str(ROOT / "connectors" / "connector_bizinfo.py")])
+    rc = _run([PY, str(ROOT / "connectors" / "connector_bizinfo.py")])
+    _log_json_list_count("BIZINFO 수집 산출물", BIZINFO_OUT_JSON)
+    print(f"[run_all] BIZINFO crawler 종료 코드: {rc}", flush=True)
+    return rc
 
 
 def run_kstartup() -> int:
@@ -221,6 +254,9 @@ def _post_merge_steps(args: argparse.Namespace) -> int:
     for title, cmd in steps:
         _section(title)
         rc = _run(cmd)
+        print(f"[run_all] 단계 종료: {title!r} exit={rc}", flush=True)
+        if title.startswith("4c)"):
+            _log_json_list_count("merge_jb 산출물 (all_jb.json)", ALL_JB_OUT_JSON)
         if rc != 0:
             msg = f"[run_all] FAILED: {title} (exit {rc})"
             print(msg, flush=True)
