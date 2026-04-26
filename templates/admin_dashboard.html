@@ -1,157 +1,96 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>관리자 대시보드</title>
   <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f1f5f9; color: #0f172a; margin: 0; line-height: 1.5; }
-    .wrap { max-width: 1100px; margin: 0 auto; padding: 20px; }
-    h1 { font-size: 1.5rem; margin: 0 0 8px; }
-    .sub { color: #64748b; font-size: 0.9rem; margin-bottom: 20px; }
-    h2 { font-size: 1.1rem; margin: 24px 0 10px; color: #334155; }
-    .kpi { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin: 12px 0; }
-    .kpi div { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; text-align: center; }
-    .kpi .n { font-size: 1.4rem; font-weight: 800; color: #1d4ed8; }
-    .kpi .l { font-size: 0.75rem; color: #64748b; }
-    .links { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; padding: 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
-    .links a { display: inline-block; padding: 8px 14px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 0.9rem; }
-    .links a.sec { background: #fff; color: #1d4ed8; border: 1px solid #93c5fd; }
-    .table-wrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; margin: 8px 0; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    th, td { border-bottom: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; }
-    th { background: #f8fafc; font-weight: 700; }
-    tr:nth-child(even) { background: #fafafa; }
-    .num { text-align: right; font-variant-numeric: tabular-nums; }
-    .title-cell { max-width: 360px; word-break: break-word; }
-    @media (max-width: 700px) { .kpi { grid-template-columns: 1fr 1fr; } }
+    body { font-family:-apple-system,sans-serif; background:#f9fafb; padding:24px; color:#111827; }
+    h1 { font-size:24px; font-weight:800; margin-bottom:24px; }
+    h2 { font-size:18px; font-weight:700; margin:28px 0 10px; border-bottom:2px solid #e5e7eb; padding-bottom:6px; }
+    .stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px; }
+    .stat-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px; text-align:center; }
+    .stat-label { font-size:12px; color:#6b7280; }
+    .stat-value { font-size:26px; font-weight:900; color:#111827; margin-top:4px; }
+    .link-row { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:24px; }
+    .btn { padding:10px 16px; border-radius:10px; font-size:14px; font-weight:700; text-decoration:none; display:inline-block; }
+    .btn-blue { background:#2563eb; color:#fff; }
+    .btn-gray { background:#f3f4f6; color:#374151; border:1px solid #e5e7eb; }
+    table { width:100%; border-collapse:collapse; background:#fff; font-size:13px; margin-bottom:24px; }
+    th { background:#f9fafb; font-weight:700; padding:10px; text-align:left; border-bottom:1px solid #e5e7eb; }
+    td { padding:9px 10px; border-bottom:1px solid #f3f4f6; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700; }
+    .badge-detail { background:#e0f2fe; color:#0369a1; }
+    .badge-apply { background:#dcfce7; color:#15803d; }
+    @media (max-width:700px) { .stat-grid { grid-template-columns:repeat(2,1fr); } }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>관리자 대시보드</h1>
-    <p class="sub">DB 요약 · 바로가기 (일반 화면에는 링크가 노출되지 않습니다.)</p>
 
-    <div class="links">
-      <a href="{{ url_for('admin_pipeline', key=admin_key) }}">파이프라인 실행</a>
-      <a class="sec" href="{{ url_for('admin_clicks', key=admin_key) }}">클릭 로그</a>
-      <a class="sec" href="{{ url_for('index') }}">공고목록</a>
-      <a class="sec" href="{{ url_for('recommend', admin=1, key=admin_key) }}">관리자 추천 확인</a>
-      <a class="sec" href="{{ url_for('company') }}">회사정보</a>
-    </div>
+<h1>🔧 관리자 대시보드</h1>
 
-    <h2>요약</h2>
-    <div class="kpi">
-      <div><div class="l">전체 공고</div><div class="n">{{ total_projects }}</div></div>
-      <div><div class="l">companies</div><div class="n">{{ companies_count }}</div></div>
-      <div><div class="l">consent_logs</div><div class="n">{{ consent_count }}</div></div>
-      <div><div class="l">click_log</div><div class="n">{{ click_count }}</div></div>
-      <div><div class="l">user_request_log</div><div class="n">{{ user_request_count }}</div></div>
-    </div>
+<div class="link-row">
+  <a class="btn btn-blue" href="/admin/pipeline?key={{ admin_key }}">파이프라인 실행</a>
+  <a class="btn btn-blue" href="/admin/clicks?key={{ admin_key }}">클릭 로그</a>
+  <a class="btn btn-gray" href="/">공고목록</a>
+  <a class="btn btn-gray" href="/company">회사정보 입력</a>
+  <a class="btn btn-gray" href="/recommend?admin=1&key={{ admin_key }}">관리자 추천 확인</a>
+</div>
 
-    <h2>source별 공고 수</h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>source</th><th class="num">건수</th></tr></thead>
-        <tbody>
-        {% for r in source_rows %}
-          <tr><td>{{ r[0] }}</td><td class="num">{{ r[1] }}</td></tr>
-        {% else %}
-          <tr><td colspan="2">없음</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
+<h2>📊 DB 현황</h2>
+<div class="stat-grid">
+  <div class="stat-card"><div class="stat-label">전체 공고</div><div class="stat-value">{{ total }}</div></div>
+  <div class="stat-card"><div class="stat-label">회사정보</div><div class="stat-value">{{ co_count }}</div></div>
+  <div class="stat-card"><div class="stat-label">동의 로그</div><div class="stat-value">{{ consent_count }}</div></div>
+  <div class="stat-card"><div class="stat-label">클릭 로그</div><div class="stat-value">{{ click_count }}</div></div>
+  <div class="stat-card"><div class="stat-label">추천 제한 로그</div><div class="stat-value">{{ req_count }}</div></div>
+</div>
 
-    <h2>상태(status)별 공고 수</h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>status</th><th class="num">건수</th></tr></thead>
-        <tbody>
-        {% for r in status_rows %}
-          <tr><td>{{ r[0] }}</td><td class="num">{{ r[1] }}</td></tr>
-        {% else %}
-          <tr><td colspan="2">없음</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
+<h2>📂 소스별 공고</h2>
+<table>
+  <tr><th>source</th><th>건수</th></tr>
+  {% for r in by_source %}
+  <tr><td>{{ r.source }}</td><td>{{ r.cnt }}</td></tr>
+  {% endfor %}
+</table>
 
-    <h2>최근 회사정보 10건</h2>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>id</th>
-            <th>회사명</th>
-            <th>업종</th>
-            <th>지역</th>
-            <th>visitor_id (앞8자)</th>
-          </tr>
-        </thead>
-        <tbody>
-        {% for c in recent_companies %}
-          <tr>
-            <td>{{ c.get('id', '-') }}</td>
-            <td class="title-cell">{{ c.get('company_name', '') }}</td>
-            <td>{{ c.get('industry', '') or '-' }}</td>
-            <td>{{ c.get('region', '') or '-' }}</td>
-            <td style="font-size:0.75rem;">{{ (c.get('visitor_id') or '')[:8] }}{% if c.get('visitor_id') %}…{% endif %}</td>
-          </tr>
-        {% else %}
-          <tr><td colspan="5">없음</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
+<h2>📋 상태별 공고</h2>
+<table>
+  <tr><th>status</th><th>건수</th></tr>
+  {% for r in by_status %}
+  <tr><td>{{ r.status }}</td><td>{{ r.cnt }}</td></tr>
+  {% endfor %}
+</table>
 
-    <h2>최근 클릭 로그 20건</h2>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>id</th>
-            <th>project</th>
-            <th>action</th>
-            <th>source</th>
-            <th class="title-cell">title</th>
-            <th>created</th>
-          </tr>
-        </thead>
-        <tbody>
-        {% for row in recent_clicks_dash %}
-          <tr>
-            <td>{{ row.id }}</td>
-            <td>{{ row.project_id or '-' }}</td>
-            <td>{{ row.action }}</td>
-            <td>{{ row.source or '-' }}</td>
-            <td class="title-cell">{{ row.display_title }}</td>
-            <td style="font-size:0.8rem; white-space:nowrap;">{{ row.created_at or '-' }}</td>
-          </tr>
-        {% else %}
-          <tr><td colspan="6">없음</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
+<h2>🏢 최근 회사정보 10건</h2>
+<table>
+  <tr><th>id</th><th>회사명</th><th>업종</th><th>지역</th><th>등록일</th></tr>
+  {% for r in recent_companies %}
+  <tr><td>{{ r.id }}</td><td>{{ r.company_name }}</td><td>{{ r.industry }}</td><td>{{ r.region }}</td><td>{{ r.created_at }}</td></tr>
+  {% endfor %}
+</table>
 
-    <h2>인기 공고 TOP 20 (click_log)</h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>project_id</th><th>title</th><th class="num">클릭</th></tr></thead>
-        <tbody>
-        {% for row in top_projects %}
-          <tr>
-            <td>{{ row.project_id or '-' }}</td>
-            <td class="title-cell">{{ row.display_title }}</td>
-            <td class="num">{{ row.cnt }}</td>
-          </tr>
-        {% else %}
-          <tr><td colspan="3">없음</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+<h2>🔥 인기 공고 TOP 20</h2>
+<table>
+  <tr><th>project_id</th><th>제목</th><th>클릭</th></tr>
+  {% for r in top_projects %}
+  <tr><td>{{ r.project_id }}</td><td>{{ r.title }}</td><td>{{ r.cnt }}</td></tr>
+  {% endfor %}
+</table>
+
+<h2>📌 최근 클릭 20건</h2>
+<table>
+  <tr><th>project_id</th><th>action</th><th>source</th><th>제목</th><th>시간</th></tr>
+  {% for r in recent_clicks %}
+  <tr>
+    <td>{{ r.project_id }}</td>
+    <td><span class="badge badge-{{ r.action }}">{{ r.action }}</span></td>
+    <td>{{ r.source }}</td>
+    <td>{{ r.title }}</td>
+    <td>{{ r.created_at }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
 </body>
 </html>

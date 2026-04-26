@@ -19,7 +19,6 @@ from typing import Any, List, Optional, Tuple
 
 from flask import (
     Flask,
-    abort,
     flash,
     g,
     jsonify,
@@ -709,121 +708,69 @@ def api_favorite():
     return resp
 
 
-def _require_admin_key() -> None:
-    if request.args.get("key", "") != ADMIN_KEY:
-        abort(403)
+def check_admin(req: Any) -> bool:
+    return req.args.get("key") == ADMIN_KEY
 
 
 @app.route("/admin")
 def admin_dashboard():
-    """관리자 전용 대시보드 (?key=ADMIN_KEY)."""
-    _require_admin_key()
-    _init_db()
-    key = request.args.get("key", "")
+    if not check_admin(request):
+        return "403 Forbidden", 403
+
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
 
-    total_projects = int(
-        cur.execute("SELECT COUNT(*) FROM biz_projects").fetchone()[0] or 0
-    )
-    source_rows = cur.execute(
-        """
-        SELECT COALESCE(NULLIF(TRIM(source), ''), '(빈값)') AS src, COUNT(*) AS cnt
-        FROM biz_projects
-        GROUP BY COALESCE(NULLIF(TRIM(source), ''), '(빈값)')
-        ORDER BY cnt DESC
-        """
+    total = conn.execute("SELECT COUNT(*) FROM biz_projects").fetchone()[0]
+    by_source = conn.execute(
+        "SELECT source, COUNT(*) as cnt FROM biz_projects GROUP BY source"
     ).fetchall()
-    status_rows = cur.execute(
-        """
-        SELECT COALESCE(NULLIF(TRIM(status), ''), '(빈값)') AS st, COUNT(*) AS cnt
-        FROM biz_projects
-        GROUP BY COALESCE(NULLIF(TRIM(status), ''), '(빈값)')
-        ORDER BY cnt DESC
-        """
+    by_status = conn.execute(
+        "SELECT status, COUNT(*) as cnt FROM biz_projects GROUP BY status"
     ).fetchall()
-    companies_count = int(
-        cur.execute("SELECT COUNT(*) FROM companies").fetchone()[0] or 0
-    )
-    consent_count = int(
-        cur.execute("SELECT COUNT(*) FROM consent_logs").fetchone()[0] or 0
-    )
-    click_count = int(cur.execute("SELECT COUNT(*) FROM click_log").fetchone()[0] or 0)
-    user_request_count = int(
-        cur.execute("SELECT COUNT(*) FROM user_request_log").fetchone()[0] or 0
-    )
+    co_count = conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0]
+    consent_count = conn.execute("SELECT COUNT(*) FROM consent_logs").fetchone()[0]
+    click_count = conn.execute("SELECT COUNT(*) FROM click_log").fetchone()[0]
+    req_count = conn.execute("SELECT COUNT(*) FROM user_request_log").fetchone()[0]
 
-    recent_companies = [
-        dict(r)
-        for r in cur.execute(
-            "SELECT * FROM companies ORDER BY id DESC LIMIT 10"
-        ).fetchall()
-    ]
-
-    recent_clicks_dash = [
-        {
-            "id": r[0],
-            "project_id": r[1],
-            "action": r[2] or "",
-            "source": r[3] or "",
-            "display_title": resolve_click_log_title(r[4], r[5]),
-            "created_at": r[6],
-        }
-        for r in cur.execute(
-            """
-            SELECT
-                cl.id, cl.project_id, cl.action,
-                COALESCE(NULLIF(bp.source, ''), cl.source) AS source,
-                bp.title AS project_title,
-                cl.title AS log_title,
-                cl.created_at
-            FROM click_log cl
-            LEFT JOIN biz_projects bp
-                ON CAST(bp.id AS TEXT) = CAST(cl.project_id AS TEXT)
-            ORDER BY cl.id DESC LIMIT 20
-            """
-        ).fetchall()
-    ]
-
-    top_raw = cur.execute(
+    recent_companies = conn.execute(
+        "SELECT id, company_name, industry, region, created_at "
+        "FROM companies ORDER BY id DESC LIMIT 10"
+    ).fetchall()
+    recent_clicks = conn.execute(
         """
-        SELECT
-            cl.project_id,
-            (SELECT p.title FROM biz_projects p
-             WHERE CAST(p.id AS TEXT) = CAST(cl.project_id AS TEXT) LIMIT 1) AS project_title,
-            (SELECT c2.title FROM click_log c2
-             WHERE CAST(c2.project_id AS TEXT) = CAST(cl.project_id AS TEXT)
-             ORDER BY c2.id DESC LIMIT 1) AS log_title,
-            COUNT(*) AS cnt
+        SELECT cl.project_id, cl.action, cl.source,
+          COALESCE(NULLIF(bp.title,''), cl.title) AS title, cl.created_at
         FROM click_log cl
-        GROUP BY cl.project_id
-        ORDER BY cnt DESC
-        LIMIT 20
+        LEFT JOIN biz_projects bp ON CAST(bp.id AS TEXT) = CAST(cl.project_id AS TEXT)
+        ORDER BY cl.id DESC LIMIT 20
         """
     ).fetchall()
-    top_projects = [
-        {
-            "project_id": r[0],
-            "display_title": resolve_click_log_title(r[1], r[2]),
-            "cnt": r[3],
-        }
-        for r in top_raw
-    ]
+    top_projects = conn.execute(
+        """
+        SELECT cl.project_id,
+          COALESCE(NULLIF(bp.title,''), cl.title) AS title,
+          COUNT(*) AS cnt
+        FROM click_log cl
+        LEFT JOIN biz_projects bp ON CAST(bp.id AS TEXT) = CAST(cl.project_id AS TEXT)
+        GROUP BY cl.project_id, COALESCE(NULLIF(bp.title,''), cl.title)
+        ORDER BY cnt DESC LIMIT 20
+        """
+    ).fetchall()
+
     conn.close()
 
     return render_template(
         "admin_dashboard.html",
-        admin_key=key,
-        total_projects=total_projects,
-        source_rows=source_rows,
-        status_rows=status_rows,
-        companies_count=companies_count,
+        admin_key=ADMIN_KEY,
+        total=total,
+        by_source=by_source,
+        by_status=by_status,
+        co_count=co_count,
         consent_count=consent_count,
         click_count=click_count,
-        user_request_count=user_request_count,
+        req_count=req_count,
         recent_companies=recent_companies,
-        recent_clicks_dash=recent_clicks_dash,
+        recent_clicks=recent_clicks,
         top_projects=top_projects,
     )
 
@@ -831,7 +778,8 @@ def admin_dashboard():
 @app.route("/admin/clicks")
 def admin_clicks():
     """클릭 로그 확인용(비로그인). DB 저장만 하던 기록을 표로 확인."""
-    _require_admin_key()
+    if not check_admin(request):
+        return "403 Forbidden", 403
     _init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -1071,7 +1019,8 @@ def index():
 
 @app.route("/admin/pipeline")
 def admin_pipeline():
-    _require_admin_key()
+    if not check_admin(request):
+        return "403 Forbidden", 403
     return render_template(
         "new.html",
         items=[],
@@ -1789,12 +1738,8 @@ def recommend(company_id: Optional[int] = None):
         user_ip = (request.remote_addr or "").strip()
 
     conn = sqlite3.connect(DB_PATH)
-    is_admin_bypass = (
-        request.args.get("admin") == "1"
-        and request.args.get("key", "") == ADMIN_KEY
-    )
     try:
-        if is_admin_bypass:
+        if request.args.get("admin") == "1" and request.args.get("key") == ADMIN_KEY:
             u = get_usage_status(
                 conn,
                 visitor_id,
