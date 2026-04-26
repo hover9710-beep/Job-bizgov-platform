@@ -450,7 +450,7 @@
             <a href="{{ url_for('project_detail', pid=item.id) }}">{{ item.display_title or item.title }}</a>
         </div>
         <div class="reason-simple">
-            {{ item.reason or (item.reasons | join(' · ')) }}
+            {{ item.reason }}
         </div>
 
         <div class="reason-toggle" onclick="toggleReason(this)">
