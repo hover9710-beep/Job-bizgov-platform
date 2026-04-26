@@ -899,12 +899,21 @@ function saveFavorite(projectId, title, source) {
     }
   };
 
+  function adminKeyFromPage() {
+    try {
+      var u = new URL(window.location.href);
+      return u.searchParams.get("key") || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
   window.startRun = async function startRun(mode) {
     try {
       var r = await fetch("/api/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: mode }),
+        body: JSON.stringify({ mode: mode, key: adminKeyFromPage() }),
       });
       if (r.status === 409) {
         alert("이미 실행 중입니다.");

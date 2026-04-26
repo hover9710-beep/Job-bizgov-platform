@@ -11,6 +11,7 @@ Attachment metadata is stored here; file download/text extraction is handled by 
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -40,7 +41,18 @@ from project_quality import (
 )
 from url_utils import canonical_url
 
-DB_PATH = ROOT_DIR / "db" / "biz.db"
+
+def _resolve_db_path() -> Path:
+    """Flask/Render 의 DB_PATH 와 동일 DB 파일 사용 (상대 경로는 프로젝트 루트 기준)."""
+    raw = (os.getenv("DB_PATH") or "db/biz.db").strip()
+    p = Path(raw)
+    if not p.is_absolute():
+        p = (ROOT_DIR / p).resolve()
+    else:
+        p = p.resolve()
+    return p
+
+
 ALL_JSON_PATH = ROOT_DIR / "data" / "all_jb" / "all_jb.json"
 
 BIZ_CREATE_SQL = """
@@ -155,17 +167,21 @@ def _ensure_column(
 
 
 def _load_items() -> List[Dict[str, Any]]:
+    ap = ALL_JSON_PATH.resolve()
     if not ALL_JSON_PATH.exists():
-        print(f"[update_db] not found: {ALL_JSON_PATH}")
+        print(f"[update_db] merge 입력 JSON 없음: {ap}", flush=True)
         return []
     try:
         data = json.loads(ALL_JSON_PATH.read_text(encoding="utf-8"))
     except Exception as exc:
-        print(f"[update_db] load error: {exc}")
+        print(f"[update_db] JSON 파싱 실패 {ap}: {exc}", flush=True)
         return []
     if not isinstance(data, list):
+        print(f"[update_db] JSON 루트가 배열이 아님: {ap}", flush=True)
         return []
-    return [x for x in data if isinstance(x, dict)]
+    items = [x for x in data if isinstance(x, dict)]
+    print(f"[update_db] merge 결과 로드: {len(items)}건 ← {ap}", flush=True)
+    return items
 
 
 def _is_empty_attachments_json(val: Any) -> bool:
@@ -563,10 +579,21 @@ def _print_field_completeness(conn: sqlite3.Connection) -> None:
 
 
 def update_db() -> None:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    db_path = _resolve_db_path()
+    env_show = (os.getenv("DB_PATH") or "").strip() or "(기본 db/biz.db)"
+    print(
+        f"[update_db] sqlite 경로: {db_path} (환경변수 DB_PATH={env_show!r})",
+        flush=True,
+    )
+    db_path.parent.mkdir(parents=True, exist_ok=True)
     items = _load_items()
+    if not items:
+        print(
+            "[update_db] 경고: 입력 0건 — merge_jb 단계·all_jb.json 경로를 확인하세요.",
+            flush=True,
+        )
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(str(db_path))
     try:
         _init_db(conn)
         # 기존 행의 URL을 canonical 로 정규화 + 파라미터 순서만 다른 중복 제거.
@@ -576,23 +603,43 @@ def update_db() -> None:
         if cu["deleted"] or cu["updated"]:
             print(
                 f"[update_db] canonical URL backfill: "
-                f"updated={cu['updated']} deleted={cu['deleted']} groups={cu['groups']}"
+                f"updated={cu['updated']} deleted={cu['deleted']} groups={cu['groups']}",
+                flush=True,
             )
+        n_before = int(
+            conn.execute("SELECT COUNT(*) FROM biz_projects").fetchone()[0] or 0
+        )
+        upsert_ok = 0
+        upsert_err = 0
         for item in items:
-            _upsert_one(conn, item)
+            try:
+                _upsert_one(conn, item)
+                upsert_ok += 1
+            except Exception as exc:
+                upsert_err += 1
+                t = str((item or {}).get("title") or "")[:80]
+                print(f"[update_db] upsert 실패 (title={t!r}): {exc}", flush=True)
         _backfill_infer_status(conn)
         _backfill_infer_source(conn)
 
         m = mirror_biz_projects_to_projects(conn)
         if m.get("skipped"):
-            print("[update_db] mirror_projects: biz_projects 없음, 건너뜀")
+            print("[update_db] mirror_projects: biz_projects 없음, 건너뜀", flush=True)
         else:
             print(
                 f"[update_db] mirror projects <- biz_projects: "
-                f"삽입 {m['inserted']}건 (projects 기존 {m['before']}건 삭제 후)"
+                f"삽입 {m['inserted']}건 (projects 기존 {m['before']}건 삭제 후)",
+                flush=True,
             )
         conn.commit()
-        print(f"[update_db] upsert done: {len(items)}건 -> {DB_PATH}")
+        n_after = int(
+            conn.execute("SELECT COUNT(*) FROM biz_projects").fetchone()[0] or 0
+        )
+        print(
+            f"[update_db] 배치 요약: 입력 {len(items)}건, upsert 시도 성공 {upsert_ok}건, "
+            f"실패 {upsert_err}건, biz_projects 행 수 {n_before} → {n_after} → 파일 {db_path}",
+            flush=True,
+        )
         _print_field_completeness(conn)
     finally:
         conn.close()

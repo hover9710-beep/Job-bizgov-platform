@@ -78,8 +78,24 @@ def fetch_total_count(
             params={"pageNo": 1, "rows": LIST_PAGE_ROWS, "cpage": 1},
             timeout=max(TIMEOUT, 25),
         )
+        print(
+            f"[bizinfo] fetch_total_count GET status={r.status_code} url={getattr(r, 'url', LIST_API)}",
+            flush=True,
+        )
         r.raise_for_status()
-    except requests.RequestException:
+    except requests.HTTPError as exc:
+        resp = exc.response
+        sc = resp.status_code if resp is not None else "?"
+        body = (resp.text[:500] if resp is not None and resp.text else "") or ""
+        print(
+            f"[bizinfo] fetch_total_count HTTPError status={sc} detail={exc!s}",
+            flush=True,
+        )
+        if body:
+            print(f"[bizinfo] 응답 본문 앞부분: {body!r}", flush=True)
+        return None, LIST_PAGE_ROWS
+    except requests.RequestException as exc:
+        print(f"[bizinfo] fetch_total_count 요청 실패: {exc!s}", flush=True)
         return None, LIST_PAGE_ROWS
 
     html = r.text
@@ -127,6 +143,13 @@ def fetch_list_page(session: requests.Session, page: int) -> str:
         params={"pageNo": 1, "rows": LIST_PAGE_ROWS, "cpage": int(page)},
         timeout=max(TIMEOUT, 25),
     )
+    print(
+        f"[bizinfo] fetch_list_page page={page} status={r.status_code}",
+        flush=True,
+    )
+    if r.status_code != 200:
+        snippet = (r.text or "")[:500]
+        print(f"[bizinfo] 비정상 status, 본문 샘플: {snippet!r}", flush=True)
     r.raise_for_status()
     return r.text
 
@@ -165,8 +188,17 @@ def fetch_detail(url: str, session: requests.Session) -> Dict[str, Any]:
     detail_url = _detail_url_from_seq(seq)
     try:
         r = session.get(detail_url, timeout=max(TIMEOUT, 25))
+        if r.status_code != 200:
+            print(
+                f"[bizinfo] 상세 비정상 status={r.status_code} url={detail_url[:120]}",
+                flush=True,
+            )
         r.raise_for_status()
-    except requests.RequestException:
+    except requests.RequestException as exc:
+        print(
+            f"[bizinfo] 상세 요청 실패 url={detail_url[:120]} err={exc!s}",
+            flush=True,
+        )
         return out
     html = r.text
     soup = BeautifulSoup(html, "html.parser")
@@ -533,13 +565,29 @@ def run(
         try:
             html = fetch_list_page(session, page)
         except requests.RequestException as exc:
-            print(f"[warning] page {page} 목록 요청 실패: {exc}", flush=True)
+            print(
+                f"[bizinfo] page {page} 목록 요청 실패: {exc!s}",
+                flush=True,
+            )
+            if getattr(exc, "response", None) is not None:
+                resp = exc.response
+                print(
+                    f"[bizinfo]   → status={resp.status_code if resp else '?'}",
+                    flush=True,
+                )
             failed_pages += 1
             page += 1
             continue
 
         raw_rows = parse_list_items(html)
         if not raw_rows:
+            if len(html) > 300:
+                print(
+                    f"[bizinfo] page {page}: 파싱 0건 (HTML 길이={len(html)}), "
+                    "목록 마크업/파서 불일치 가능",
+                    flush=True,
+                )
+                print(f"[bizinfo] HTML 샘플: {html[:450]!r}...", flush=True)
             break
 
         key = str(raw_rows[0].get("title", "")) + "|" + str(raw_rows[0].get("seq", ""))
@@ -632,7 +680,14 @@ def run_enrich_detail_from_file(
         print(f"[enrich] 파일 없음: {in_path}", flush=True)
         return {"error": "missing", "updated": 0}
 
-    raw = json.loads(in_path.read_text(encoding="utf-8"))
+    try:
+        raw = json.loads(in_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        print(f"[bizinfo] enrich JSON 파싱 실패 {in_path}: {exc!s}", flush=True)
+        return {"error": "json_parse", "updated": 0}
+    except Exception as exc:
+        print(f"[bizinfo] enrich 입력 읽기 실패 {in_path}: {exc!s}", flush=True)
+        return {"error": "read", "updated": 0}
     if not isinstance(raw, list):
         print("[enrich] JSON은 배열이어야 합니다.", flush=True)
         return {"error": "bad_json", "updated": 0}

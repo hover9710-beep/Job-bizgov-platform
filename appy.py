@@ -419,18 +419,51 @@ def _build_command(mode: str) -> List[str]:
     raise ValueError(f"unknown mode: {mode}")
 
 
+def _pipeline_env_for_subprocess(cwd: str) -> dict:
+    """자식 프로세스에 DB_PATH 등 전달 (Flask와 동일 DB 사용)."""
+    env = os.environ.copy()
+    raw = os.getenv("DB_PATH", "db/biz.db")
+    p = Path(raw)
+    if not p.is_absolute():
+        p = Path(cwd) / p
+    env["DB_PATH"] = str(p.resolve())
+    return env
+
+
+def _effective_pipeline_mode(requested: str) -> str:
+    """Render 등에서 JBEXPORT 프록시(:5001)가 없으면 all → bizinfo 로 대체."""
+    if requested != "all":
+        return requested
+    if os.getenv("PIPELINE_ALL_AS_BIZINFO", "").strip() in ("1", "true", "yes"):
+        return "bizinfo"
+    if (os.getenv("RENDER") or "").strip():
+        return "bizinfo"
+    return "all"
+
+
 def _run_pipeline_background(mode: str) -> None:
     """서브프로세스를 백그라운드 스레드에서 실행하고 RUN_LOG 에 stdout 을 적재."""
 
     def worker() -> None:
-        cmd = _build_command(mode)
         root = str(_project_root())
+        eff = _effective_pipeline_mode(mode)
+        cmd = _build_command(eff)
+        env = _pipeline_env_for_subprocess(root)
+        _log_line(
+            f"[pipeline] 크롤링/파이프라인 시작 요청={mode} 실행={eff} DB_PATH={env.get('DB_PATH')}"
+        )
         _log_line(f"cwd={root}")
         _log_line("$ " + " ".join(cmd))
+        if mode == "all" and eff != "all":
+            _log_line(
+                "[pipeline] 안내: 이 환경에서는 JBEXPORT 프록시가 없어 "
+                "기업마당(bizinfo) 수집·병합·DB 반영만 실행합니다."
+            )
         try:
             proc = subprocess.Popen(
                 cmd,
                 cwd=root,
+                env=env,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -439,7 +472,7 @@ def _run_pipeline_background(mode: str) -> None:
                 bufsize=1,
             )
         except Exception as e:
-            _log_line(f"Popen 실패: {e}")
+            _log_line(f"[pipeline] Popen 실패: {e}")
             with RUN_LOCK:
                 RUN_STATE["running"] = False
                 RUN_STATE["returncode"] = -1
@@ -455,7 +488,7 @@ def _run_pipeline_background(mode: str) -> None:
                 _log_line(line.rstrip("\r\n"))
             rc = proc.wait()
         except Exception as e:
-            _log_line(f"실행 중 오류: {e}")
+            _log_line(f"[pipeline] 실행 중 오류: {e}")
             try:
                 proc.kill()
             except Exception:
@@ -466,7 +499,18 @@ def _run_pipeline_background(mode: str) -> None:
             RUN_STATE["running"] = False
             RUN_STATE["returncode"] = rc
             RUN_STATE["finished_at"] = datetime.now().isoformat(timespec="seconds")
-        _log_line(f"종료 코드: {rc}")
+        _log_line(f"[pipeline] 서브프로세스 종료 코드: {rc}")
+        try:
+            conn = sqlite3.connect(env["DB_PATH"])
+            try:
+                row = conn.execute("SELECT COUNT(*) FROM biz_projects").fetchone()
+                n = int(row[0]) if row else 0
+                _log_line(f"[pipeline] DB insert/반영 후 biz_projects 총 {n}건")
+            finally:
+                conn.close()
+        except Exception as e:
+            _log_line(f"[pipeline] DB 건수 확인 실패: {e}")
+        _log_line("[pipeline] 크롤링/파이프라인 종료")
 
     threading.Thread(target=worker, daemon=True).start()
 
@@ -805,7 +849,12 @@ def api_favorite():
 
 
 def check_admin(req: Any) -> bool:
-    return req.args.get("key") == ADMIN_KEY
+    if (req.args.get("key") or "").strip() == ADMIN_KEY:
+        return True
+    body = req.get_json(silent=True)
+    if isinstance(body, dict) and str(body.get("key") or "").strip() == ADMIN_KEY:
+        return True
+    return False
 
 
 @app.route("/admin")
@@ -1117,16 +1166,7 @@ def index():
 def admin_pipeline():
     if not check_admin(request):
         return "403 Forbidden", 403
-    return render_template(
-        "new.html",
-        items=[],
-        tab="",
-        fq={},
-        count=0,
-        top_clicked=[],
-        usage=None,
-        is_admin=True,
-    )
+    return _render_new_announcements_page(is_admin=True)
 
 
 @app.route("/company", methods=["GET", "POST"])
@@ -2155,12 +2195,8 @@ def run_pipeline_route():
     )
 
 
-@app.route("/new", strict_slashes=False)
-def new_announcements():
-    """DB 기반 + start_date 최근 7일 이내만 표시하는 신규 공고 화면.
-
-    `/` 와 달리 status 쿼리 기본값 없음(미지정 시 전체 상태). 이후 7일 필터 적용.
-    """
+def _render_new_announcements_page(is_admin: bool):
+    """DB 기반 신규 공고 화면. 관리자(/admin/pipeline)는 최근 7일 필터 없이 전체 표시."""
     status = request.args.get("status")
     if status is not None:
         status = status.strip()
@@ -2194,7 +2230,12 @@ def new_announcements():
         like_q = f"%{query}%"
         params.extend([like_q, like_q, like_q])
 
-    rows = get_db().execute(sql, params).fetchall()
+    try:
+        rows = get_db().execute(sql, params).fetchall()
+    except Exception as e:
+        print(f"[new/admin pipeline] DB 조회 실패: {e}", flush=True)
+        rows = []
+
     rows_ui = prepare_db_rows_for_ui(rows)
     rows_ui = filter_items(
         rows_ui,
@@ -2209,17 +2250,19 @@ def new_announcements():
         category=category or None,
     )
 
-    today = date.today()
-    cutoff = today - timedelta(days=7)
-    rows_ui = [
-        it
-        for it in rows_ui
-        if (sd := _safe_parse_date(it.get("start_date"))) is not None and sd >= cutoff
-    ]
+    if not is_admin:
+        today = date.today()
+        cutoff = today - timedelta(days=7)
+        rows_ui = [
+            it
+            for it in rows_ui
+            if (sd := _safe_parse_date(it.get("start_date"))) is not None and sd >= cutoff
+        ]
 
     summary = _compute_ui_summary(rows_ui)
+    label = "GET /admin/pipeline (목록 10)" if is_admin else "GET /new (목록 10)"
     if audit_ui_enabled():
-        log_source_mismatch_and_parser(rows_ui[:10], label="GET /new (목록 10)")
+        log_source_mismatch_and_parser(rows_ui[:10], label=label)
         db = get_db()
         for r in rows_ui[:5]:
             rid = r.get("id")
@@ -2235,11 +2278,15 @@ def new_announcements():
     user_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if user_ip and "," in user_ip:
         user_ip = user_ip.split(",")[0].strip()
-    conn = sqlite3.connect(DB_PATH)
     try:
-        usage = get_usage_status(conn, visitor_id, user_ip)
-    finally:
-        conn.close()
+        conn = sqlite3.connect(DB_PATH)
+        try:
+            usage = get_usage_status(conn, visitor_id, user_ip)
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"[new/admin pipeline] usage 조회 실패: {e}", flush=True)
+        usage = None
     resp = make_response(
         render_template(
             "new.html",
@@ -2262,7 +2309,7 @@ def new_announcements():
             source_labels=SOURCE_LABELS,
             top_clicked=top_clicked,
             usage=usage,
-            is_admin=False,
+            is_admin=is_admin,
         )
     )
     resp.set_cookie(
@@ -2275,9 +2322,20 @@ def new_announcements():
     return resp
 
 
+@app.route("/new", strict_slashes=False)
+def new_announcements():
+    """DB 기반 + start_date 최근 7일 이내만 표시하는 신규 공고 화면.
+
+    `/` 와 달리 status 쿼리 기본값 없음(미지정 시 전체 상태). 이후 7일 필터 적용.
+    """
+    return _render_new_announcements_page(is_admin=False)
+
+
 @app.route("/api/run", methods=["POST"])
 def api_run_start():
     """크롤링/파이프라인 실행 시작. 이미 실행 중이면 409."""
+    if not check_admin(request):
+        return jsonify({"ok": False, "error": "admin key required"}), 403
     payload = request.get_json(silent=True) or {}
     mode = str(payload.get("mode") or "").strip()
     if mode not in ("all", "jbexport", "bizinfo"):
