@@ -935,12 +935,12 @@ def admin_pipeline():
 @app.route("/company", methods=["GET", "POST"])
 def company():
     if request.method == "GET":
-        return render_template("company.html")
+        return render_template("company_form.html", is_admin=False)
 
     company_name = (request.form.get("company_name") or "").strip()
     if not company_name:
         flash("회사명은 필수입니다.", "danger")
-        return render_template("company.html"), 400
+        return render_template("company_form.html", is_admin=False), 400
 
     industry = (request.form.get("industry") or "").strip()
     region = (request.form.get("region") or "").strip()
@@ -978,7 +978,7 @@ def company():
 
 @app.route("/company/form", methods=["GET"])
 def company_form_page():
-    return render_template("company_form.html", is_admin=False)
+    return redirect("/company")
 
 
 @app.route("/company/save", methods=["POST"])
@@ -987,7 +987,7 @@ def save_company():
     vid = get_visitor_id()
     company_name = (request.form.get("company_name") or "").strip()
     if not company_name:
-        return redirect("/company/form")
+        return redirect("/company")
     industry = request.form.get("industry") or ""
     industry_other = (request.form.get("industry_other") or "").strip()
     if industry == "기타" and industry_other:
