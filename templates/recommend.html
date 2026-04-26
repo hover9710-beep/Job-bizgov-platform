@@ -264,6 +264,35 @@
         .rec-title a:hover { color: #2563eb; text-decoration: underline; }
         .reason-list { margin: 10px 0 14px; padding-left: 18px; color: #4b5563; line-height: 1.6; }
         .reason-list li { margin-bottom: 4px; }
+
+        .reason-simple {
+            margin-top: 6px;
+            font-size: 14px;
+            color: #374151;
+        }
+
+        .reason-toggle {
+            margin-top: 6px;
+            font-size: 13px;
+            color: #2563eb;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .reason-detail {
+            margin-top: 8px;
+            padding: 10px 12px;
+            background: #f9fafb;
+            border-radius: 10px;
+            font-size: 13px;
+            color: #4b5563;
+            line-height: 1.6;
+        }
+
+        .reason-detail ul {
+            padding-left: 16px;
+            margin: 0;
+        }
         .rec-actions {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -420,11 +449,50 @@
         <div class="rec-title">
             <a href="{{ url_for('project_detail', pid=item.id) }}">{{ item.display_title or item.title }}</a>
         </div>
-        <ul class="reason-list">
-            {% for reason in item.reasons or [] %}
-            <li>{{ reason }}</li>
-            {% endfor %}
-        </ul>
+        <div class="reason-simple">
+            {{ item.reason or (item.reasons | join(' · ')) }}
+        </div>
+
+        <div class="reason-toggle" onclick="toggleReason(this)">
+            왜 추천됐나요? ▼
+        </div>
+
+        <div class="reason-detail" style="display:none;">
+            <ul>
+                <li>입력한 회사정보 기반으로 조건이 일치합니다.</li>
+                <li>지역 / 업종 / 수출 여부 등을 종합 반영했습니다.</li>
+
+                {% if item.reason and "지역" in item.reason %}
+                <li>지역 조건이 공고와 일치합니다.</li>
+                {% endif %}
+
+                {% if item.reason and "수출" in item.reason %}
+                <li>수출 관련 공고로 판단되었습니다.</li>
+                {% endif %}
+
+                {% if item.reason and "인증" in item.reason %}
+                <li>인증 보유 조건이 반영되었습니다.</li>
+                {% endif %}
+
+                {% if item.reason and "카탈로그" in item.reason %}
+                <li>외국어 카탈로그 보유 조건이 반영되었습니다.</li>
+                {% endif %}
+
+                {% if item.reason and "사회적기업" in item.reason %}
+                <li>사회적기업 조건이 반영되었습니다.</li>
+                {% endif %}
+
+                {% if item.reason and "여성대표" in item.reason %}
+                <li>여성대표기업 조건이 반영되었습니다.</li>
+                {% endif %}
+
+                {% if item.reason and "수출의 탑" in item.reason %}
+                <li>수출 실적 조건이 반영되었습니다.</li>
+                {% endif %}
+
+                <li>최종 신청 여부는 공고 원문을 반드시 확인해야 합니다.</li>
+            </ul>
+        </div>
         <div class="rec-actions">
             <a class="btn-detail" href="{{ url_for('project_detail', pid=item.id) }}"
                onclick="logClick('{{ item.id }}', 'detail', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">상세보기</a>
@@ -471,6 +539,18 @@ function logClick(projectId, action, source, title) {
       body: JSON.stringify({project_id: projectId||"", action: action||"", source: source||"", title: title||""})
     }).catch(function(){});
   } catch(e) {}
+}
+</script>
+<script>
+function toggleReason(el) {
+  const detail = el.nextElementSibling;
+  if (detail.style.display === "none") {
+    detail.style.display = "block";
+    el.innerText = "왜 추천됐나요? ▲";
+  } else {
+    detail.style.display = "none";
+    el.innerText = "왜 추천됐나요? ▼";
+  }
 }
 </script>
 </body>
