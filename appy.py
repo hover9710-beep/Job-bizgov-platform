@@ -39,9 +39,208 @@ from pipeline.recommend_projects import score_company_project
 
 from kakao_notify import build_recommend_kakao_text, send_kakao_memo
 
+DB_PATH = os.getenv("DB_PATH", "db/biz.db")
+
+
+def ensure_db_file():
+    target = Path(DB_PATH)
+    source = Path("db/biz.db")
+    if str(target) != "db/biz.db":
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not target.exists() and source.exists():
+            shutil.copy2(source, target)
+        if not target.exists():
+            target.touch()
+
+
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-key")
 ADMIN_KEY = os.getenv("ADMIN_KEY", "dev-admin-key")
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, col_type: str) -> None:
+    cur = conn.cursor()
+    col_names = {str(c[1]) for c in cur.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in col_names:
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+
+
+def _init_db():
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS biz_projects (
+            id INTEGER PRIMARY KEY,
+            title TEXT,
+            organization TEXT,
+            start_date TEXT,
+            end_date TEXT,
+            status TEXT,
+            url TEXT,
+            description TEXT,
+            ai_result TEXT,
+            pdf_path TEXT,
+            created_at TEXT,
+            updated_at TEXT
+        )
+        """
+    )
+    cols = cur.execute("PRAGMA table_info(biz_projects)").fetchall()
+    col_names = {str(c[1]) for c in cols}
+    if "organization" not in col_names:
+        cur.execute("ALTER TABLE biz_projects ADD COLUMN organization TEXT")
+    col_names = {str(c[1]) for c in cur.execute("PRAGMA table_info(biz_projects)").fetchall()}
+    if "source" not in col_names:
+        cur.execute("ALTER TABLE biz_projects ADD COLUMN source TEXT")
+    col_names = {str(c[1]) for c in cur.execute("PRAGMA table_info(biz_projects)").fetchall()}
+    if "ministry" not in col_names:
+        cur.execute("ALTER TABLE biz_projects ADD COLUMN ministry TEXT")
+    col_names = {str(c[1]) for c in cur.execute("PRAGMA table_info(biz_projects)").fetchall()}
+    if "executing_agency" not in col_names:
+        cur.execute("ALTER TABLE biz_projects ADD COLUMN executing_agency TEXT")
+    for _jbcol in (
+        "receipt_start",
+        "receipt_end",
+        "biz_start",
+        "biz_end",
+        "raw_status",
+        "attachments_json",
+    ):
+        col_names = {
+            str(c[1]) for c in cur.execute("PRAGMA table_info(biz_projects)").fetchall()
+        }
+        if _jbcol not in col_names:
+            cur.execute(
+                f"ALTER TABLE biz_projects ADD COLUMN {_jbcol} TEXT"
+            )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS companies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_name TEXT NOT NULL,
+            industry TEXT,
+            region TEXT,
+            employee_count TEXT,
+            revenue TEXT,
+            export_flag TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS recommendations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL,
+            project_id INTEGER NOT NULL,
+            score INTEGER NOT NULL DEFAULT 0,
+            reason TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(company_id, project_id)
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS click_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT,
+            action TEXT,
+            source TEXT,
+            title TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    _ensure_column(conn, "companies", "export_amount", "TEXT")
+    _ensure_column(conn, "companies", "business_number", "TEXT")
+    _ensure_column(conn, "companies", "visitor_id", "TEXT")
+    _ensure_column(conn, "companies", "interest_keywords", "TEXT")
+    _ensure_column(conn, "companies", "consent_accepted", "INTEGER DEFAULT 0")
+    _ensure_column(conn, "companies", "consent_version", "TEXT")
+    _ensure_column(conn, "companies", "cert_count", "INTEGER DEFAULT 0")
+    _ensure_column(conn, "companies", "catalog_count", "INTEGER DEFAULT 0")
+    _ensure_column(conn, "companies", "social_enterprise", "INTEGER DEFAULT 0")
+    _ensure_column(conn, "companies", "female_ceo", "INTEGER DEFAULT 0")
+    _ensure_column(conn, "companies", "export_tower", "INTEGER DEFAULT 0")
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS consent_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            visitor_id TEXT,
+            company_id INTEGER,
+            consent_text TEXT,
+            accepted_at TEXT DEFAULT (datetime('now', 'localtime')),
+            user_ip TEXT
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_request_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            visitor_id TEXT,
+            user_ip TEXT,
+            action TEXT,
+            created_at TEXT
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS favorite_projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            visitor_id TEXT,
+            project_id TEXT,
+            title TEXT,
+            source TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(visitor_id, project_id)
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email TEXT UNIQUE NOT NULL,
+          name TEXT,
+          company_name TEXT,
+          phone TEXT,
+          region TEXT,
+          industry TEXT,
+          email_enabled INTEGER DEFAULT 1,
+          kakao_enabled INTEGER DEFAULT 0,
+          consent_accepted INTEGER DEFAULT 0,
+          consent_text TEXT,
+          source TEXT DEFAULT 'google_form',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS google_form_import_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          imported_count INTEGER DEFAULT 0,
+          inserted_count INTEGER DEFAULT 0,
+          updated_count INTEGER DEFAULT 0,
+          skipped_count INTEGER DEFAULT 0,
+          status TEXT,
+          message TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+ensure_db_file()
+_init_db()
 
 
 @app.context_processor
@@ -91,20 +290,6 @@ from pipeline.ui_view import (
     sort_recommend_items,
     sqlite_row_to_item,
 )
-
-DB_PATH = os.getenv("DB_PATH", "db/biz.db")
-
-
-def ensure_render_db():
-    target = Path(DB_PATH)
-    source = Path("db/biz.db")
-    if str(target) != "db/biz.db":
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if not target.exists() and source.exists():
-            shutil.copy2(source, target)
-
-
-ensure_render_db()
 
 REPORTS_DIR = BASE_DIR / "reports"
 PIPELINE_SCRIPT = BASE_DIR / "pipeline" / "run_pipeline.py"
@@ -321,193 +506,12 @@ def get_db():
     return g.db
 
 
-def _ensure_column(conn: sqlite3.Connection, table: str, column: str, col_type: str) -> None:
-    cur = conn.cursor()
-    col_names = {str(c[1]) for c in cur.execute(f"PRAGMA table_info({table})").fetchall()}
-    if column not in col_names:
-        cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
-
-
 def clamp_int(value, min_value=0, max_value=5):
     try:
         n = int(value)
     except (TypeError, ValueError):
         n = 0
     return max(min_value, min(max_value, n))
-
-
-def _init_db():
-    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS biz_projects (
-            id INTEGER PRIMARY KEY,
-            title TEXT,
-            organization TEXT,
-            start_date TEXT,
-            end_date TEXT,
-            status TEXT,
-            url TEXT,
-            description TEXT,
-            ai_result TEXT,
-            pdf_path TEXT,
-            created_at TEXT,
-            updated_at TEXT
-        )
-        """
-    )
-    cols = cur.execute("PRAGMA table_info(biz_projects)").fetchall()
-    col_names = {str(c[1]) for c in cols}
-    if "organization" not in col_names:
-        cur.execute("ALTER TABLE biz_projects ADD COLUMN organization TEXT")
-    col_names = {str(c[1]) for c in cur.execute("PRAGMA table_info(biz_projects)").fetchall()}
-    if "source" not in col_names:
-        cur.execute("ALTER TABLE biz_projects ADD COLUMN source TEXT")
-    col_names = {str(c[1]) for c in cur.execute("PRAGMA table_info(biz_projects)").fetchall()}
-    if "ministry" not in col_names:
-        cur.execute("ALTER TABLE biz_projects ADD COLUMN ministry TEXT")
-    col_names = {str(c[1]) for c in cur.execute("PRAGMA table_info(biz_projects)").fetchall()}
-    if "executing_agency" not in col_names:
-        cur.execute("ALTER TABLE biz_projects ADD COLUMN executing_agency TEXT")
-    for _jbcol in (
-        "receipt_start",
-        "receipt_end",
-        "biz_start",
-        "biz_end",
-        "raw_status",
-        "attachments_json",
-    ):
-        col_names = {
-            str(c[1]) for c in cur.execute("PRAGMA table_info(biz_projects)").fetchall()
-        }
-        if _jbcol not in col_names:
-            cur.execute(
-                f"ALTER TABLE biz_projects ADD COLUMN {_jbcol} TEXT"
-            )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS companies (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            company_name TEXT NOT NULL,
-            industry TEXT,
-            region TEXT,
-            employee_count TEXT,
-            revenue TEXT,
-            export_flag TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS recommendations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            company_id INTEGER NOT NULL,
-            project_id INTEGER NOT NULL,
-            score INTEGER NOT NULL DEFAULT 0,
-            reason TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(company_id, project_id)
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS click_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id TEXT,
-            action TEXT,
-            source TEXT,
-            title TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    _ensure_column(conn, "companies", "export_amount", "TEXT")
-    _ensure_column(conn, "companies", "business_number", "TEXT")
-    _ensure_column(conn, "companies", "visitor_id", "TEXT")
-    _ensure_column(conn, "companies", "interest_keywords", "TEXT")
-    _ensure_column(conn, "companies", "consent_accepted", "INTEGER DEFAULT 0")
-    _ensure_column(conn, "companies", "consent_version", "TEXT")
-    _ensure_column(conn, "companies", "cert_count", "INTEGER DEFAULT 0")
-    _ensure_column(conn, "companies", "catalog_count", "INTEGER DEFAULT 0")
-    _ensure_column(conn, "companies", "social_enterprise", "INTEGER DEFAULT 0")
-    _ensure_column(conn, "companies", "female_ceo", "INTEGER DEFAULT 0")
-    _ensure_column(conn, "companies", "export_tower", "INTEGER DEFAULT 0")
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS consent_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            visitor_id TEXT,
-            company_id INTEGER,
-            consent_text TEXT,
-            accepted_at TEXT DEFAULT (datetime('now', 'localtime')),
-            user_ip TEXT
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS user_request_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            visitor_id TEXT,
-            user_ip TEXT,
-            action TEXT,
-            created_at TEXT
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS favorite_projects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            visitor_id TEXT,
-            project_id TEXT,
-            title TEXT,
-            source TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(visitor_id, project_id)
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS users (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          email TEXT UNIQUE NOT NULL,
-          name TEXT,
-          company_name TEXT,
-          phone TEXT,
-          region TEXT,
-          industry TEXT,
-          email_enabled INTEGER DEFAULT 1,
-          kakao_enabled INTEGER DEFAULT 0,
-          consent_accepted INTEGER DEFAULT 0,
-          consent_text TEXT,
-          source TEXT DEFAULT 'google_form',
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS google_form_import_log (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          imported_count INTEGER DEFAULT 0,
-          inserted_count INTEGER DEFAULT 0,
-          updated_count INTEGER DEFAULT 0,
-          skipped_count INTEGER DEFAULT 0,
-          status TEXT,
-          message TEXT,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    conn.commit()
-    conn.close()
 
 
 def check_window_limit(
