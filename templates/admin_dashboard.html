@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>관리자 대시보드</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f1f5f9; color: #0f172a; margin: 0; line-height: 1.5; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    h1 { font-size: 1.5rem; margin: 0 0 8px; }
+    .sub { color: #64748b; font-size: 0.9rem; margin-bottom: 20px; }
+    h2 { font-size: 1.1rem; margin: 24px 0 10px; color: #334155; }
+    .kpi { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin: 12px 0; }
+    .kpi div { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; text-align: center; }
+    .kpi .n { font-size: 1.4rem; font-weight: 800; color: #1d4ed8; }
+    .kpi .l { font-size: 0.75rem; color: #64748b; }
+    .links { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; padding: 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
+    .links a { display: inline-block; padding: 8px 14px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 0.9rem; }
+    .links a.sec { background: #fff; color: #1d4ed8; border: 1px solid #93c5fd; }
+    .table-wrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; margin: 8px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { border-bottom: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; }
+    th { background: #f8fafc; font-weight: 700; }
+    tr:nth-child(even) { background: #fafafa; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .title-cell { max-width: 360px; word-break: break-word; }
+    @media (max-width: 700px) { .kpi { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>관리자 대시보드</h1>
+    <p class="sub">DB 요약 · 바로가기 (일반 화면에는 링크가 노출되지 않습니다.)</p>
+
+    <div class="links">
+      <a href="{{ url_for('admin_pipeline', key=admin_key) }}">파이프라인 실행</a>
+      <a class="sec" href="{{ url_for('admin_clicks', key=admin_key) }}">클릭 로그</a>
+      <a class="sec" href="{{ url_for('index') }}">공고목록</a>
+      <a class="sec" href="{{ url_for('recommend', admin=1, key=admin_key) }}">관리자 추천 확인</a>
+      <a class="sec" href="{{ url_for('company') }}">회사정보</a>
+    </div>
+
+    <h2>요약</h2>
+    <div class="kpi">
+      <div><div class="l">전체 공고</div><div class="n">{{ total_projects }}</div></div>
+      <div><div class="l">companies</div><div class="n">{{ companies_count }}</div></div>
+      <div><div class="l">consent_logs</div><div class="n">{{ consent_count }}</div></div>
+      <div><div class="l">click_log</div><div class="n">{{ click_count }}</div></div>
+      <div><div class="l">user_request_log</div><div class="n">{{ user_request_count }}</div></div>
+    </div>
+
+    <h2>source별 공고 수</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>source</th><th class="num">건수</th></tr></thead>
+        <tbody>
+        {% for r in source_rows %}
+          <tr><td>{{ r[0] }}</td><td class="num">{{ r[1] }}</td></tr>
+        {% else %}
+          <tr><td colspan="2">없음</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <h2>상태(status)별 공고 수</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>status</th><th class="num">건수</th></tr></thead>
+        <tbody>
+        {% for r in status_rows %}
+          <tr><td>{{ r[0] }}</td><td class="num">{{ r[1] }}</td></tr>
+        {% else %}
+          <tr><td colspan="2">없음</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <h2>최근 회사정보 10건</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>id</th>
+            <th>회사명</th>
+            <th>업종</th>
+            <th>지역</th>
+            <th>visitor_id (앞8자)</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for c in recent_companies %}
+          <tr>
+            <td>{{ c.get('id', '-') }}</td>
+            <td class="title-cell">{{ c.get('company_name', '') }}</td>
+            <td>{{ c.get('industry', '') or '-' }}</td>
+            <td>{{ c.get('region', '') or '-' }}</td>
+            <td style="font-size:0.75rem;">{{ (c.get('visitor_id') or '')[:8] }}{% if c.get('visitor_id') %}…{% endif %}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5">없음</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <h2>최근 클릭 로그 20건</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>id</th>
+            <th>project</th>
+            <th>action</th>
+            <th>source</th>
+            <th class="title-cell">title</th>
+            <th>created</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for row in recent_clicks_dash %}
+          <tr>
+            <td>{{ row.id }}</td>
+            <td>{{ row.project_id or '-' }}</td>
+            <td>{{ row.action }}</td>
+            <td>{{ row.source or '-' }}</td>
+            <td class="title-cell">{{ row.display_title }}</td>
+            <td style="font-size:0.8rem; white-space:nowrap;">{{ row.created_at or '-' }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6">없음</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <h2>인기 공고 TOP 20 (click_log)</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>project_id</th><th>title</th><th class="num">클릭</th></tr></thead>
+        <tbody>
+        {% for row in top_projects %}
+          <tr>
+            <td>{{ row.project_id or '-' }}</td>
+            <td class="title-cell">{{ row.display_title }}</td>
+            <td class="num">{{ row.cnt }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3">없음</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

@@ -19,6 +19,7 @@ from typing import Any, List, Optional, Tuple
 
 from flask import (
     Flask,
+    abort,
     flash,
     g,
     jsonify,
@@ -40,6 +41,7 @@ from kakao_notify import build_recommend_kakao_text, send_kakao_memo
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-key")
+ADMIN_KEY = os.getenv("ADMIN_KEY", "dev-admin-key")
 
 
 @app.context_processor
@@ -707,9 +709,129 @@ def api_favorite():
     return resp
 
 
+def _require_admin_key() -> None:
+    if request.args.get("key", "") != ADMIN_KEY:
+        abort(403)
+
+
+@app.route("/admin")
+def admin_dashboard():
+    """관리자 전용 대시보드 (?key=ADMIN_KEY)."""
+    _require_admin_key()
+    _init_db()
+    key = request.args.get("key", "")
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    total_projects = int(
+        cur.execute("SELECT COUNT(*) FROM biz_projects").fetchone()[0] or 0
+    )
+    source_rows = cur.execute(
+        """
+        SELECT COALESCE(NULLIF(TRIM(source), ''), '(빈값)') AS src, COUNT(*) AS cnt
+        FROM biz_projects
+        GROUP BY COALESCE(NULLIF(TRIM(source), ''), '(빈값)')
+        ORDER BY cnt DESC
+        """
+    ).fetchall()
+    status_rows = cur.execute(
+        """
+        SELECT COALESCE(NULLIF(TRIM(status), ''), '(빈값)') AS st, COUNT(*) AS cnt
+        FROM biz_projects
+        GROUP BY COALESCE(NULLIF(TRIM(status), ''), '(빈값)')
+        ORDER BY cnt DESC
+        """
+    ).fetchall()
+    companies_count = int(
+        cur.execute("SELECT COUNT(*) FROM companies").fetchone()[0] or 0
+    )
+    consent_count = int(
+        cur.execute("SELECT COUNT(*) FROM consent_logs").fetchone()[0] or 0
+    )
+    click_count = int(cur.execute("SELECT COUNT(*) FROM click_log").fetchone()[0] or 0)
+    user_request_count = int(
+        cur.execute("SELECT COUNT(*) FROM user_request_log").fetchone()[0] or 0
+    )
+
+    recent_companies = [
+        dict(r)
+        for r in cur.execute(
+            "SELECT * FROM companies ORDER BY id DESC LIMIT 10"
+        ).fetchall()
+    ]
+
+    recent_clicks_dash = [
+        {
+            "id": r[0],
+            "project_id": r[1],
+            "action": r[2] or "",
+            "source": r[3] or "",
+            "display_title": resolve_click_log_title(r[4], r[5]),
+            "created_at": r[6],
+        }
+        for r in cur.execute(
+            """
+            SELECT
+                cl.id, cl.project_id, cl.action,
+                COALESCE(NULLIF(bp.source, ''), cl.source) AS source,
+                bp.title AS project_title,
+                cl.title AS log_title,
+                cl.created_at
+            FROM click_log cl
+            LEFT JOIN biz_projects bp
+                ON CAST(bp.id AS TEXT) = CAST(cl.project_id AS TEXT)
+            ORDER BY cl.id DESC LIMIT 20
+            """
+        ).fetchall()
+    ]
+
+    top_raw = cur.execute(
+        """
+        SELECT
+            cl.project_id,
+            (SELECT p.title FROM biz_projects p
+             WHERE CAST(p.id AS TEXT) = CAST(cl.project_id AS TEXT) LIMIT 1) AS project_title,
+            (SELECT c2.title FROM click_log c2
+             WHERE CAST(c2.project_id AS TEXT) = CAST(cl.project_id AS TEXT)
+             ORDER BY c2.id DESC LIMIT 1) AS log_title,
+            COUNT(*) AS cnt
+        FROM click_log cl
+        GROUP BY cl.project_id
+        ORDER BY cnt DESC
+        LIMIT 20
+        """
+    ).fetchall()
+    top_projects = [
+        {
+            "project_id": r[0],
+            "display_title": resolve_click_log_title(r[1], r[2]),
+            "cnt": r[3],
+        }
+        for r in top_raw
+    ]
+    conn.close()
+
+    return render_template(
+        "admin_dashboard.html",
+        admin_key=key,
+        total_projects=total_projects,
+        source_rows=source_rows,
+        status_rows=status_rows,
+        companies_count=companies_count,
+        consent_count=consent_count,
+        click_count=click_count,
+        user_request_count=user_request_count,
+        recent_companies=recent_companies,
+        recent_clicks_dash=recent_clicks_dash,
+        top_projects=top_projects,
+    )
+
+
 @app.route("/admin/clicks")
 def admin_clicks():
     """클릭 로그 확인용(비로그인). DB 저장만 하던 기록을 표로 확인."""
+    _require_admin_key()
     _init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -949,6 +1071,7 @@ def index():
 
 @app.route("/admin/pipeline")
 def admin_pipeline():
+    _require_admin_key()
     return render_template(
         "new.html",
         items=[],
@@ -1666,37 +1789,54 @@ def recommend(company_id: Optional[int] = None):
         user_ip = (request.remote_addr or "").strip()
 
     conn = sqlite3.connect(DB_PATH)
-    allowed, used_count, reset_at = check_window_limit(
-        conn,
-        visitor_id,
-        user_ip,
-        action="recommend",
-        limit=5,
-        window_hours=12,
+    is_admin_bypass = (
+        request.args.get("admin") == "1"
+        and request.args.get("key", "") == ADMIN_KEY
     )
-    if not allowed:
-        resp = make_response(
-            render_template(
-                "limit_exceeded.html",
-                used_count=used_count,
+    try:
+        if is_admin_bypass:
+            u = get_usage_status(
+                conn,
+                visitor_id,
+                user_ip,
+                action="recommend",
                 limit=5,
-                reset_at=reset_at,
                 window_hours=12,
-                kakao_url="",
             )
-        )
-        resp.set_cookie(
-            "visitor_id",
-            visitor_id,
-            max_age=60 * 60 * 24 * 365,
-            httponly=True,
-            samesite="Lax",
-        )
+            used_count = u["used_count"]
+            remaining = u["remaining"]
+        else:
+            allowed, used_count, reset_at = check_window_limit(
+                conn,
+                visitor_id,
+                user_ip,
+                action="recommend",
+                limit=5,
+                window_hours=12,
+            )
+            if not allowed:
+                resp = make_response(
+                    render_template(
+                        "limit_exceeded.html",
+                        used_count=used_count,
+                        limit=5,
+                        reset_at=reset_at,
+                        window_hours=12,
+                        kakao_url="",
+                    )
+                )
+                resp.set_cookie(
+                    "visitor_id",
+                    visitor_id,
+                    max_age=60 * 60 * 24 * 365,
+                    httponly=True,
+                    samesite="Lax",
+                )
+                return resp
+            remaining = max(0, 5 - used_count)
+            save_user_request_log(conn, visitor_id, user_ip, action="recommend")
+    finally:
         conn.close()
-        return resp
-    remaining = max(0, 5 - used_count)
-    save_user_request_log(conn, visitor_id, user_ip, action="recommend")
-    conn.close()
 
     if state == "no_projects":
         tmpl = render_template(
