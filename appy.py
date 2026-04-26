@@ -256,9 +256,22 @@ with sqlite3.connect(DB_PATH) as _conn:
         except Exception:
             pass
 
+    _safe_add("biz_projects", "ai_result", "TEXT")
+    _safe_add("biz_projects", "pdf_path", "TEXT")
+    _safe_add("biz_projects", "site", "TEXT")
+    _safe_add("biz_projects", "collected_at", "TEXT")
+    _safe_add("biz_projects", "ministry", "TEXT")
+    _safe_add("biz_projects", "executing_agency", "TEXT")
+    _safe_add("biz_projects", "receipt_start", "TEXT")
+    _safe_add("biz_projects", "receipt_end", "TEXT")
+    _safe_add("biz_projects", "biz_start", "TEXT")
+    _safe_add("biz_projects", "biz_end", "TEXT")
+    _safe_add("biz_projects", "raw_status", "TEXT")
+    _safe_add("biz_projects", "attachments_json", "TEXT")
     _safe_add("biz_projects", "ai_summary", "TEXT")
     _safe_add("biz_projects", "ai_summary_at", "TEXT")
     _safe_add("biz_projects", "recommend_label", "TEXT")
+    _safe_add("biz_projects", "recommend_label_at", "TEXT")
     _safe_add("biz_projects", "period_text", "TEXT")
     _safe_add("biz_projects", "attachment_text", "TEXT")
     _safe_add("biz_projects", "source", "TEXT")
