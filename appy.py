@@ -246,12 +246,31 @@ with sqlite3.connect(DB_PATH) as _conn:
 
     def _safe_add(table, column, coltype):
         try:
+            cols = {
+                str(r[1])
+                for r in _cur.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+            if column in cols:
+                return
             _cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
         except Exception:
             pass
 
     _safe_add("biz_projects", "ai_summary", "TEXT")
     _safe_add("biz_projects", "ai_summary_at", "TEXT")
+    _safe_add("biz_projects", "recommend_label", "TEXT")
+    _safe_add("biz_projects", "period_text", "TEXT")
+    _safe_add("biz_projects", "attachment_text", "TEXT")
+    _safe_add("biz_projects", "source", "TEXT")
+    _safe_add("biz_projects", "score", "REAL")
+    _safe_add("biz_projects", "reason", "TEXT")
+    _safe_add("biz_projects", "apply_url", "TEXT")
+    _safe_add("biz_projects", "view_count", "INTEGER DEFAULT 0")
+    _safe_add("companies", "social_enterprise", "INTEGER DEFAULT 0")
+    _safe_add("companies", "female_ceo", "INTEGER DEFAULT 0")
+    _safe_add("companies", "export_tower", "INTEGER DEFAULT 0")
+    _safe_add("companies", "cert_count", "INTEGER DEFAULT 0")
+    _safe_add("companies", "catalog_count", "INTEGER DEFAULT 0")
     _conn.commit()
 
 
