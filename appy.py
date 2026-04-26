@@ -6,6 +6,7 @@ Background collection: POST /api/run spawns subprocess run_all.py only.
 import json
 import os
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -91,7 +92,20 @@ from pipeline.ui_view import (
     sqlite_row_to_item,
 )
 
-DB_PATH = BASE_DIR / "db" / "biz.db"
+DB_PATH = os.getenv("DB_PATH", "db/biz.db")
+
+
+def ensure_render_db():
+    target = Path(DB_PATH)
+    source = Path("db/biz.db")
+    if str(target) != "db/biz.db":
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not target.exists() and source.exists():
+            shutil.copy2(source, target)
+
+
+ensure_render_db()
+
 REPORTS_DIR = BASE_DIR / "reports"
 PIPELINE_SCRIPT = BASE_DIR / "pipeline" / "run_pipeline.py"
 
@@ -323,7 +337,7 @@ def clamp_int(value, min_value=0, max_value=5):
 
 
 def _init_db():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute(
