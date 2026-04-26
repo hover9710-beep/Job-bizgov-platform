@@ -458,6 +458,40 @@ def _init_db():
         )
         """
     )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email TEXT UNIQUE NOT NULL,
+          name TEXT,
+          company_name TEXT,
+          phone TEXT,
+          region TEXT,
+          industry TEXT,
+          email_enabled INTEGER DEFAULT 1,
+          kakao_enabled INTEGER DEFAULT 0,
+          consent_accepted INTEGER DEFAULT 0,
+          consent_text TEXT,
+          source TEXT DEFAULT 'google_form',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS google_form_import_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          imported_count INTEGER DEFAULT 0,
+          inserted_count INTEGER DEFAULT 0,
+          updated_count INTEGER DEFAULT 0,
+          skipped_count INTEGER DEFAULT 0,
+          status TEXT,
+          message TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
     conn.commit()
     conn.close()
 
