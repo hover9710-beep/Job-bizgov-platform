@@ -264,25 +264,46 @@
         .rec-title a:hover { color: #2563eb; text-decoration: underline; }
         .reason-list { margin: 10px 0 14px; padding-left: 18px; color: #4b5563; line-height: 1.6; }
         .reason-list li { margin-bottom: 4px; }
-        .recommend-actions { display: flex; gap: 8px; margin-top: 12px; }
-        .recommend-actions a {
-            flex: 1;
-            text-align: center;
-            padding: 11px 14px;
-            border-radius: 10px;
-            text-decoration: none;
-            font-weight: 800;
+        .rec-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 14px;
         }
-        .recommend-card .btn-detail { border: 1px solid #d1d5db; color: #374151; background: #fff; }
-        .recommend-card .btn-apply { background: #2563eb; color: #fff; border: 1px solid #2563eb; }
+        .rec-actions a,
+        .rec-actions button {
+            width: 100%;
+            min-height: 44px;
+            padding: 11px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 800;
+            text-align: center;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+        }
+        .rec-actions .btn-detail {
+            background: #ffffff;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+        .rec-actions .btn-apply {
+            background: #2563eb;
+            color: #ffffff;
+            border: 1px solid #2563eb;
+        }
 
         @media (max-width: 700px) {
             .summary-grid { grid-template-columns: 1fr; }
             .top-recommend-box { padding: 14px; }
             .rec-card { padding: 14px; margin-bottom: 12px; }
             .rec-title { font-size: 15px; line-height: 1.45; }
-            .rec-actions { display: flex; flex-direction: column; gap: 6px; }
-            .rec-actions a { width: 100%; text-align: center; box-sizing: border-box; }
+            .rec-actions { grid-template-columns: 1fr; }
+            .rec-actions a,
+            .rec-actions button { min-height: 48px; font-size: 15px; }
 
             .top-title { font-size: 15px; line-height: 1.45; }
             .top-actions {
@@ -404,10 +425,12 @@
             <li>{{ reason }}</li>
             {% endfor %}
         </ul>
-        <div class="recommend-actions">
-            <a href="{{ url_for('project_detail', pid=item.id) }}" class="btn-detail" onclick="logClick('{{ item.id }}', 'detail', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">상세보기</a>
+        <div class="rec-actions">
+            <a class="btn-detail" href="{{ url_for('project_detail', pid=item.id) }}"
+               onclick="logClick('{{ item.id }}', 'detail', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">상세보기</a>
             {% if item.url %}
-            <a href="{{ item.url }}" target="_blank" rel="noopener" class="btn-apply" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">신청 바로가기</a>
+            <a class="btn-apply" href="{{ item.url }}" target="_blank" rel="noopener"
+               onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">신청 바로가기</a>
             {% endif %}
         </div>
     </div>
