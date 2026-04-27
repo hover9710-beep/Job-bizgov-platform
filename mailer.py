@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parent
 RECOMMENDED_JSON = ROOT / "data" / "filtered" / "recommended.json"
 LIST_PREVIEW_MAX = 20
 MAIL_BODY_FILE = Path("data/mail/mail_body.txt")
+SERVICE_URL = os.getenv("SERVICE_URL", "https://job-bizgov-platform.onrender.com")
 
 
 def _build_mime_text(content: str) -> MIMEText:
@@ -229,13 +230,13 @@ def main() -> int:
     recipients = load_email_recipients_from_users(str(ROOT / "db" / "biz.db"))
 
     subject = "정부지원사업 추천 서비스 안내"
-    body = """안녕하세요.
+    body = f"""안녕하세요.
 정부지원사업 추천 서비스를 안내드립니다.
 
 아래 링크에서 회사정보를 입력하면 맞춤 공고를 확인할 수 있습니다.
 
 서비스 바로가기:
-https://barista-raging-fraction.ngrok-free.dev
+{SERVICE_URL}
 
 [주의]
 AI 추천은 참고용이며, 최종 신청 여부와 공고 원문 확인은 사용자 책임입니다.
