@@ -12,6 +12,16 @@
             line-height: 1.6;
             color: #1f2937;
             background-color: #f9fafb;
+            box-sizing: border-box;
+        }
+        body * { box-sizing: inherit; }
+
+        .page-lead {
+            color: #6b7280;
+            font-size: 15px;
+            margin: -6px 0 14px;
+            line-height: 1.55;
+            max-width: 40rem;
         }
 
         h1 { font-size: 28px; font-weight: 700; margin-bottom: 16px; }
@@ -128,21 +138,32 @@
         .top-clicked-list { display:flex; flex-direction:column; gap:8px; }
         .top-clicked-item { display:flex; gap:10px; padding:10px; border-radius:10px; background:#ffffff; text-decoration:none; color:inherit; border:1px solid #fed7aa; }
         .top-clicked-rank { width:28px; height:28px; border-radius:999px; background:#f97316; color:white; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-        .top-clicked-name { font-weight:700; line-height:1.35; }
-        .top-clicked-meta { margin-top:4px; font-size:12px; color:#6b7280; }
+        .top-clicked-name {
+            font-weight: 700;
+            line-height: 1.35;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .top-clicked-meta { margin-top: 6px; font-size: 12px; color: #6b7280; display: flex; flex-direction: column; gap: 3px; }
+        .top-clicked-source { font-size: 11px; color: #9ca3af; }
+        .top-clicked-stats { font-size: 12px; color: #6b7280; }
 
         /* --- 제목 링크 --- */
         .title-link { color: #111827; text-decoration: none; }
         .title-link:hover { color: #1d4ed8; text-decoration: underline; }
 
         .ai-summary-line {
-            margin-top: 3px;
-            font-size: 11px;
+            margin-top: 4px;
+            font-size: 12px;
             color: #64748b;
             font-style: italic;
-            white-space: nowrap;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
             overflow: hidden;
-            text-overflow: ellipsis;
         }
 
         .recommend-label-line {
@@ -153,9 +174,9 @@
         }
 
         /* --- 마감일 배지 (D-3 / D-7 / 마감) --- */
-        .deadline-badge { display: inline-block; margin-left: 4px; font-weight: 700; font-size: 11px; padding: 2px 5px; border-radius: 6px; line-height: 1.2; }
-        .deadline-danger { background: #fee2e2; color: #b91c1c; }
-        .deadline-warn { background: #fef3c7; color: #b45309; }
+        .deadline-badge { display: inline-block; margin-left: 4px; font-weight: 600; font-size: 11px; padding: 2px 6px; border-radius: 6px; line-height: 1.25; }
+        .deadline-danger { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+        .deadline-warn { background: #fffbeb; color: #a16207; border: 1px solid #fde68a; }
 
         /* --- [6] 크롤링 실행 패널 --- */
         .run-panel {
@@ -258,12 +279,14 @@
         .top-recommend-summary { font-size: 12px; color: #475569; font-style: italic; margin-top: 4px; }
         .top-recommend-meta { font-size: 11px; color: #64748b; margin-top: 6px; }
         .recommend-reason-line {
-            margin-top: 3px;
-            font-size: 11px;
+            margin-top: 4px;
+            font-size: 12px;
             color: #334155;
-            white-space: nowrap;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
             overflow: hidden;
-            text-overflow: ellipsis;
         }
         .top-recommend-reason {
             font-size: 12px;
@@ -273,12 +296,16 @@
         }
         .action-col { text-align: center; white-space: nowrap; }
         .btn-detail, .btn-apply {
-            display: inline-block;
-            padding: 4px 7px;
-            border-radius: 6px;
-            font-size: 11px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 36px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
             text-decoration: none;
-            margin: 1px;
+            margin: 2px;
         }
         .btn-detail { border: 1px solid #cbd5e1; color: #334155; background: #ffffff; }
         .btn-apply { border: 1px solid #2563eb; color: #ffffff; background: #2563eb; }
@@ -292,28 +319,32 @@
         .usage-remain { display: inline-flex; align-items: center; justify-content: center; padding: 5px 10px; border-radius: 999px; background: #dbeafe; color: #2563eb; font-size: 13px; font-weight: 900; white-space: nowrap; }
         .usage-remain.is-zero { background: #fee2e2; color: #dc2626; }
         .usage-progress { font-size: 18px; font-weight: 900; color: #1d4ed8; margin-bottom: 6px; }
-        .usage-sub { font-size: 12px; color: #64748b; line-height: 1.5; }
+        .usage-sub { font-size: 12px; color: #64748b; line-height: 1.55; }
+        .usage-sub-line { display: block; }
+        .usage-sub-line + .usage-sub-line { margin-top: 4px; }
         .usage-upgrade { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #bfdbfe; font-size: 12px; color: #1e40af; font-weight: 700; line-height: 1.5; }
 
         .ai-disclaimer {
-            margin: 18px 0;
-            padding: 13px 15px;
+            margin: 12px 0;
+            padding: 10px 12px;
             border: 1px solid #fde68a;
             background: #fffbeb;
             color: #92400e;
-            border-radius: 14px;
-            font-size: 13px;
-            line-height: 1.55;
+            border-radius: 10px;
+            font-size: 12px;
+            line-height: 1.45;
         }
-        .ai-disclaimer strong { margin-right: 6px; font-weight: 900; }
-        .main-disclaimer { margin-top: 16px; margin-bottom: 18px; }
+        .ai-disclaimer strong { margin-right: 6px; font-weight: 800; }
+        .main-disclaimer { margin-top: 12px; margin-bottom: 14px; }
 
         @media (max-width: 700px) {
+          body { padding-left: 14px; padding-right: 14px; }
+          .page-lead { font-size: 14px; margin: -4px 0 12px; line-height: 1.55; max-width: none; }
           .pipeline-log, .run-log, .log-box, #runLog, .run-log-pre {
             max-width: 100%;
             max-height: 160px;
           }
-          .ai-disclaimer { font-size: 12px; margin: 14px 0; padding: 12px 13px; }
+          .ai-disclaimer { font-size: 12px; margin: 10px 0; padding: 10px 12px; line-height: 1.45; }
           /* 테이블 카드형 */
           .project-table, .project-table thead, .project-table tbody,
           .project-table th, .project-table td, .project-table tr {
@@ -321,8 +352,8 @@
           }
           .project-table thead { display: none; }
           .project-table tr {
-            margin-bottom: 14px;
-            padding: 16px;
+            margin: 0 0 14px;
+            padding: 16px 14px;
             border: 1px solid #e5e7eb;
             border-radius: 12px;
             background: #ffffff;
@@ -331,9 +362,9 @@
           .num-col, .source-col { display: none; }
           .title-cell { max-width: none; }
           .title-main, .title-link {
-            -webkit-line-clamp: 3;
-            font-size: 17px;
-            line-height: 1.5;
+            -webkit-line-clamp: 2;
+            font-size: 16px;
+            line-height: 1.45;
             font-weight: 600;
           }
           .center-cell { text-align: left; font-size: 13px; }
@@ -461,7 +492,8 @@
           }
           .run-btn {
             width: 100%;
-            padding: 10px;
+            min-height: 44px;
+            padding: 10px 12px;
             font-size: 14px;
             text-align: center;
           }
@@ -489,7 +521,7 @@
 <body>
     {% set tb = tab|default('', true) %}
     <h1>{% if tb == 'recommend' %}추천 공고 목록{% else %}지원사업 공고 목록{% endif %}</h1>
-    <p style="color:#6b7280;font-size:15px;margin:-8px 0 12px;">우리 기업에 맞는 지원사업을 자동으로 찾아드립니다.</p>
+    <p class="page-lead">우리 기업에 맞는 지원사업을 자동으로 찾아드립니다.</p>
     <nav class="topnav">
         <a href="{{ url_for('index') }}">공고목록</a>
         <a href="{{ url_for('new_announcements') }}">신규공고</a>
@@ -650,7 +682,8 @@
                 <div class="top-clicked-body">
                     <div class="top-clicked-name">{{ p.title }}</div>
                     <div class="top-clicked-meta">
-                        {{ p.source }} · 조회 {{ p.click_count }} · 신청 {{ p.apply_count }}
+                        <span class="top-clicked-source">{{ p.source }}</span>
+                        <span class="top-clicked-stats">👁 조회 {{ p.click_count }} · ✍ 신청 {{ p.apply_count }}</span>
                     </div>
                 </div>
             </a>
@@ -678,7 +711,8 @@
             사용 {{ usage.used_count }} / {{ usage.limit }}
         </div>
         <div class="usage-sub">
-            무료는 {{ usage.window_hours }}시간 기준 {{ usage.limit }}회까지 이용 가능 · 공고 목록 조회는 제한 없음
+            <span class="usage-sub-line">무료는 12시간 기준 5회까지 이용 가능</span>
+            <span class="usage-sub-line">공고 목록 조회는 제한 없음</span>
         </div>
         <div class="usage-upgrade">
             더 많은 추천 조회가 필요하면 유료/기관용 확장으로 전환할 수 있습니다.
