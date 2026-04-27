@@ -471,11 +471,11 @@
             margin: 0;
           }
 
-          .usage-mini-card { max-width: none; margin: 12px 0 16px; padding: 14px; }
+          .usage-mini-card { max-width: none; margin: 12px 0 16px; padding: 14px 12px; }
           .usage-head { align-items: flex-start; }
           .usage-progress { font-size: 17px; }
 
-          .top-clicked-box { margin:14px 0; padding:14px; }
+          .top-clicked-box { margin: 14px 0; padding: 14px 12px; }
           .top-clicked-title { font-size:16px; }
           .top-clicked-item { padding:12px; }
           .top-clicked-name { font-size:15px; }
@@ -516,6 +516,8 @@
           .filter-toggle-btn { display: none; }
           #filter-box { display: block !important; }
         }
+
+        #project-list { display: none; }
     </style>
 </head>
 <body>
@@ -722,6 +724,15 @@
 
     <h3>{% if tb == 'recommend' %}추천 공고 {{ count }}건{% else %}📊 현재 확인 가능한 지원사업 {{ count }}건{% endif %}</h3>
 
+    <div id="loading-box" style="
+     padding: 40px;
+     text-align: center;
+     color: #666;
+     font-size: 14px;
+   ">
+     🔄 공고 불러오는 중입니다...
+   </div>
+    <div id="project-list">
     <table class="project-table">
         <colgroup>
             <col style="width:40px">      <!-- 1: # -->
@@ -805,6 +816,7 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
 
     {% if not err and tb == 'recommend' and items %}
     {% set top = items[0] %}
@@ -840,6 +852,15 @@
     {% endif %}
 
 <script>
+document.addEventListener("DOMContentLoaded", function () {
+  var lb = document.getElementById("loading-box");
+  var pl = document.getElementById("project-list");
+  if (lb && pl) {
+    lb.style.display = "none";
+    pl.style.display = "block";
+  }
+});
+
 function toggleFilter() {
   const box = document.getElementById("filter-box");
   const btn = document.querySelector(".filter-toggle-btn");
