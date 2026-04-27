@@ -68,6 +68,55 @@
         }
         .ai-disclaimer strong { margin-right: 6px; font-weight: 900; }
 
+        .share-tools { margin: 12px 0 8px; }
+        .share-btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+        .btn-share {
+            flex: 1 1 140px;
+            min-height: 44px;
+            padding: 10px 14px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #fff;
+            color: #334155;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .btn-share:active { background: #f1f5f9; }
+        .qr-wrap {
+            margin-top: 12px;
+            padding: 12px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .qr-wrap[hidden] { display: none !important; }
+        #qrCanvas { max-width: 100%; height: auto !important; }
+
+        .copy-toast {
+            position: fixed;
+            left: 50%;
+            bottom: 24px;
+            transform: translateX(-50%) translateY(10px);
+            background: #1e293b;
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 9999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.25);
+        }
+        .copy-toast.copy-toast-visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
         .detail-cta-box {
             margin: 16px 0 18px;
             padding: 14px;
@@ -214,6 +263,11 @@
             }
 
             .ai-disclaimer { font-size: 12px; margin: 14px 0; }
+
+            .share-btn-row .btn-share {
+                flex: 1 1 calc(50% - 4px);
+                min-width: 0;
+            }
         }
     </style>
 </head>
@@ -245,6 +299,17 @@
         {% else %}—{% endif %}
     </div>
     <div class="meta-row"><strong>소스</strong> {{ src_label }}</div>
+
+    <div class="share-tools">
+        <div class="share-btn-row">
+            <button type="button" id="btn-copy-link" class="btn-share">링크복사</button>
+            <button type="button" id="btn-show-qr" class="btn-share">QR코드</button>
+        </div>
+        <div id="qr-wrap" class="qr-wrap" hidden>
+            <canvas id="qrCanvas" width="200" height="200"></canvas>
+        </div>
+    </div>
+    <div id="copy-toast" class="copy-toast" role="status" aria-live="polite" aria-hidden="true">링크가 복사되었습니다.</div>
 
     <div class="detail-cta-box">
         {% set badge = (item.get('deadline_badge') or "") | trim %}
@@ -308,6 +373,7 @@
     <div class="actions">
         <a href="{{ url_for('index') }}" class="btn-detail">목록으로 돌아가기</a>
     </div>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script>
 function logClick(projectId, action, source, title) {
   try {
@@ -318,6 +384,62 @@ function logClick(projectId, action, source, title) {
     }).catch(function(){});
   } catch(e) {}
 }
+
+(function () {
+  var toast = document.getElementById("copy-toast");
+  var qrWrap = document.getElementById("qr-wrap");
+  var qrCanvas = document.getElementById("qrCanvas");
+  var btnCopy = document.getElementById("btn-copy-link");
+  var btnQr = document.getElementById("btn-show-qr");
+  var toastTimer = null;
+
+  function showCopyToast() {
+    if (!toast) return;
+    toast.setAttribute("aria-hidden", "false");
+    toast.classList.add("copy-toast-visible");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      toast.classList.remove("copy-toast-visible");
+      toast.setAttribute("aria-hidden", "true");
+    }, 2500);
+  }
+
+  if (btnCopy) {
+    btnCopy.addEventListener("click", function () {
+      var url = window.location.href;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(showCopyToast).catch(function () {});
+        return;
+      }
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = url;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        var ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        if (ok) showCopyToast();
+      } catch (e) {}
+    });
+  }
+
+  if (btnQr && qrWrap && qrCanvas && typeof QRCode !== "undefined") {
+    btnQr.addEventListener("click", function () {
+      if (!qrWrap.hidden) {
+        qrWrap.hidden = true;
+        return;
+      }
+      qrWrap.hidden = false;
+      var url = window.location.href;
+      QRCode.toCanvas(qrCanvas, url, { width: 200, margin: 2 }, function (err) {
+        if (err) qrWrap.hidden = true;
+      });
+    });
+  }
+})();
 </script>
 </body>
 </html>
