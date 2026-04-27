@@ -330,8 +330,11 @@
             <button type="button" id="btn-copy-link" class="btn-share">링크복사</button>
             <button type="button" id="btn-show-qr" class="btn-share">QR코드</button>
         </div>
-        <div id="qr-wrap" class="qr-wrap" hidden>
-            <canvas id="qrCanvas" width="200" height="200"></canvas>
+        <div id="qr-wrap" style="display:none; text-align:center; margin:14px 0 20px;">
+            <canvas id="qrCanvas" width="180" height="180"></canvas>
+            <div style="font-size:13px;color:#64748b;margin-top:8px;">
+                이 QR을 스캔하면 현재 공고 페이지가 열립니다.
+            </div>
         </div>
     </div>
     <div id="copy-toast" class="copy-toast" role="status" aria-live="polite" aria-hidden="true">링크가 복사되었습니다.</div>
@@ -403,7 +406,7 @@
             🔗 링크 복사
         </button>
     </div>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 <script>
 function logClick(projectId, action, source, title) {
   try {
@@ -442,10 +445,7 @@ function fallbackCopy(text) {
 
 (function () {
   var toast = document.getElementById("copy-toast");
-  var qrWrap = document.getElementById("qr-wrap");
-  var qrCanvas = document.getElementById("qrCanvas");
   var btnCopy = document.getElementById("btn-copy-link");
-  var btnQr = document.getElementById("btn-show-qr");
   var toastTimer = null;
 
   function showCopyToast() {
@@ -480,21 +480,26 @@ function fallbackCopy(text) {
       } catch (e) {}
     });
   }
-
-  if (btnQr && qrWrap && qrCanvas && typeof QRCode !== "undefined") {
-    btnQr.addEventListener("click", function () {
-      if (!qrWrap.hidden) {
-        qrWrap.hidden = true;
-        return;
-      }
-      qrWrap.hidden = false;
-      var url = window.location.href;
-      QRCode.toCanvas(qrCanvas, url, { width: 200, margin: 2 }, function (err) {
-        if (err) qrWrap.hidden = true;
-      });
-    });
-  }
 })();
+
+const qrBtn = document.getElementById("btn-show-qr");
+const qrWrap = document.getElementById("qr-wrap");
+const qrCanvas = document.getElementById("qrCanvas");
+
+if (qrBtn) {
+  qrBtn.addEventListener("click", function () {
+    if (typeof QRCode === "undefined") {
+      alert("QR 라이브러리를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
+      return;
+    }
+    if (!qrWrap || !qrCanvas) return;
+    qrWrap.style.display = "block";
+    QRCode.toCanvas(qrCanvas, window.location.href, { width: 180 }, function (err) {
+      if (err) console.error("QR 생성 오류:", err);
+    });
+    qrWrap.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+}
 </script>
 </body>
 </html>
