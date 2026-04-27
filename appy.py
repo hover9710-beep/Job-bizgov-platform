@@ -407,8 +407,13 @@ def _log_line(msg: str) -> None:
 
 
 def _build_command(mode: str) -> List[str]:
-    """UI 패널에서 run_all.py 를 --mode 와 함께 실행."""
+    """UI 패널에서 run_all.py 를 --mode 와 함께 실행. notify 는 mailer.py 만."""
     root = _project_root()
+    if mode == "notify":
+        return [
+            sys.executable,
+            os.path.join(str(root), "mailer.py"),
+        ]
     if mode in ("all", "jbexport", "bizinfo"):
         return [
             sys.executable,
@@ -2338,8 +2343,8 @@ def api_run_start():
         return jsonify({"ok": False, "error": "admin key required"}), 403
     payload = request.get_json(silent=True) or {}
     mode = str(payload.get("mode") or "").strip()
-    if mode not in ("all", "jbexport", "bizinfo"):
-        return jsonify({"ok": False, "error": "mode must be all|jbexport|bizinfo"}), 400
+    if mode not in ("all", "jbexport", "bizinfo", "notify"):
+        return jsonify({"ok": False, "error": "mode must be all|jbexport|bizinfo|notify"}), 400
 
     with RUN_LOCK:
         if RUN_STATE["running"]:
