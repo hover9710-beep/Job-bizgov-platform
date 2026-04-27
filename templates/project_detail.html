@@ -117,6 +117,28 @@
             transform: translateX(-50%) translateY(0);
         }
 
+        .share-actions {
+            margin-top: 14px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-share-copy {
+            padding: 10px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 10px;
+            background: #fff;
+            color: #374151;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .btn-share-copy:hover {
+            background: #f3f4f6;
+        }
+
         .detail-cta-box {
             margin: 16px 0 18px;
             padding: 14px;
@@ -268,6 +290,9 @@
                 flex: 1 1 calc(50% - 4px);
                 min-width: 0;
             }
+
+            .share-actions { flex-direction: column; }
+            .btn-share-copy { width: 100%; padding: 12px; font-size: 15px; }
         }
     </style>
 </head>
@@ -373,6 +398,11 @@
     <div class="actions">
         <a href="{{ url_for('index') }}" class="btn-detail">목록으로 돌아가기</a>
     </div>
+    <div class="share-actions">
+        <button type="button" class="btn-share-copy" onclick="copyPageUrl()">
+            🔗 링크 복사
+        </button>
+    </div>
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script>
 function logClick(projectId, action, source, title) {
@@ -383,6 +413,31 @@ function logClick(projectId, action, source, title) {
       body: JSON.stringify({project_id: projectId||"", action: action||"", source: source||"", title: title||""})
     }).catch(function(){});
   } catch(e) {}
+}
+
+function copyPageUrl() {
+  const url = window.location.href;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(function() {
+      alert("링크가 복사됐습니다.");
+    }).catch(function() {
+      fallbackCopy(url);
+    });
+  } else {
+    fallbackCopy(url);
+  }
+}
+
+function fallbackCopy(text) {
+  const el = document.createElement("textarea");
+  el.value = text;
+  el.style.position = "fixed";
+  el.style.opacity = "0";
+  document.body.appendChild(el);
+  el.select();
+  document.execCommand("copy");
+  document.body.removeChild(el);
+  alert("링크가 복사됐습니다.");
 }
 
 (function () {
