@@ -643,7 +643,7 @@
         <div class="top-clicked-list">
             {% for p in top_clicked %}
             <a class="top-clicked-item"
-               href="/project/{{ p.project_id }}"
+               href="{{ url_for('project_detail', pid=p.project_id) }}"
                onclick="logClick('{{ p.project_id }}', 'detail', '{{ p.source|e }}', '{{ p.title|e }}')">
                 <div class="top-clicked-rank">{{ loop.index }}</div>
                 <div class="top-clicked-body">
