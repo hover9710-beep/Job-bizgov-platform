@@ -282,7 +282,7 @@ def _run_mail_chain(args: argparse.Namespace) -> int:
         ("5a) Kakao token refresh", [PY, str(ROOT / "scripts" / "kakao_token_refresh.py")]),
         ("5b) Make Kakao body", [PY, str(ROOT / "pipeline" / "make_kakao.py")]),
         ("5c) Kakao notify (send)", [PY, str(ROOT / "kakao_notify.py")]),
-        ("6) Mailer (dry-run)", [PY, str(ROOT / "mailer.py"), "--dry-run"]),
+        ("6) Mailer", [PY, str(ROOT / "mailer.py")]),
     ]
     NON_FATAL_STEPS = {
         "5a) Kakao token refresh",
