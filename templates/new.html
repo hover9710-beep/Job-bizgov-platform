@@ -489,6 +489,7 @@
 <body>
     {% set tb = tab|default('', true) %}
     <h1>{% if tb == 'recommend' %}추천 공고 목록{% else %}지원사업 공고 목록{% endif %}</h1>
+    <p style="color:#6b7280;font-size:15px;margin:-8px 0 12px;">우리 기업에 맞는 지원사업을 자동으로 찾아드립니다.</p>
     <nav class="topnav">
         <a href="{{ url_for('index') }}">공고목록</a>
         <a href="{{ url_for('new_announcements') }}">신규공고</a>
@@ -659,9 +660,7 @@
     {% endif %}
 
     <div class="ai-disclaimer main-disclaimer">
-        <strong>주의</strong>
-        AI는 보조적 판단수단이며, 사실이 아닌 내용을 생성할 수 있습니다.
-        최종 판단과 공고 원문 확인은 반드시 사용자의 책임입니다.
+        <strong>⚠</strong> AI는 보조 정보입니다. 반드시 공고 원문을 확인하세요.
     </div>
 
     {% if err %}
@@ -687,7 +686,7 @@
     </div>
     {% endif %}
 
-    <h3>{% if tb == 'recommend' %}추천 공고 {{ count }}건{% else %}전체 공고 {{ count }}건{% endif %}</h3>
+    <h3>{% if tb == 'recommend' %}추천 공고 {{ count }}건{% else %}📊 현재 확인 가능한 지원사업 {{ count }}건{% endif %}</h3>
 
     <table class="project-table">
         <colgroup>
@@ -737,7 +736,7 @@
               {% endif %}
               {% if item.recommend_label %}
                 <div class="recommend-label-line">
-                  🏷 {{ item.recommend_label }}
+                  🏷️ {{ item.recommend_label|replace(',', ' /') }}
                 </div>
               {% endif %}
               {% if item.recommend_reason %}
@@ -753,15 +752,19 @@
             <td class="date-col center-cell">{{ item.get('start_date') or '-' }}</td>
             <td class="date-col center-cell {{ item.deadline_class }}">
                 {{ item.end_date or '-' }}
-                {% if item.deadline_badge %}
-                    <span class="deadline-badge">{{ item.deadline_badge }}</span>
+                {% if item.deadline_badge == 'D-0' %}
+                  <span class="deadline-badge deadline-danger">🔥 오늘 마감 (D-0)</span>
+                {% elif item.deadline_badge in ['D-1','D-2','D-3'] %}
+                  <span class="deadline-badge deadline-warn">⏰ 마감 임박 ({{ item.deadline_badge }})</span>
+                {% elif item.deadline_badge %}
+                  <span class="deadline-badge">{{ item.deadline_badge }}</span>
                 {% endif %}
             </td>
             <td class="source-col"><span class="source-tag">{{ src_label }}</span></td>
             <td class="action-col">
-                <a class="btn-detail" href="{{ url_for('project_detail', pid=item.id) }}" onclick="logClick('{{ item.id }}', 'detail', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">상세보기</a>
+                <a class="btn-detail" href="{{ url_for('project_detail', pid=item.id) }}" onclick="logClick('{{ item.id }}', 'detail', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">공고 자세히 보기</a>
                 {% if item.url %}
-                <a class="btn-apply" href="{{ item.url }}" target="_blank" rel="noopener noreferrer" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">신청 바로가기</a>
+                <a class="btn-apply" href="{{ item.url }}" target="_blank" rel="noopener noreferrer" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">👉 지금 신청하기</a>
                 {% endif %}
             </td>
         </tr>
@@ -793,9 +796,9 @@
         {% endif %}
         <div class="top-recommend-meta">마감일: {{ top.end_date or '-' }}</div>
         <div class="top-recommend-actions">
-            <a href="{{ url_for('project_detail', pid=top.id) }}" class="btn-detail" onclick="logClick('{{ top.id }}', 'detail', '{{ top.source|e }}', '{{ (top.display_title or top.title)|e }}')">상세보기</a>
+            <a href="{{ url_for('project_detail', pid=top.id) }}" class="btn-detail" onclick="logClick('{{ top.id }}', 'detail', '{{ top.source|e }}', '{{ (top.display_title or top.title)|e }}')">공고 자세히 보기</a>
             {% if top.url %}
-            <a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply" onclick="logClick('{{ top.id }}', 'apply', '{{ top.source|e }}', '{{ (top.display_title or top.title)|e }}')">신청 바로가기</a>
+            <a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply" onclick="logClick('{{ top.id }}', 'apply', '{{ top.source|e }}', '{{ (top.display_title or top.title)|e }}')">👉 지금 신청하기</a>
             {% endif %}
         </div>
     </div>
