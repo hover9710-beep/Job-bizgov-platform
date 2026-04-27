@@ -93,7 +93,7 @@
             text-align: center;
         }
         .qr-wrap[hidden] { display: none !important; }
-        #qrCanvas { max-width: 100%; height: auto !important; }
+        #qr-img { max-width: 100%; height: auto !important; }
 
         .copy-toast {
             position: fixed;
@@ -328,10 +328,11 @@
     <div class="share-tools">
         <div class="share-btn-row">
             <button type="button" id="btn-copy-link" class="btn-share">링크복사</button>
-            <button type="button" id="btn-show-qr" class="btn-share">QR코드</button>
+            <button type="button" id="qr-btn" class="btn-share">QR코드</button>
         </div>
         <div id="qr-wrap" style="display:none; text-align:center; margin:14px 0 20px;">
-            <canvas id="qrCanvas" width="180" height="180"></canvas>
+            <img id="qr-img" alt="공고 QR코드" width="180" height="180"
+              style="border:1px solid #e5e7eb; border-radius:12px; padding:8px; background:#fff;">
             <div style="font-size:13px;color:#64748b;margin-top:8px;">
                 이 QR을 스캔하면 현재 공고 페이지가 열립니다.
             </div>
@@ -481,25 +482,24 @@ function fallbackCopy(text) {
     });
   }
 })();
-
-const qrBtn = document.getElementById("btn-show-qr");
-const qrWrap = document.getElementById("qr-wrap");
-const qrCanvas = document.getElementById("qrCanvas");
-
-if (qrBtn) {
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  var qrBtn = document.getElementById("qr-btn");
+  var qrWrap = document.getElementById("qr-wrap");
+  var qrImg = document.getElementById("qr-img");
+  if (!qrBtn || !qrWrap || !qrImg) return;
   qrBtn.addEventListener("click", function () {
-    if (typeof QRCode === "undefined") {
-      alert("QR 라이브러리를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
-      return;
+    var url = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data="
+              + encodeURIComponent(window.location.href);
+    qrImg.src = url;
+    var isHidden = qrWrap.style.display === "none" || qrWrap.style.display === "";
+    qrWrap.style.display = isHidden ? "block" : "none";
+    if (isHidden) {
+      qrWrap.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-    if (!qrWrap || !qrCanvas) return;
-    qrWrap.style.display = "block";
-    QRCode.toCanvas(qrCanvas, window.location.href, { width: 180 }, function (err) {
-      if (err) console.error("QR 생성 오류:", err);
-    });
-    qrWrap.scrollIntoView({ behavior: "smooth", block: "center" });
   });
-}
+});
 </script>
 </body>
 </html>
