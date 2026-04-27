@@ -294,7 +294,7 @@
             margin-top: 6px;
             line-height: 1.5;
         }
-        .action-col { text-align: center; white-space: nowrap; }
+        .action-col { text-align: center; }
         .btn-detail, .btn-apply {
             display: inline-flex;
             align-items: center;
@@ -309,43 +309,6 @@
         }
         .btn-detail { border: 1px solid #cbd5e1; color: #334155; background: #ffffff; }
         .btn-apply { border: 1px solid #2563eb; color: #ffffff; background: #2563eb; }
-
-        .card-actions {
-            display: grid !important;
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-            gap: 10px;
-            width: 100%;
-            max-width: 100%;
-            box-sizing: border-box;
-            overflow: hidden;
-        }
-
-        .card-actions > a:only-child {
-            grid-column: 1 / -1;
-        }
-
-        .card-actions a,
-        .card-actions button {
-            width: 100% !important;
-            max-width: 100% !important;
-            min-width: 0 !important;
-            height: 56px;
-            box-sizing: border-box;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            white-space: nowrap;
-            padding: 0 8px !important;
-            margin: 0 !important;
-            border-radius: 14px;
-        }
-
-        @media (max-width: 380px) {
-            .card-actions {
-                grid-template-columns: 1fr;
-            }
-        }
 
         .btn-favorite { height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid #facc15; background: #fffbeb; color: #92400e; font-weight: 800; font-size: 14px; cursor: pointer; }
         .mobile-search-guide { display: none; }
@@ -538,6 +501,68 @@
         }
 
         #project-list { display: none; }
+
+        .project-card,
+        .project-table tbody tr {
+            overflow: hidden !important;
+        }
+
+        .card-actions {
+            display: grid !important;
+            grid-template-columns: minmax(0,1fr) minmax(0,1fr) !important;
+            gap: 10px !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+        }
+
+        .card-actions > a:only-child {
+            grid-column: 1 / -1;
+        }
+
+        .card-actions a,
+        .card-actions button {
+            all: revert !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            height: 52px !important;
+            box-sizing: border-box !important;
+            margin: 0 !important;
+            padding: 0 8px !important;
+            overflow: hidden !important;
+            white-space: nowrap !important;
+            text-overflow: ellipsis !important;
+            border-radius: 12px !important;
+        }
+
+        .card-actions a.btn-detail {
+            border: 1px solid #cbd5e1 !important;
+            color: #334155 !important;
+            background: #ffffff !important;
+            font-weight: 700 !important;
+            font-size: 15px !important;
+            text-decoration: none !important;
+        }
+
+        .card-actions a.btn-apply {
+            border: 1px solid #2563eb !important;
+            color: #ffffff !important;
+            background: #2563eb !important;
+            font-weight: 800 !important;
+            font-size: 15px !important;
+            text-decoration: none !important;
+        }
+
+        @media (max-width: 430px) {
+            .card-actions {
+                grid-template-columns: 1fr !important;
+            }
+        }
     </style>
 </head>
 <body>
