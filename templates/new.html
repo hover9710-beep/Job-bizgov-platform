@@ -309,6 +309,44 @@
         }
         .btn-detail { border: 1px solid #cbd5e1; color: #334155; background: #ffffff; }
         .btn-apply { border: 1px solid #2563eb; color: #ffffff; background: #2563eb; }
+
+        .card-actions {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 10px;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        .card-actions > a:only-child {
+            grid-column: 1 / -1;
+        }
+
+        .card-actions a,
+        .card-actions button {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            height: 56px;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            white-space: nowrap;
+            padding: 0 8px !important;
+            margin: 0 !important;
+            border-radius: 14px;
+        }
+
+        @media (max-width: 380px) {
+            .card-actions {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .btn-favorite { height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid #facc15; background: #fffbeb; color: #92400e; font-weight: 800; font-size: 14px; cursor: pointer; }
         .mobile-search-guide { display: none; }
         .top-recommend-actions { margin-top: 10px; }
@@ -379,38 +417,20 @@
             margin-bottom: 14px;
           }
 
-          .action-col {
-            display: flex;
-            gap: 8px;
+          .action-col.card-actions {
             margin-top: 14px;
-            align-items: center;
           }
 
           .btn-detail {
-            height: 44px;
-            min-height: 44px;
-            padding: 0 18px;
             border-radius: 12px;
             font-size: 15px;
             font-weight: 700;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            flex: 0 0 auto;
-            min-width: 112px;
           }
 
           .btn-apply {
-            height: 44px;
-            min-height: 44px;
-            padding: 0 18px;
             border-radius: 12px;
             font-size: 15px;
             font-weight: 800;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            flex: 1 1 auto;
           }
 
           .btn-favorite { width: 100%; height: 44px; margin-top: 8px; font-size: 14px; }
@@ -806,7 +826,7 @@
                 {% endif %}
             </td>
             <td class="source-col"><span class="source-tag">{{ src_label }}</span></td>
-            <td class="action-col">
+            <td class="action-col card-actions">
                 <a class="btn-detail" href="{{ url_for('project_detail', pid=item.id) }}" onclick="logClick('{{ item.id }}', 'detail', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">공고 자세히 보기</a>
                 {% if item.url %}
                 <a class="btn-apply" href="{{ item.url }}" target="_blank" rel="noopener noreferrer" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">👉 지금 신청하기</a>
@@ -841,7 +861,7 @@
         <div class="top-recommend-summary">{{ top.ai_summary }}</div>
         {% endif %}
         <div class="top-recommend-meta">마감일: {{ top.end_date or '-' }}</div>
-        <div class="top-recommend-actions">
+        <div class="top-recommend-actions card-actions">
             <a href="{{ url_for('project_detail', pid=top.id) }}" class="btn-detail" onclick="logClick('{{ top.id }}', 'detail', '{{ top.source|e }}', '{{ (top.display_title or top.title)|e }}')">공고 자세히 보기</a>
             {% if top.url %}
             <a href="{{ top.url }}" target="_blank" rel="noopener noreferrer" class="btn-apply" onclick="logClick('{{ top.id }}', 'apply', '{{ top.source|e }}', '{{ (top.display_title or top.title)|e }}')">👉 지금 신청하기</a>
