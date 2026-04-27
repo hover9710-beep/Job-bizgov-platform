@@ -72,7 +72,7 @@
         .share-btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
         .btn-share {
             flex: 1 1 140px;
-            min-height: 44px;
+            min-height: 52px;
             padding: 10px 14px;
             border: 1px solid #cbd5e1;
             border-radius: 8px;
@@ -82,6 +82,7 @@
             font-weight: 600;
             cursor: pointer;
             font-family: inherit;
+            white-space: nowrap;
         }
         .btn-share:active { background: #f1f5f9; }
         .qr-wrap {
@@ -337,8 +338,9 @@
                 이 QR을 스캔하면 현재 공고 페이지가 열립니다.
             </div>
         </div>
+        <div id="qr-error" style="display:none; margin-top:8px; font-size:13px; color:#dc2626;"></div>
     </div>
-    <div id="copy-toast" class="copy-toast" role="status" aria-live="polite" aria-hidden="true">링크가 복사되었습니다.</div>
+    <div id="copy-toast" class="copy-toast" role="status" aria-live="polite" aria-hidden="true"></div>
 
     <div class="detail-cta-box">
         {% set badge = (item.get('deadline_badge') or "") | trim %}
@@ -407,7 +409,6 @@
             🔗 링크 복사
         </button>
     </div>
-<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 <script>
 function logClick(projectId, action, source, title) {
   try {
@@ -449,8 +450,9 @@ function fallbackCopy(text) {
   var btnCopy = document.getElementById("btn-copy-link");
   var toastTimer = null;
 
-  function showCopyToast() {
+  function showCopyToast(message) {
     if (!toast) return;
+    toast.textContent = message;
     toast.setAttribute("aria-hidden", "false");
     toast.classList.add("copy-toast-visible");
     if (toastTimer) clearTimeout(toastTimer);
@@ -460,45 +462,77 @@ function fallbackCopy(text) {
     }, 2500);
   }
 
+  function fallbackCopyToClipboard(url) {
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = url;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
   if (btnCopy) {
     btnCopy.addEventListener("click", function () {
       var url = window.location.href;
+      var okMsg = "클립보드에 복사했어요.";
+      var failMsg = "복사에 실패했습니다. 주소창 URL을 직접 복사해주세요.";
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(url).then(showCopyToast).catch(function () {});
+        navigator.clipboard.writeText(url).then(function () {
+          showCopyToast(okMsg);
+        }).catch(function () {
+          if (fallbackCopyToClipboard(url)) {
+            showCopyToast(okMsg);
+          } else {
+            showCopyToast(failMsg);
+          }
+        });
         return;
       }
-      try {
-        var ta = document.createElement("textarea");
-        ta.value = url;
-        ta.setAttribute("readonly", "");
-        ta.style.position = "fixed";
-        ta.style.left = "-9999px";
-        document.body.appendChild(ta);
-        ta.select();
-        var ok = document.execCommand("copy");
-        document.body.removeChild(ta);
-        if (ok) showCopyToast();
-      } catch (e) {}
+      if (fallbackCopyToClipboard(url)) {
+        showCopyToast(okMsg);
+      } else {
+        showCopyToast(failMsg);
+      }
     });
   }
 })();
 </script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-  var qrBtn = document.getElementById("qr-btn");
-  var qrWrap = document.getElementById("qr-wrap");
-  var qrImg = document.getElementById("qr-img");
-  if (!qrBtn || !qrWrap || !qrImg) return;
-  qrBtn.addEventListener("click", function () {
-    var url = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data="
-              + encodeURIComponent(window.location.href);
-    qrImg.src = url;
-    var isHidden = qrWrap.style.display === "none" || qrWrap.style.display === "";
-    qrWrap.style.display = isHidden ? "block" : "none";
-    if (isHidden) {
-      qrWrap.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  });
+  const qrBtn = document.getElementById("qr-btn");
+  const qrWrap = document.getElementById("qr-wrap");
+  const qrImg = document.getElementById("qr-img");
+  const qrError = document.getElementById("qr-error");
+
+  if (qrBtn && qrWrap && qrImg) {
+    qrBtn.addEventListener("click", function () {
+      try {
+        const isOpen = qrWrap.style.display === "block";
+        if (isOpen) { qrWrap.style.display = "none"; return; }
+        qrImg.src = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data="
+                    + encodeURIComponent(window.location.href);
+        qrWrap.style.display = "block";
+        if (qrError) { qrError.style.display = "none"; qrError.textContent = ""; }
+        qrWrap.scrollIntoView({ behavior: "smooth", block: "center" });
+      } catch (e) {
+        console.error("[QR ERROR]", e);
+        if (qrError) {
+          qrError.style.display = "block";
+          qrError.textContent = "QR코드를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.";
+        } else {
+          alert("QR코드를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+        }
+      }
+    });
+  }
 });
 </script>
 </body>

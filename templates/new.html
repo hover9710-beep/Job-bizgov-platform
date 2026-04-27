@@ -125,13 +125,8 @@
             gap: 4px;
             box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
         }
-        .summary-card-urgent {
-            background: #fff7ed;
-            border-color: #fed7aa;
-        }
         .summary-label { font-size: 12px; color: #6b7280; font-weight: 500; }
         .summary-value { font-size: 22px; color: #111827; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
-        .summary-card-urgent .summary-value { color: #c2410c; }
 
         .top-clicked-box { margin:16px 0; padding:14px; border:1px solid #e5e7eb; border-radius:14px; background:#fff7ed; }
         .top-clicked-title { font-weight:800; margin-bottom:10px; color:#9a3412; }
@@ -173,10 +168,29 @@
             font-weight: 600;
         }
 
-        /* --- 마감일 배지 (D-3 / D-7 / 마감) --- */
+        /* --- 마감일 배지 (D-3 / D-7 / 마감) — 시각만 보정, D-day 로직은 백엔드 --- */
         .deadline-badge { display: inline-block; margin-left: 4px; font-weight: 600; font-size: 11px; padding: 2px 6px; border-radius: 6px; line-height: 1.25; }
-        .deadline-danger { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+        .deadline-danger { border: 1px solid #fecaca; background: #fff1f2; color: #b91c1c; }
         .deadline-warn { background: #fffbeb; color: #a16207; border: 1px solid #fde68a; }
+        td.date-col.deadline-danger {
+            border: 1px solid #fecaca;
+            background: #fff1f2;
+            color: #b91c1c;
+            border-radius: 8px;
+        }
+        .summary-card.summary-card-urgent {
+            border: 1px solid #fecaca;
+            background: #fff1f2;
+            color: #b91c1c;
+        }
+        .summary-card.summary-card-urgent .summary-label { color: #b91c1c; }
+        .summary-card.summary-card-urgent .summary-value { color: #b91c1c; }
+        @media (max-width: 700px) {
+            .project-table tbody tr:has(td.date-col.deadline-danger) {
+                border-color: #fed7aa;
+                box-shadow: 0 8px 20px rgba(249, 115, 22, 0.08);
+            }
+        }
 
         /* --- [6] 크롤링 실행 패널 --- */
         .run-panel {
@@ -339,7 +353,7 @@
         .main-disclaimer { margin-top: 12px; margin-bottom: 14px; }
 
         @media (max-width: 700px) {
-          body { padding-left: 14px; padding-right: 14px; }
+          body { padding-left: 16px; padding-right: 16px; }
           .page-lead { font-size: 14px; margin: -4px 0 12px; line-height: 1.55; max-width: none; }
           .pipeline-log, .run-log, .log-box, #runLog, .run-log-pre {
             max-width: 100%;
@@ -354,7 +368,7 @@
           .project-table thead { display: none; }
           .project-table tr {
             margin: 0 0 14px;
-            padding: 16px 14px;
+            padding: 16px 16px;
             border: 1px solid #e5e7eb;
             border-radius: 12px;
             background: #ffffff;
@@ -502,23 +516,24 @@
 
         #project-list { display: none; }
 
+        .project-card {
+            overflow: hidden;
+            box-sizing: border-box;
+        }
         .project-card,
         .project-table tbody tr {
             overflow: hidden !important;
+            box-sizing: border-box;
         }
 
         .card-actions {
-            display: grid !important;
-            grid-template-columns: minmax(0,1fr) minmax(0,1fr) !important;
+            display: flex !important;
+            flex-direction: column !important;
             gap: 10px !important;
             width: 100% !important;
             max-width: 100% !important;
             box-sizing: border-box !important;
             overflow: hidden !important;
-        }
-
-        .card-actions > a:only-child {
-            grid-column: 1 / -1;
         }
 
         .card-actions a,
@@ -530,7 +545,7 @@
             width: 100% !important;
             max-width: 100% !important;
             min-width: 0 !important;
-            height: 52px !important;
+            min-height: 52px !important;
             box-sizing: border-box !important;
             margin: 0 !important;
             padding: 0 8px !important;
@@ -558,11 +573,6 @@
             text-decoration: none !important;
         }
 
-        @media (max-width: 430px) {
-            .card-actions {
-                grid-template-columns: 1fr !important;
-            }
-        }
     </style>
 </head>
 <body>
