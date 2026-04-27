@@ -573,6 +573,132 @@
             text-decoration: none !important;
         }
 
+        /* --- PC 전용: 테이블 열 간격·배지·액션 (모바일 카드형은 max-width:700px 블록 유지) --- */
+        @media (min-width: 769px) {
+            .desktop-table-wrap {
+                width: 100%;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .project-table {
+                width: 100%;
+                min-width: 1180px;
+                table-layout: fixed;
+                border-collapse: separate;
+                border-spacing: 0;
+            }
+
+            .project-table th,
+            .project-table td {
+                vertical-align: middle;
+                box-sizing: border-box;
+                white-space: normal;
+                word-break: keep-all;
+            }
+
+            .project-table th:nth-child(1),
+            .project-table td:nth-child(1) {
+                width: 52px;
+                min-width: 52px;
+                text-align: center;
+            }
+
+            .project-table th:nth-child(2),
+            .project-table td:nth-child(2) {
+                width: 430px;
+                min-width: 430px;
+            }
+
+            .project-table th:nth-child(3),
+            .project-table td:nth-child(3) {
+                width: 180px;
+                min-width: 180px;
+            }
+
+            .project-table th:nth-child(4),
+            .project-table td:nth-child(4) {
+                width: 90px;
+                min-width: 90px;
+                text-align: center;
+            }
+
+            .project-table th:nth-child(5),
+            .project-table td:nth-child(5) {
+                width: 110px;
+                min-width: 110px;
+                text-align: center;
+            }
+
+            .project-table th:nth-child(6),
+            .project-table td:nth-child(6) {
+                width: 160px;
+                min-width: 160px;
+                text-align: center;
+            }
+
+            .project-table th:nth-child(7),
+            .project-table td:nth-child(7) {
+                width: 110px;
+                min-width: 110px;
+                text-align: center;
+            }
+
+            .project-table th:nth-child(8),
+            .project-table td:nth-child(8) {
+                width: 170px;
+                min-width: 170px;
+                text-align: center;
+            }
+
+            .project-table .deadline-badge,
+            .project-table .d-day-badge,
+            .project-table .urgent-badge,
+            .project-table .deadline-label {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                white-space: nowrap;
+                max-width: 100%;
+                box-sizing: border-box;
+                padding: 4px 8px;
+                font-size: 12px;
+                line-height: 1.2;
+            }
+
+            .project-table .source-badge,
+            .project-table .source-label,
+            .project-table .source-tag {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                white-space: nowrap;
+                max-width: 100%;
+                box-sizing: border-box;
+                padding: 4px 8px;
+                font-size: 12px;
+                line-height: 1.2;
+            }
+
+            .project-table .action-col.card-actions {
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 8px !important;
+                align-items: stretch !important;
+                width: 100%;
+            }
+
+            .project-table .action-col.card-actions a,
+            .project-table .action-col.card-actions button {
+                width: 100% !important;
+                min-height: 38px !important;
+                height: auto !important;
+                box-sizing: border-box !important;
+                white-space: nowrap !important;
+                text-align: center !important;
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -788,6 +914,7 @@
      🔄 공고 불러오는 중입니다...
    </div>
     <div id="project-list">
+    <div class="desktop-table-wrap">
     <table class="project-table">
         <colgroup>
             <col style="width:40px">      <!-- 1: # -->
@@ -871,6 +998,7 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
     </div>
 
     {% if not err and tb == 'recommend' and items %}
