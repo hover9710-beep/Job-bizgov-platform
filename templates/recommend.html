@@ -426,6 +426,87 @@
                 flex-direction: column;
             }
         }
+
+        /* === recommend.html 최종 미세 정렬 보정 === */
+        .recommend-card {
+            padding: 20px 22px !important;
+            margin-bottom: 18px !important;
+            box-sizing: border-box !important;
+        }
+        .recommend-card .rank-badge,
+        .recommend-card .recommend-score {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            height: 28px !important;
+            min-width: 54px !important;
+            padding: 0 10px !important;
+            line-height: 1 !important;
+            vertical-align: middle !important;
+        }
+        .recommend-card h3,
+        .recommend-card .title,
+        .recommend-card .recommend-title {
+            margin-top: 14px !important;
+            margin-bottom: 8px !important;
+            line-height: 1.45 !important;
+        }
+        .recommend-card .reason-toggle,
+        .recommend-card .why-recommend {
+            display: inline-block !important;
+            margin-top: 6px !important;
+            margin-bottom: 12px !important;
+        }
+        .rec-actions {
+            display: flex !important;
+            gap: 10px !important;
+            align-items: stretch !important;
+            width: 100% !important;
+            margin-top: 14px !important;
+        }
+        .rec-actions a,
+        .rec-actions button {
+            flex: 1 1 0 !important;
+            height: 46px !important;
+            min-height: 46px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 0 14px !important;
+            white-space: nowrap !important;
+            box-sizing: border-box !important;
+            line-height: 1 !important;
+        }
+        .recommend-summary {
+            padding: 18px 20px !important;
+            margin: 16px 0 !important;
+            box-sizing: border-box !important;
+        }
+        .company-bar {
+            padding: 12px 14px !important;
+            box-sizing: border-box !important;
+        }
+        .company-tag {
+            display: inline-flex !important;
+            align-items: center !important;
+            line-height: 1.2 !important;
+        }
+        @media (max-width: 768px) {
+            .recommend-card {
+                padding: 18px 16px !important;
+            }
+            .rec-actions {
+                flex-direction: column !important;
+                gap: 10px !important;
+            }
+            .rec-actions a,
+            .rec-actions button {
+                width: 100% !important;
+                height: 48px !important;
+                min-height: 48px !important;
+                font-size: 15px !important;
+            }
+        }
     </style>
 </head>
 <body>
