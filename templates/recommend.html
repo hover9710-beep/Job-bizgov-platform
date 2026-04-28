@@ -375,6 +375,57 @@
             .recommend-card { padding: 16px; border-radius: 15px; }
             .recommend-actions a { font-size: 14px; padding: 12px 10px; }
         }
+
+        /* 카드 내부 여백 안정화 */
+        .recommend-card,
+        .project-card,
+        .recommend-item {
+            padding: 18px 20px !important;
+            box-sizing: border-box;
+        }
+
+        /* 추천 이유 링크 간격 */
+        .recommend-reason,
+        .why-recommend,
+        .reason-toggle {
+            display: inline-block;
+            margin-top: 6px;
+            margin-bottom: 12px;
+        }
+
+        /* 버튼 영역 정렬 */
+        .card-actions,
+        .recommend-actions,
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+            margin-top: 8px;
+        }
+
+        /* 버튼 높이 강제 통일 */
+        .card-actions a,
+        .card-actions button,
+        .recommend-actions a,
+        .recommend-actions button {
+            height: 44px !important;
+            line-height: 44px !important;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            white-space: nowrap;
+        }
+
+        .btn-detail, .detail-btn { flex: 1; }
+        .btn-apply, .apply-btn { flex: 1; }
+
+        @media (max-width: 768px) {
+            .card-actions,
+            .recommend-actions {
+                flex-direction: column;
+            }
+        }
     </style>
 </head>
 <body>
