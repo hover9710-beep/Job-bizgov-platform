@@ -507,6 +507,31 @@
                 font-size: 15px !important;
             }
         }
+
+        /* === 버튼 영역 직접 타겟 (핵심 수정) === */
+        .recommend-card > div:last-child {
+            display: flex !important;
+            gap: 10px !important;
+            width: 100% !important;
+            margin-top: 14px !important;
+        }
+        .recommend-card > div:last-child a {
+            flex: 1 !important;
+            height: 46px !important;
+            min-height: 46px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            box-sizing: border-box !important;
+        }
+        @media (max-width: 768px) {
+            .recommend-card > div:last-child {
+                flex-direction: column !important;
+            }
+            .recommend-card > div:last-child a {
+                width: 100% !important;
+            }
+        }
     </style>
 </head>
 <body>
