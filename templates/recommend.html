@@ -532,6 +532,54 @@
                 width: 100% !important;
             }
         }
+
+        /* === 모바일 추천 버튼 최종 보정: rec-actions 직접 타겟 === */
+        @media (max-width: 768px) {
+            .recommend-card .rec-actions,
+            .rec-actions {
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 10px !important;
+                width: 100% !important;
+                margin-top: 14px !important;
+            }
+            .recommend-card .rec-actions a,
+            .recommend-card .rec-actions button,
+            .rec-actions a,
+            .rec-actions button {
+                width: 100% !important;
+                max-width: 100% !important;
+                flex: none !important;
+                height: 48px !important;
+                min-height: 48px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                box-sizing: border-box !important;
+                white-space: nowrap !important;
+            }
+        }
+        @media (min-width: 769px) {
+            .recommend-card .rec-actions,
+            .rec-actions {
+                display: flex !important;
+                flex-direction: row !important;
+                gap: 10px !important;
+                width: 100% !important;
+            }
+            .recommend-card .rec-actions a,
+            .recommend-card .rec-actions button,
+            .rec-actions a,
+            .rec-actions button {
+                flex: 1 1 0 !important;
+                height: 46px !important;
+                min-height: 46px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                box-sizing: border-box !important;
+            }
+        }
     </style>
 </head>
 <body>
