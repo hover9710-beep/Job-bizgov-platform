@@ -498,10 +498,14 @@
             👉 공식 페이지 바로 신청
         </a>
         <button
-            type="button"
-            class="btn-share-kakao"
-            onclick="shareKakao('{{ (item.display_title or item.title or '')|e }}', '지금 신청 가능한 지원사업입니다.', 'https://job-bizgov-platform.onrender.com/project/{{ item.id }}?src=kakao')">
-            카카오로 공유하기
+          type="button"
+          class="btn-share-kakao"
+          onclick="shareKakao(
+            '{{ (item.display_title or item.title or item.name or '')|e }}',
+            '지금 신청 가능한 지원사업입니다.',
+            'https://job-bizgov-platform.onrender.com/project/{{ item.id }}?src=kakao'
+          )">
+          카카오로 공유하기
         </button>
         <p class="official-guide">
             ※ 공식 기관 페이지로 이동합니다. 최종 신청 전 공고문을 반드시 확인하세요.
@@ -678,25 +682,37 @@ document.addEventListener("DOMContentLoaded", function () {
 </script>
 <script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-  if (window.Kakao && !Kakao.isInitialized()) {
-    Kakao.init("7c482b7b3b3dc493ee01532cbc3f31e6");
-  }
-});
-
 function shareKakao(title, description, url) {
-  if (!window.Kakao || !Kakao.isInitialized()) {
-    alert("카카오 SDK 로딩 실패");
+  console.log("shareKakao called:", title, url);
+
+  if (!window.Kakao) {
+    alert("카카오 SDK가 로딩되지 않았습니다.");
     return;
   }
+
+  if (!Kakao.isInitialized()) {
+    Kakao.init("7c482b7b3b3dc493ee01532cbc3f31e6");
+  }
+
   Kakao.Share.sendDefault({
     objectType: "feed",
     content: {
       title: title || "지원사업 공고",
       description: description || "지금 신청 가능한 지원사업입니다.",
-      link: { mobileWebUrl: url, webUrl: url }
+      link: {
+        mobileWebUrl: url,
+        webUrl: url
+      }
     },
-    buttons: [{ title: "바로 확인하기", link: { mobileWebUrl: url, webUrl: url } }]
+    buttons: [
+      {
+        title: "바로 확인하기",
+        link: {
+          mobileWebUrl: url,
+          webUrl: url
+        }
+      }
+    ]
   });
 }
 </script>
