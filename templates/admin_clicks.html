@@ -42,6 +42,62 @@
             table { min-width:760px; font-size:14px; }
             .title-cell { min-width:360px; }
         }
+
+        .recent-click-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 14px;
+        }
+        .recent-click-card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            padding: 14px 16px;
+            box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+        }
+        .click-card-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .click-action {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: #dcfce7;
+            color: #15803d;
+            font-size: 13px;
+            font-weight: 800;
+        }
+        .click-time {
+            font-size: 12px;
+            color: #64748b;
+            white-space: nowrap;
+        }
+        .click-title {
+            font-size: 15px;
+            font-weight: 700;
+            line-height: 1.45;
+            color: #111827;
+            margin-bottom: 8px;
+            word-break: keep-all;
+        }
+        .click-meta {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            font-size: 13px;
+            color: #64748b;
+        }
+        .click-meta span {
+            background: #f1f5f9;
+            border-radius: 999px;
+            padding: 4px 8px;
+        }
     </style>
 </head>
 <body>
@@ -100,26 +156,22 @@
 
     <div class="admin-section">
         <h2>최근 클릭 100건</h2>
-        <div class="table-wrap">
-        <table>
-            <thead>
-                <tr><th>id</th><th>project_id</th><th>action</th><th>source</th><th class="title-cell">title</th><th>created_at</th></tr>
-            </thead>
-            <tbody>
+        <div class="recent-click-list">
             {% for row in recent_clicks %}
-                <tr>
-                    <td>{{ row.id }}</td>
-                    <td>{{ row.project_id or '-' }}</td>
-                    <td><span class="badge-action badge-{{ row.action }}">{{ row.action }}</span></td>
-                    <td>{{ row.source or '-' }}</td>
-                    <td class="title-cell">{{ row.display_title }}</td>
-                    <td>{{ row.created_at or '-' }}</td>
-                </tr>
+            <div class="recent-click-card">
+                <div class="click-card-top">
+                    <span class="click-action">{{ row.action }}</span>
+                    <span class="click-time">{{ row.created_at or '-' }}</span>
+                </div>
+                <div class="click-title">{{ row.display_title }}</div>
+                <div class="click-meta">
+                    <span>ID {{ row.project_id or '-' }}</span>
+                    <span>{{ row.source or '-' }}</span>
+                </div>
+            </div>
             {% else %}
-                <tr><td colspan="6">기록 없음</td></tr>
+            <p class="muted">기록 없음</p>
             {% endfor %}
-            </tbody>
-        </table>
         </div>
     </div>
 </div>
