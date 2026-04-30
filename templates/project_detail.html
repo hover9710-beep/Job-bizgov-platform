@@ -404,6 +404,15 @@
                 margin-bottom: 14px !important;
             }
         }
+
+        /* === 신청 안내 문구 === */
+        .official-guide {
+            font-size: 12px;
+            color: #6b7280;
+            text-align: center;
+            margin-top: 8px;
+            line-height: 1.5;
+        }
     </style>
 </head>
 <body>
@@ -471,8 +480,11 @@
         </div>
         {% if item.get('url') %}
         <a href="{{ item.url }}" target="_blank" rel="noopener" class="btn-apply primary-cta" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">
-            👉 지금 신청하기
+            👉 공식 페이지 바로 신청
         </a>
+        <p class="official-guide">
+            ※ 공식 기관 페이지로 이동합니다. 최종 신청 전 공고문을 반드시 확인하세요.
+        </p>
         {% endif %}
     </div>
 
