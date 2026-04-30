@@ -72,10 +72,11 @@ def log_visit():
         if ip and "," in ip:
             ip = ip.split(",")[0].strip()
         ua = request.headers.get("User-Agent", "")
+        traffic_source = detect_traffic_source()
         with sqlite3.connect(DB_PATH) as conn:
             conn.execute(
-                "INSERT INTO visit_log (path, method, ip, user_agent) VALUES (?, ?, ?, ?)",
-                (path, request.method, ip, ua[:500]),
+                "INSERT INTO visit_log (path, method, ip, user_agent, traffic_source) VALUES (?, ?, ?, ?, ?)",
+                (path, request.method, ip, ua[:500], traffic_source),
             )
             conn.commit()
     except Exception as e:
@@ -275,6 +276,15 @@ def _init_db():
         )
         """
     )
+
+    def ensure_column(conn, table_name, column_name, column_sql):
+        cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table_name})").fetchall()]
+        if column_name not in cols:
+            conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_sql}")
+            print(f"[DB] added {table_name}.{column_name}", flush=True)
+
+    ensure_column(conn, "visit_log", "traffic_source", "traffic_source TEXT")
+    ensure_column(conn, "click_log", "traffic_source", "traffic_source TEXT")
     conn.commit()
     conn.close()
 
@@ -870,10 +880,11 @@ def api_click():
         action = str(data.get("action") or "")
         source = str(data.get("source") or "")
         title = str(data.get("title") or "")
+        traffic_source = detect_traffic_source()
         conn = sqlite3.connect(DB_PATH)
         conn.execute(
-            "INSERT INTO click_log (project_id, action, source, title) VALUES (?,?,?,?)",
-            (project_id, action, source, title),
+            "INSERT INTO click_log (project_id, action, source, title, traffic_source) VALUES (?,?,?,?,?)",
+            (project_id, action, source, title, traffic_source),
         )
         conn.commit()
         conn.close()
@@ -914,6 +925,30 @@ def api_favorite():
         samesite="Lax",
     )
     return resp
+
+
+def detect_traffic_source():
+    try:
+        ref = (request.headers.get("Referer") or "").lower()
+        ua = (request.headers.get("User-Agent") or "").lower()
+        url = (request.url or "").lower()
+        src = (request.args.get("src") or request.args.get("utm_source") or "").lower().strip()
+        if src in ("kakao", "qr", "naver", "google", "direct", "test"):
+            return src
+        if "kakao" in ref or "kakaotalk" in ua or "kakao" in ua:
+            return "kakao"
+        if "utm_source=qr" in url or "src=qr" in url:
+            return "qr"
+        if not ref:
+            return "direct"
+        if "google" in ref:
+            return "google"
+        if "naver" in ref:
+            return "naver"
+        return "other"
+    except Exception as e:
+        print("[traffic_source] detect error:", repr(e), flush=True)
+        return "unknown"
 
 
 def check_admin(req: Any) -> bool:
@@ -1016,6 +1051,27 @@ def admin_visits():
             "ok": True,
             "today_visits": today,
             "by_path": [{"path": p, "count": c} for p, c in by_path],
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": repr(e)}), 500
+
+
+@app.route("/admin/traffic")
+def admin_traffic():
+    if not check_admin(request):
+        return "403 Forbidden", 403
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            visits = conn.execute(
+                "SELECT COALESCE(traffic_source,'unknown'), COUNT(*) FROM visit_log WHERE date(created_at,'localtime')=date('now','localtime') GROUP BY 1 ORDER BY 2 DESC"
+            ).fetchall()
+            clicks = conn.execute(
+                "SELECT COALESCE(traffic_source,'unknown'), COUNT(*) FROM click_log WHERE date(created_at,'localtime')=date('now','localtime') GROUP BY 1 ORDER BY 2 DESC"
+            ).fetchall()
+        return jsonify({
+            "ok": True,
+            "today_visits_by_source": [{"traffic_source": s, "count": c} for s, c in visits],
+            "today_clicks_by_source": [{"traffic_source": s, "count": c} for s, c in clicks],
         })
     except Exception as e:
         return jsonify({"ok": False, "error": repr(e)}), 500
