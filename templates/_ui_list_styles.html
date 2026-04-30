@@ -1,0 +1,61 @@
+<style>
+    body { font-size: 14px; font-family: system-ui, "Segoe UI", sans-serif; line-height: 1.45; }
+    .page-wrap { max-width: 1280px; margin: 0 auto; padding: 12px 16px 32px; }
+    .topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
+    .topnav a { text-decoration: none; color: #1d4ed8; font-weight: 600; }
+    .topnav a:hover { text-decoration: underline; }
+
+    .data-table { table-layout: fixed; width: 100%; border-collapse: collapse; border: 1px solid #d1d5db; background: #fff; }
+    .data-table thead th {
+        position: sticky; top: 0; z-index: 2;
+        background: #e8eef5; color: #1e293b; font-weight: 600;
+        box-shadow: inset 0 -1px 0 #cbd5e1;
+        padding: 10px 12px; vertical-align: top; text-align: center;
+    }
+    .data-table th, .data-table td { padding: 10px 12px; vertical-align: top; word-break: break-word; }
+    .data-table tbody tr:nth-child(odd) { background: #fafbfc; }
+    .data-table tbody tr:nth-child(even) { background: #f3f6f9; }
+    .data-table tbody tr:hover { background: #eef2ff; }
+
+    .col-num { width: 48px; text-align: center; }
+    .col-title { width: 28%; min-width: 200px; text-align: left; }
+    .col-org { width: 14%; text-align: left; }
+    .col-src { width: 100px; text-align: center; }
+    .col-status { width: 110px; text-align: center; }
+    .col-date { width: 108px; text-align: center; }
+    .col-action { width: 88px; text-align: center; }
+
+    .title-cell {
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        overflow: hidden; word-break: break-word;
+    }
+
+    .badge-status {
+        display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap;
+    }
+    /* 접수중 */
+    .badge-status-active { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    /* 공고중 */
+    .badge-status-open { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+    /* 마감 */
+    .badge-status-closed { background: #f3f4f6; color: #4b5563; border: 1px solid #d1d5db; }
+    /* 확인 필요 */
+    .badge-status-warn { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
+    /* 마감임박 보조 */
+    .badge-status-ending { background: #ffedd5; color: #c2410c; border: 1px solid #fdba74; }
+    .badge-status-other { background: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb; }
+
+    .badge-src {
+        display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 12px; font-weight: 600;
+    }
+    .badge-src-jb { background: #e0e7ff; color: #3730a3; }
+    .badge-src-biz { background: #dbeafe; color: #1e40af; }
+    .badge-src-other { background: #f3f4f6; color: #4b5563; }
+
+    .btn-detail {
+        display: inline-block; padding: 6px 12px; border-radius: 6px;
+        background: #2563eb; color: #fff !important; font-weight: 600; font-size: 13px; text-decoration: none;
+        border: 1px solid #1d4ed8;
+    }
+    .btn-detail:hover { background: #1d4ed8; }
+</style>

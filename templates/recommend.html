@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="utf-8">
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>맞춤 추천 공고</title>
+    <style>
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+            font-size: 16px;
+            line-height: 1.6;
+            color: #1f2937;
+            background-color: #f9fafb;
+        }
+
+        h1 { font-size: 28px; font-weight: 700; margin-bottom: 16px; }
+        h2 { font-size: 22px; font-weight: 600; }
+        h3 { font-size: 18px; font-weight: 600; }
+
+        table { font-size: 15px; }
+        th { font-weight: 600; background-color: #f3f4f6; }
+        td { color: #374151; }
+
+        button, a { font-weight: 500; letter-spacing: -0.2px; }
+
+        @media (max-width: 700px) {
+            body { font-size: 15px; }
+            h1 { font-size: 22px; }
+            h2 { font-size: 18px; }
+        }
+
+        body { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+        .muted { color: #64748b; font-size: 13px; }
+        .box { padding: 16px; background: #fff8e6; border: 1px solid #e5c76b; border-radius: 8px; margin: 16px 0; }
+        .flash { padding: 10px; margin: 12px 0; border-radius: 6px; }
+        .flash.success { background: #d1fae5; color: #065f46; }
+        .flash.danger { background: #fee2e2; color: #991b1b; }
+        .flash.warning { background: #fef3c7; color: #92400e; }
+        .flash.info { background: #e0f2fe; color: #075985; }
+        a.btn, button.btn { display: inline-block; padding: 8px 14px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 13px; border: none; cursor: pointer; }
+        button.btn { font-size: 13px; }
+        .topnav { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 8px; }
+        .topnav a { text-decoration: none; color: #1d4ed8; font-weight: 600; }
+        .topnav a:hover { text-decoration: underline; }
+
+        .company-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 8px 14px;
+            margin: 12px 0 16px;
+            padding: 12px 14px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+        }
+        .company-bar-label { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
+        .company-bar-name { font-size: 17px; font-weight: 700; color: #0f172a; }
+        .company-bar-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+        .company-tag { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e0e7ff; color: #3730a3; }
+
+        .usage-box {
+            margin: 14px 0 18px;
+            padding: 14px 16px;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 12px;
+            color: #1d4ed8;
+            font-weight: 700;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .usage-box strong { font-size: 16px; }
+
+        .usage-bar {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 10px 14px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #374151;
+        }
+        .usage-bar strong { color: #2563eb; font-size: 15px; }
+
+        .ai-disclaimer {
+            margin: 18px 0;
+            padding: 12px 14px;
+            border: 1px solid #fde68a;
+            background: #fffbeb;
+            color: #92400e;
+            border-radius: 12px;
+            font-size: 13px;
+            line-height: 1.55;
+        }
+        .ai-disclaimer strong { margin-right: 6px; font-weight: 900; }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin: 16px 0 20px;
+        }
+        .summary-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 14px 16px;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+        }
+        .summary-card .summary-label { font-size: 12px; color: #64748b; font-weight: 600; }
+        .summary-card .summary-value { font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+        .top-recommend-box {
+            margin: 0 0 20px;
+            padding: 16px 18px;
+            border: 1px solid #bfdbfe;
+            border-radius: 12px;
+            background: linear-gradient(180deg, #eff6ff 0%, #fff 48%);
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+        }
+        .top-label { font-size: 13px; font-weight: 700; color: #1d4ed8; margin-bottom: 8px; }
+        .top-title { font-size: 18px; font-weight: 700; line-height: 1.35; margin-bottom: 8px; }
+        .top-title a { color: #0f172a; text-decoration: none; }
+        .top-title a:hover { color: #2563eb; text-decoration: underline; }
+        .top-tag { font-size: 13px; font-weight: 600; color: #2563eb; margin-bottom: 8px; }
+        .top-reason { font-size: 13px; color: #334155; line-height: 1.5; margin-bottom: 10px; }
+        .top-meta { font-size: 12px; color: #64748b; margin-bottom: 12px; }
+        .top-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+        .recommend-table {
+            width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+            margin: 16px 0 24px;
+            font-size: 13px;
+        }
+        .recommend-table th,
+        .recommend-table td {
+            border-bottom: 1px solid #e5e7eb;
+            padding: 10px 8px;
+            vertical-align: top;
+        }
+        .recommend-table th {
+            text-align: center;
+            font-weight: 600;
+            background: #f8fafc;
+            color: #374151;
+        }
+        .recommend-table tr:hover { background: #fafafa; }
+        .recommend-table .num-col { width: 44px; text-align: center; color: #64748b; }
+        .recommend-table .org-col { width: 14%; text-align: center; }
+        .recommend-table .status-col { width: 90px; text-align: center; }
+        .recommend-table .end-col { width: 110px; text-align: center; font-variant-numeric: tabular-nums; }
+        .recommend-table .score-col { width: 72px; text-align: center; }
+        .recommend-table .action-col { width: 150px; text-align: center; white-space: nowrap; }
+
+        .title-cell { max-width: 0; }
+        .title-link { font-weight: 600; color: #0f172a; text-decoration: none; }
+        .title-link:hover { color: #2563eb; text-decoration: underline; }
+        .ai-summary-line {
+            margin-top: 4px;
+            font-size: 11px;
+            color: #64748b;
+            font-style: italic;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .recommend-label-line {
+            margin-top: 4px;
+            font-size: 11px;
+            color: #2563eb;
+            font-weight: 600;
+        }
+        .recommend-reason-line {
+            margin-top: 4px;
+            font-size: 11px;
+            color: #475569;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .score-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 8px;
+            background: #fef3c7;
+            color: #92400e;
+            font-weight: 700;
+            font-size: 12px;
+        }
+        .empty-box {
+            padding: 28px 20px;
+            text-align: center;
+            background: #f8fafc;
+            border: 1px dashed #cbd5e1;
+            border-radius: 12px;
+            color: #475569;
+            font-size: 14px;
+            line-height: 1.6;
+            margin: 20px 0;
+        }
+        .empty-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 16px; }
+        .btn-detail, .btn-apply {
+            display: inline-block;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+        }
+        .btn-detail { border: 1px solid #cbd5e1; color: #334155; background: #ffffff; }
+        .btn-detail:hover { background: #f1f5f9; }
+        .btn-apply { border: 1px solid #2563eb; color: #fff; background: #2563eb; }
+        .btn-apply:hover { background: #1d4ed8; }
+        .mail-row { margin: 12px 0 8px; }
+
+        .recommend-summary {
+            margin: 18px 0;
+            padding: 16px;
+            border: 1px solid #bfdbfe;
+            background: #eff6ff;
+            border-radius: 14px;
+            color: #1e3a8a;
+            font-weight: 700;
+        }
+        .recommend-card {
+            margin: 16px 0;
+            padding: 18px;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            background: #fff;
+        }
+        .rank-badge {
+            display: inline-block;
+            margin-bottom: 8px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: #2563eb;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 800;
+        }
+        .recommend-score {
+            display: inline-block;
+            margin: 8px 0;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #dcfce7;
+            color: #15803d;
+            font-weight: 900;
+            font-size: 13px;
+        }
+        .rec-title { font-size: 17px; font-weight: 700; line-height: 1.4; margin: 8px 0; }
+        .rec-title a { color: #0f172a; text-decoration: none; }
+        .rec-title a:hover { color: #2563eb; text-decoration: underline; }
+        .reason-list { margin: 10px 0 14px; padding-left: 18px; color: #4b5563; line-height: 1.6; }
+        .reason-list li { margin-bottom: 4px; }
+
+        .reason-simple {
+            margin-top: 6px;
+            font-size: 14px;
+            color: #374151;
+        }
+
+        .reason-toggle {
+            margin-top: 6px;
+            font-size: 13px;
+            color: #2563eb;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .reason-detail {
+            margin-top: 8px;
+            padding: 10px 12px;
+            background: #f9fafb;
+            border-radius: 10px;
+            font-size: 13px;
+            color: #4b5563;
+            line-height: 1.6;
+        }
+
+        .reason-detail ul {
+            padding-left: 16px;
+            margin: 0;
+        }
+        .rec-actions {
+            display: flex;
+            flex-direction: row;
+            gap: 10px;
+            margin-top: 14px;
+            width: 100%;
+        }
+        .rec-actions a,
+        .rec-actions button {
+            flex: 1 1 0;
+            height: 46px;
+            min-height: 46px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            white-space: nowrap;
+        }
+        .rec-actions .btn-detail {
+            background: #ffffff;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+        .rec-actions .btn-apply {
+            background: #2563eb;
+            color: #ffffff;
+            border: 1px solid #2563eb;
+        }
+
+        @media (max-width: 700px) {
+            .summary-grid { grid-template-columns: 1fr; }
+            .top-recommend-box { padding: 14px; }
+            .rec-card { padding: 14px; margin-bottom: 12px; }
+            .rec-title { font-size: 15px; line-height: 1.45; }
+            .rec-actions { flex-direction: column; }
+            .rec-actions a,
+            .rec-actions button { min-height: 48px; font-size: 15px; }
+
+            .top-title { font-size: 15px; line-height: 1.45; }
+            .top-actions {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+            }
+            .top-actions .btn-detail,
+            .top-actions .btn-apply {
+                width: 100%;
+                text-align: center;
+                box-sizing: border-box;
+            }
+            .recommend-table { display: block; overflow-x: auto; }
+            .recommend-table .action-col {
+                white-space: normal;
+                display: block;
+                width: 100%;
+            }
+            .recommend-table .action-col .btn-detail,
+            .recommend-table .action-col .btn-apply {
+                display: block;
+                width: 100%;
+                text-align: center;
+                box-sizing: border-box;
+                margin: 0 0 6px;
+            }
+            .recommend-table .action-col .btn-apply:last-child { margin-bottom: 0; }
+            .mail-row .btn { width: 100%; box-sizing: border-box; text-align: center; }
+
+            .ai-disclaimer { font-size: 12px; margin: 14px 0; }
+
+            .usage-box {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+                font-size: 14px;
+            }
+
+            .recommend-card { padding: 16px; border-radius: 15px; }
+            .recommend-actions a { font-size: 14px; padding: 12px 10px; }
+        }
+
+        /* 카드 내부 여백 안정화 */
+        .recommend-card,
+        .project-card,
+        .recommend-item {
+            padding: 18px 20px !important;
+            box-sizing: border-box;
+        }
+
+        /* 추천 이유 링크 간격 */
+        .recommend-reason,
+        .why-recommend,
+        .reason-toggle {
+            display: inline-block;
+            margin-top: 6px;
+            margin-bottom: 12px;
+        }
+
+        /* 버튼 영역 정렬 */
+        .card-actions,
+        .recommend-actions,
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+            margin-top: 8px;
+        }
+
+        /* 버튼 높이 강제 통일 */
+        .card-actions a,
+        .card-actions button,
+        .recommend-actions a,
+        .recommend-actions button {
+            height: 44px !important;
+            line-height: 44px !important;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            white-space: nowrap;
+        }
+
+        .btn-detail, .detail-btn { flex: 1; }
+        .btn-apply, .apply-btn { flex: 1; }
+
+        @media (max-width: 768px) {
+            .card-actions,
+            .recommend-actions {
+                flex-direction: column;
+            }
+        }
+
+        /* === recommend.html 최종 미세 정렬 보정 === */
+        .recommend-card {
+            padding: 20px 22px !important;
+            margin-bottom: 18px !important;
+            box-sizing: border-box !important;
+        }
+        .recommend-card .rank-badge,
+        .recommend-card .recommend-score {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            height: 28px !important;
+            min-width: 54px !important;
+            padding: 0 10px !important;
+            line-height: 1 !important;
+            vertical-align: middle !important;
+        }
+        .recommend-card h3,
+        .recommend-card .title,
+        .recommend-card .recommend-title {
+            margin-top: 14px !important;
+            margin-bottom: 8px !important;
+            line-height: 1.45 !important;
+        }
+        .recommend-card .reason-toggle,
+        .recommend-card .why-recommend {
+            display: inline-block !important;
+            margin-top: 6px !important;
+            margin-bottom: 12px !important;
+        }
+        .rec-actions {
+            display: flex !important;
+            gap: 10px !important;
+            align-items: stretch !important;
+            width: 100% !important;
+            margin-top: 14px !important;
+        }
+        .rec-actions a,
+        .rec-actions button {
+            flex: 1 1 0 !important;
+            height: 46px !important;
+            min-height: 46px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 0 14px !important;
+            white-space: nowrap !important;
+            box-sizing: border-box !important;
+            line-height: 1 !important;
+        }
+        .recommend-summary {
+            padding: 18px 20px !important;
+            margin: 16px 0 !important;
+            box-sizing: border-box !important;
+        }
+        .company-bar {
+            padding: 12px 14px !important;
+            box-sizing: border-box !important;
+        }
+        .company-tag {
+            display: inline-flex !important;
+            align-items: center !important;
+            line-height: 1.2 !important;
+        }
+        @media (max-width: 768px) {
+            .recommend-card {
+                padding: 18px 16px !important;
+            }
+            .rec-actions {
+                flex-direction: column !important;
+                gap: 10px !important;
+            }
+            .rec-actions a,
+            .rec-actions button {
+                width: 100% !important;
+                height: 48px !important;
+                min-height: 48px !important;
+                font-size: 15px !important;
+            }
+        }
+
+        /* === 버튼 영역 직접 타겟 (핵심 수정) === */
+        .recommend-card > div:last-child {
+            display: flex !important;
+            gap: 10px !important;
+            width: 100% !important;
+            margin-top: 14px !important;
+        }
+        .recommend-card > div:last-child a {
+            flex: 1 !important;
+            height: 46px !important;
+            min-height: 46px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            box-sizing: border-box !important;
+        }
+        @media (max-width: 768px) {
+            .recommend-card > div:last-child {
+                flex-direction: column !important;
+            }
+            .recommend-card > div:last-child a {
+                width: 100% !important;
+            }
+        }
+
+        /* === 모바일 추천 버튼 최종 보정: rec-actions 직접 타겟 === */
+        @media (max-width: 768px) {
+            .recommend-card .rec-actions,
+            .rec-actions {
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 10px !important;
+                width: 100% !important;
+                margin-top: 14px !important;
+            }
+            .recommend-card .rec-actions a,
+            .recommend-card .rec-actions button,
+            .rec-actions a,
+            .rec-actions button {
+                width: 100% !important;
+                max-width: 100% !important;
+                flex: none !important;
+                height: 48px !important;
+                min-height: 48px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                box-sizing: border-box !important;
+                white-space: nowrap !important;
+            }
+        }
+        @media (min-width: 769px) {
+            .recommend-card .rec-actions,
+            .rec-actions {
+                display: flex !important;
+                flex-direction: row !important;
+                gap: 10px !important;
+                width: 100% !important;
+            }
+            .recommend-card .rec-actions a,
+            .recommend-card .rec-actions button,
+            .rec-actions a,
+            .rec-actions button {
+                flex: 1 1 0 !important;
+                height: 46px !important;
+                min-height: 46px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                box-sizing: border-box !important;
+            }
+        }
+
+        /* === recommend 모바일 최종 안정화 === */
+        @media screen and (max-width: 900px) {
+            body { overflow-x: hidden !important; }
+            .recommend-card {
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 18px 16px !important;
+                box-sizing: border-box !important;
+            }
+            .rec-actions,
+            .recommend-card .rec-actions {
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 10px !important;
+                width: 100% !important;
+                margin-top: 14px !important;
+            }
+            .rec-actions a,
+            .rec-actions button,
+            .recommend-card .rec-actions a,
+            .recommend-card .rec-actions button {
+                width: 100% !important;
+                max-width: 100% !important;
+                flex: none !important;
+                height: 48px !important;
+                min-height: 48px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                box-sizing: border-box !important;
+                white-space: nowrap !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>맞춤 추천 공고</h1>
+    <div class="usage-box">
+        <div>오늘 사용: <strong>{{ used_count }}</strong> / {{ limit }}</div>
+        <div>남은 횟수: <strong>{{ remaining }}</strong>회</div>
+    </div>
+    <nav class="topnav">
+        <a href="{{ url_for('index') }}">공고목록</a>
+        <a href="{{ url_for('new_announcements') }}">신규공고</a>
+        <a href="{{ url_for('projects_list') }}">전체공고</a>
+        <a href="{{ url_for('company') }}">회사정보</a>
+        <a href="{{ url_for('recommend') }}">맞춤추천</a>
+        <a href="{{ url_for('run_pipeline_route') }}">파이프라인 실행</a>
+    </nav>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% if no_company %}
+    <div class="box">
+        <p><strong>등록된 회사 정보가 없습니다.</strong></p>
+        <p class="muted">추천을 받으려면 먼저 회사 정보를 입력해 주세요.</p>
+        <p><a class="btn" href="{{ url_for('company') }}">회사 정보 입력하기</a></p>
+    </div>
+    {% elif no_projects %}
+    <p><strong>등록된 공고가 없습니다.</strong></p>
+    {% if company %}
+    <div class="company-bar">
+        <span class="company-bar-label">기준 회사</span>
+        <span class="company-bar-name">{{ company["company_name"] }}</span>
+    </div>
+    {% endif %}
+    {% else %}
+    {% if company %}
+    <div class="company-bar">
+        <span class="company-bar-label">기준 회사</span>
+        <span class="company-bar-name">{{ company["company_name"] }}</span>
+        <div class="company-bar-tags">
+            {% if company["industry"] %}<span class="company-tag">{{ company["industry"] }}</span>{% endif %}
+            {% if company["region"] %}<span class="company-tag">{{ company["region"] }}</span>{% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if items %}
+    <div class="recommend-summary">
+        추천 후보 {{ total_candidates|default(0) }}건 중<br>
+        귀사 기준 <strong>TOP {{ shown_count|default(0) }}건</strong>을 선별했습니다.
+    </div>
+
+    <div class="usage-bar">
+        <div>오늘 사용 <strong>{{ used_count }}</strong> / {{ limit }}</div>
+        <div>
+            남은 <strong>{{ remaining }}</strong>회
+            {% if remaining == 1 %}
+                <span style="color:red;"> ⚠ 마지막 1회</span>
+            {% endif %}
+        </div>
+    </div>
+
+    {% for item in items %}
+    <div class="recommend-card">
+        <div class="rank-badge">TOP {{ loop.index }}</div>
+        <div class="recommend-score">추천도 {{ item.score }}점</div>
+        <div class="rec-title">
+            <a href="{{ url_for('project_detail', pid=item.id) }}">{{ item.display_title or item.title }}</a>
+        </div>
+        <div class="reason-simple">
+            {{ item.reason }}
+        </div>
+
+        <div class="reason-toggle" onclick="toggleReason(this)">
+            왜 추천됐나요? ▼
+        </div>
+
+        <div class="reason-detail" style="display:none;">
+            <ul>
+                <li>입력한 회사정보 기반으로 조건이 일치합니다.</li>
+                <li>지역 / 업종 / 수출 여부 등을 종합 반영했습니다.</li>
+
+                {% if item.reason and "지역" in item.reason %}
+                <li>지역 조건이 공고와 일치합니다.</li>
+                {% endif %}
+
+                {% if item.reason and "수출" in item.reason %}
+                <li>수출 관련 공고로 판단되었습니다.</li>
+                {% endif %}
+
+                {% if item.reason and "인증" in item.reason %}
+                <li>인증 보유 조건이 반영되었습니다.</li>
+                {% endif %}
+
+                {% if item.reason and "카탈로그" in item.reason %}
+                <li>외국어 카탈로그 보유 조건이 반영되었습니다.</li>
+                {% endif %}
+
+                {% if item.reason and "사회적기업" in item.reason %}
+                <li>사회적기업 조건이 반영되었습니다.</li>
+                {% endif %}
+
+                {% if item.reason and "여성대표" in item.reason %}
+                <li>여성대표기업 조건이 반영되었습니다.</li>
+                {% endif %}
+
+                {% if item.reason and "수출의 탑" in item.reason %}
+                <li>수출 실적 조건이 반영되었습니다.</li>
+                {% endif %}
+
+                <li>최종 신청 여부는 공고 원문을 반드시 확인해야 합니다.</li>
+            </ul>
+        </div>
+        <div class="rec-actions">
+            <a class="btn-detail" href="{{ url_for('project_detail', pid=item.id) }}"
+               onclick="logClick('{{ item.id }}', 'detail', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">상세보기</a>
+            {% if item.url %}
+            <a class="btn-apply" href="{{ item.url }}" target="_blank" rel="noopener"
+               onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">신청 바로가기</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <div class="mail-row">
+        <form method="post" action="{{ url_for('recommend_send') }}" style="display:inline;">
+            {% if company %}
+            <input type="hidden" name="company_id" value="{{ company['id'] }}">
+            {% endif %}
+            <button type="submit" class="btn">추천 결과 메일로 보내기</button>
+        </form>
+        <span class="muted" style="margin-left:8px;">(상위 10건 · 수신: MAIL_TO 환경변수)</span>
+    </div>
+
+    <div class="ai-disclaimer">
+        <strong>주의</strong>
+        AI는 보조적 판단수단이며, 사실이 아닌 내용을 생성할 수 있습니다.
+        최종 판단과 공고 원문 확인은 반드시 사용자의 책임입니다.
+    </div>
+    {% else %}
+    <div class="empty-box">
+      조건에 맞는 지원사업이 없습니다.<br>
+      업종, 지역, 수출 여부를 변경해 다시 추천을 받아보세요.
+    </div>
+    <div class="empty-actions">
+      <a href="{{ url_for('company') }}" class="btn-detail">회사정보 다시 입력</a>
+      <a href="{{ url_for('index') }}" class="btn-detail">전체 공고 보기</a>
+    </div>
+    {% endif %}
+    {% endif %}
+<script>
+function logClick(projectId, action, source, title) {
+  try {
+    fetch("/api/click", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({project_id: projectId||"", action: action||"", source: source||"", title: title||""})
+    }).catch(function(){});
+  } catch(e) {}
+}
+</script>
+<script>
+function toggleReason(el) {
+  const detail = el.nextElementSibling;
+  if (detail.style.display === "none") {
+    detail.style.display = "block";
+    el.innerText = "왜 추천됐나요? ▲";
+  } else {
+    detail.style.display = "none";
+    el.innerText = "왜 추천됐나요? ▼";
+  }
+}
+</script>
+</body>
+</html>
