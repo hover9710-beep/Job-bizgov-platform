@@ -1087,22 +1087,19 @@ def admin_status_debug():
         today = date.today().isoformat()
         with sqlite3.connect(DB_PATH) as conn:
             conn.row_factory = sqlite3.Row
-            col_names = {
-                str(r[1])
-                for r in conn.execute("PRAGMA table_info(biz_projects)").fetchall()
-            }
-            # Render/구 DB 에 display_status 컬럼이 없으면 status 로 대체
-            ds_col = "display_status" if "display_status" in col_names else "status"
-            rows = conn.execute(
-                f"""
+            cols = [r[1] for r in conn.execute(
+                "PRAGMA table_info(biz_projects)"
+            ).fetchall()]
+            ds_col = "display_status" if "display_status" in cols else "status"
+            rows = conn.execute(f"""
                 SELECT id, source,
                        substr(title,1,40) as title,
-                       end_date, {ds_col} AS display_status
+                       end_date,
+                       {ds_col} as display_status
                 FROM biz_projects
                 ORDER BY id DESC
                 LIMIT 50
-                """
-            ).fetchall()
+            """).fetchall()
         result = []
         for r in rows:
             end = (r["end_date"] or "").strip()
@@ -1113,15 +1110,11 @@ def admin_status_debug():
                 calc = "접수중"
             else:
                 calc = "마감"
-            result.append(
-                {
-                    "id": r["id"],
-                    "source": r["source"],
-                    "end_date": end,
-                    "display_status": ds,
-                    "calc": calc,
-                }
-            )
+            result.append({
+                "end_date": end,
+                "display_status": ds,
+                "calc": calc,
+            })
         return jsonify({"today": today, "sample": result[:10]})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
