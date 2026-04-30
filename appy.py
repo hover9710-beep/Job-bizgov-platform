@@ -416,23 +416,25 @@ def _compute_ui_summary(items: List[dict]) -> dict:
     """
     인덱스 카드 요약 집계.
       - total    : 전체
-      - open     : display_status == '접수중'
-      - closed   : display_status == '마감'
+      - open     : display_status == '접수중' 이거나
+                   (end_date가 있고 오늘 이상이며 display_status != '마감')
+      - closed   : display_status == '마감' 이거나 end_date가 오늘 미만
       - unknown  : 그 외(확인 필요 등)
-      - urgent   : 접수중 중 end_date 가 오늘 ~ 오늘+3일(포함) 사이
+      - urgent   : open 중 end_date(ISO 문자열)가 오늘 ~ 오늘+3일(포함) 사이
     """
     today = date.today()
-    limit = today + timedelta(days=3)
+    today_str = today.isoformat()
+    limit_str = (today + timedelta(days=3)).isoformat()
     total = len(items)
     open_n = closed_n = unknown_n = urgent_n = 0
     for it in items:
         st = (it.get("display_status") or "").strip()
-        if st == "접수중":
+        end = (it.get("end_date") or "").strip()
+        if st == "접수중" or (end and end >= today_str and st != "마감"):
             open_n += 1
-            ed = _safe_parse_date(it.get("end_date"))
-            if ed is not None and today <= ed <= limit:
+            if end and today_str <= end <= limit_str:
                 urgent_n += 1
-        elif st == "마감":
+        elif st == "마감" or (end and end < today_str):
             closed_n += 1
         else:
             unknown_n += 1
