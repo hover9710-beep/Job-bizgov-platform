@@ -2387,6 +2387,7 @@ def _render_new_announcements_page(is_admin: bool):
             source_labels=SOURCE_LABELS,
             top_clicked=top_clicked,
             usage=usage,
+            today_visits=get_today_visit_count(),
             is_admin=is_admin,
         )
     )
