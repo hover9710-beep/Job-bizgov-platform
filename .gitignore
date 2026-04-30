@@ -10,6 +10,7 @@ __pycache__/
 db/
 debug_detail.html
 *.db
+!db/biz.db
 
 # Runtime outputs (under ignored data/): data/history/, data/mail/, data/new.json
 # To track only data/mail/.gitkeep, replace blanket `data/` with granular rules.
