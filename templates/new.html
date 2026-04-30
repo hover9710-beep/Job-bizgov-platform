@@ -851,12 +851,10 @@
             <span class="summary-label">마감임박 (≤ D-3)</span>
             <span class="summary-value">{{ s.urgent }}</span>
         </div>
-        {% if today_visits is defined and today_visits > 0 %}
         <div class="summary-card">
             <span class="summary-label">오늘 방문</span>
-            <span class="summary-value">{{ today_visits }}</span>
+            <span class="summary-value">{{ today_visits | default(0) }}</span>
         </div>
-        {% endif %}
     </div>
 
     {% if top_clicked %}
