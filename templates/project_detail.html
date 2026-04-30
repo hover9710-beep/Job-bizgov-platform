@@ -677,39 +677,26 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 <script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
-
 <script>
-if (window.Kakao) {
-  if (!Kakao.isInitialized()) {
+document.addEventListener("DOMContentLoaded", function () {
+  if (window.Kakao && !Kakao.isInitialized()) {
     Kakao.init("7c482b7b3b3dc493ee01532cbc3f31e6");
   }
-}
+});
 
 function shareKakao(title, description, url) {
   if (!window.Kakao || !Kakao.isInitialized()) {
-    alert("카카오 SDK 초기화 실패");
+    alert("카카오 SDK 로딩 실패");
     return;
   }
-
   Kakao.Share.sendDefault({
-    objectType: 'feed',
+    objectType: "feed",
     content: {
-      title: title,
-      description: description,
-      link: {
-        mobileWebUrl: url,
-        webUrl: url,
-      },
+      title: title || "지원사업 공고",
+      description: description || "지금 신청 가능한 지원사업입니다.",
+      link: { mobileWebUrl: url, webUrl: url }
     },
-    buttons: [
-      {
-        title: '바로 확인하기',
-        link: {
-          mobileWebUrl: url,
-          webUrl: url,
-        },
-      },
-    ],
+    buttons: [{ title: "바로 확인하기", link: { mobileWebUrl: url, webUrl: url } }]
   });
 }
 </script>
