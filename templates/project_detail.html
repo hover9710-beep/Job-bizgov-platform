@@ -500,12 +500,8 @@
         <button
           type="button"
           class="btn-share-kakao"
-          onclick="shareKakao(
-            '{{ (item.display_title or item.title or item.name or '')|e }}',
-            '지금 신청 가능한 지원사업입니다.',
-            'https://job-bizgov-platform.onrender.com/project/{{ item.id }}?src=kakao'
-          )">
-          카카오로 공유하기
+          onclick='shareProject({{ (item.display_title or item.title or item.get("name") or "지원사업 공고")|tojson }}, {{ "지금 신청 가능한 지원사업입니다."|tojson }}, {{ ("https://job-bizgov-platform.onrender.com/project/" ~ item.id ~ "?src=share")|tojson }})'>
+          공유하기
         </button>
         <p class="official-guide">
             ※ 공식 기관 페이지로 이동합니다. 최종 신청 전 공고문을 반드시 확인하세요.
@@ -680,40 +676,29 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 });
 </script>
-<script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
 <script>
-function shareKakao(title, description, url) {
-  console.log("shareKakao called:", title, url);
+async function shareProject(title, text, url) {
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: title || "지원사업 공고",
+        text: text || "지금 신청 가능한 지원사업입니다.",
+        url: url
+      });
+      return;
+    }
 
-  if (!window.Kakao) {
-    alert("카카오 SDK가 로딩되지 않았습니다.");
-    return;
+    await navigator.clipboard.writeText(url);
+    alert("공유 링크를 복사했습니다. 카카오톡에 붙여넣어 보내세요.");
+  } catch (err) {
+    console.log("share failed", err);
+    try {
+      await navigator.clipboard.writeText(url);
+      alert("공유 링크를 복사했습니다. 카카오톡에 붙여넣어 보내세요.");
+    } catch (copyErr) {
+      alert("공유에 실패했습니다. 링크복사 버튼을 이용해주세요.");
+    }
   }
-
-  if (!Kakao.isInitialized()) {
-    Kakao.init("7c482b7b3b3dc493ee01532cbc3f31e6");
-  }
-
-  Kakao.Share.sendDefault({
-    objectType: "feed",
-    content: {
-      title: title || "지원사업 공고",
-      description: description || "지금 신청 가능한 지원사업입니다.",
-      link: {
-        mobileWebUrl: url,
-        webUrl: url
-      }
-    },
-    buttons: [
-      {
-        title: "바로 확인하기",
-        link: {
-          mobileWebUrl: url,
-          webUrl: url
-        }
-      }
-    ]
-  });
 }
 </script>
 </body>
