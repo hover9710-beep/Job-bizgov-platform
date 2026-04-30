@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>오늘 유입 경로</title>
+<style>
+body { font-family: sans-serif; padding: 20px; background: #f9fafb; }
+h2 { font-size: 20px; margin-bottom: 16px; }
+table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; }
+th { background: #f1f5f9; padding: 10px; text-align: left; font-size: 13px; }
+td { padding: 10px; border-top: 1px solid #e5e7eb; font-size: 14px; }
+.total { margin-top: 14px; font-weight: 700; color: #1d4ed8; }
+a { color: #1d4ed8; font-size: 13px; }
+</style>
+</head>
+<body>
+<a href="/admin?key={{ request.args.get('key','') }}">← 관리자</a>
+<h2>📊 오늘 유입 경로</h2>
+<table>
+<tr><th>유입 경로</th><th>방문 수</th></tr>
+{% for source, cnt in rows %}
+<tr><td>{{ source or 'unknown' }}</td><td>{{ cnt }}</td></tr>
+{% endfor %}
+</table>
+<p class="total">합계: {{ total }}회</p>
+</body>
+</html>

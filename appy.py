@@ -1062,19 +1062,17 @@ def admin_traffic():
         return "403 Forbidden", 403
     try:
         with sqlite3.connect(DB_PATH) as conn:
-            visits = conn.execute(
-                "SELECT COALESCE(traffic_source,'unknown'), COUNT(*) FROM visit_log WHERE date(created_at,'localtime')=date('now','localtime') GROUP BY 1 ORDER BY 2 DESC"
-            ).fetchall()
-            clicks = conn.execute(
-                "SELECT COALESCE(traffic_source,'unknown'), COUNT(*) FROM click_log WHERE date(created_at,'localtime')=date('now','localtime') GROUP BY 1 ORDER BY 2 DESC"
-            ).fetchall()
-        return jsonify({
-            "ok": True,
-            "today_visits_by_source": [{"traffic_source": s, "count": c} for s, c in visits],
-            "today_clicks_by_source": [{"traffic_source": s, "count": c} for s, c in clicks],
-        })
+            rows = conn.execute("""
+                SELECT traffic_source, COUNT(*) as cnt
+                FROM visit_log
+                WHERE date(created_at, 'localtime') = date('now', 'localtime')
+                GROUP BY traffic_source
+                ORDER BY cnt DESC
+            """).fetchall()
+        total = sum(r[1] for r in rows)
+        return render_template("admin_traffic.html", rows=rows, total=total)
     except Exception as e:
-        return jsonify({"ok": False, "error": repr(e)}), 500
+        return f"ERROR: {e}"
 
 
 @app.route("/admin/clicks")
