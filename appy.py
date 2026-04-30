@@ -54,6 +54,34 @@ def ensure_db_file():
 
 
 app = Flask(__name__)
+
+
+@app.before_request
+def log_visit():
+    try:
+        if request.method != "GET":
+            return
+        path = request.path or ""
+        if path.startswith("/static"):
+            return
+        if path == "/favicon.ico":
+            return
+        if path.startswith("/api/run/status"):
+            return
+        ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+        if ip and "," in ip:
+            ip = ip.split(",")[0].strip()
+        ua = request.headers.get("User-Agent", "")
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute(
+                "INSERT INTO visit_log (path, method, ip, user_agent) VALUES (?, ?, ?, ?)",
+                (path, request.method, ip, ua[:500]),
+            )
+            conn.commit()
+    except Exception as e:
+        print("[visit_log] skipped:", repr(e), flush=True)
+
+
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-key")
 ADMIN_KEY = os.getenv("ADMIN_KEY", "dev-admin-key")
 
@@ -232,6 +260,18 @@ def _init_db():
           status TEXT,
           message TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS visit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            path TEXT,
+            method TEXT,
+            ip TEXT,
+            user_agent TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
         """
     )
@@ -862,6 +902,18 @@ def check_admin(req: Any) -> bool:
     return False
 
 
+def get_today_visit_count():
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM visit_log WHERE date(created_at,'localtime')=date('now','localtime')"
+            ).fetchone()
+            return row[0] if row else 0
+    except Exception as e:
+        print("[visit_log] count error:", repr(e), flush=True)
+        return 0
+
+
 @app.route("/admin")
 def admin_dashboard():
     if not check_admin(request):
@@ -923,6 +975,27 @@ def admin_dashboard():
         recent_clicks=recent_clicks,
         top_projects=top_projects,
     )
+
+
+@app.route("/admin/visits")
+def admin_visits():
+    if not check_admin(request):
+        return "403 Forbidden", 403
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            today = conn.execute(
+                "SELECT COUNT(*) FROM visit_log WHERE date(created_at,'localtime')=date('now','localtime')"
+            ).fetchone()[0]
+            by_path = conn.execute(
+                "SELECT path, COUNT(*) as cnt FROM visit_log WHERE date(created_at,'localtime')=date('now','localtime') GROUP BY path ORDER BY cnt DESC LIMIT 20"
+            ).fetchall()
+        return jsonify({
+            "ok": True,
+            "today_visits": today,
+            "by_path": [{"path": p, "count": c} for p, c in by_path],
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": repr(e)}), 500
 
 
 @app.route("/admin/clicks")
