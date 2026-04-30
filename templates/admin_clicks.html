@@ -98,6 +98,13 @@
             border-radius: 999px;
             padding: 4px 8px;
         }
+
+        .popular-list { display:flex; flex-direction:column; gap:12px; margin-top:14px; }
+        .popular-card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:14px 16px; box-shadow:0 2px 8px rgba(15,23,42,0.04); }
+        .popular-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+        .popular-id { background:#f1f5f9; color:#64748b; border-radius:999px; padding:4px 9px; font-size:12px; font-weight:800; }
+        .popular-count { background:#ffedd5; color:#c2410c; border-radius:999px; padding:4px 10px; font-size:12px; font-weight:900; white-space:nowrap; }
+        .popular-title { font-size:15px; font-weight:800; line-height:1.45; color:#111827; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:keep-all; }
     </style>
 </head>
 <body>
@@ -140,17 +147,18 @@
 
     <div class="admin-section">
         <h2>인기 공고 TOP 20 (project_id · title)</h2>
-        <div class="table-wrap">
-        <table>
-            <thead><tr><th>project_id</th><th class="title-cell">title</th><th class="num">클릭</th></tr></thead>
-            <tbody>
+        <div class="popular-list">
             {% for row in top_projects %}
-                <tr><td>{{ row.project_id or '-' }}</td><td class="title-cell">{{ row.display_title }}</td><td class="num">{{ row.cnt }}</td></tr>
+            <div class="popular-card">
+                <div class="popular-head">
+                    <span class="popular-id">ID {{ row.project_id or '-' }}</span>
+                    <span class="popular-count">조회 {{ row.cnt }}</span>
+                </div>
+                <div class="popular-title">{{ row.display_title }}</div>
+            </div>
             {% else %}
-                <tr><td colspan="3">기록 없음</td></tr>
+            <p class="muted">기록 없음</p>
             {% endfor %}
-            </tbody>
-        </table>
         </div>
     </div>
 
