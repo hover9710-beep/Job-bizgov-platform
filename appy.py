@@ -1075,6 +1075,40 @@ def admin_traffic():
         return f"ERROR: {e}"
 
 
+@app.route("/admin/status-debug")
+def admin_status_debug():
+    if not check_admin(request):
+        return "unauthorized", 403
+    from datetime import date
+
+    today = date.today().isoformat()
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("""
+            SELECT id, source, title, start_date, end_date, status, display_status
+            FROM biz_projects
+            ORDER BY id DESC
+            LIMIT 100
+        """).fetchall()
+    result = []
+    for r in rows:
+        end_date = r["end_date"]
+        if not end_date or end_date in ("-", "None", "null"):
+            calc = "확인 필요"
+        elif end_date >= today:
+            calc = "접수중"
+        else:
+            calc = "마감"
+        result.append({
+            "id": r["id"],
+            "source": r["source"],
+            "end_date": r["end_date"],
+            "display_status": r["display_status"],
+            "calc": calc,
+        })
+    return jsonify({"today": today, "rows": result})
+
+
 @app.route("/admin/clicks")
 def admin_clicks():
     """클릭 로그 확인용(비로그인). DB 저장만 하던 기록을 표로 확인."""
