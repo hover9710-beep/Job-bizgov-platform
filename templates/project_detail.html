@@ -359,6 +359,51 @@
                 margin-bottom: 14px;
             }
         }
+
+        /* === QR 코드 크기 강제 축소 최종본 === */
+        .qr-box {
+            width: 100% !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            margin: 14px 0 8px 0 !important;
+        }
+        .qr-box-img {
+            width: 170px !important;
+            max-width: 170px !important;
+            height: auto !important;
+            display: block !important;
+            object-fit: contain !important;
+            border-radius: 12px !important;
+            background: #ffffff !important;
+            padding: 8px !important;
+            border: 1px solid #e5e7eb !important;
+            box-sizing: border-box !important;
+        }
+        .qr-box img {
+            width: 170px !important;
+            max-width: 170px !important;
+            height: auto !important;
+        }
+        .qr-box-guide {
+            text-align: center !important;
+            font-size: 13px !important;
+            line-height: 1.5 !important;
+            color: #64748b !important;
+            margin: 6px 0 16px 0 !important;
+        }
+        @media (max-width: 480px) {
+            .qr-box-img,
+            .qr-box img {
+                width: 150px !important;
+                max-width: 150px !important;
+                padding: 6px !important;
+            }
+            .qr-box-guide {
+                font-size: 12px !important;
+                margin-bottom: 14px !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -396,10 +441,10 @@
             <button type="button" id="qr-btn" class="btn-share">QR코드</button>
         </div>
         <div id="qr-wrap" style="display:none; text-align:center; margin:14px 0 20px;">
-            <div class="qr-wrap">
-                <img src="{{ qr_url }}" alt="공고 QR 코드" class="qr-img" id="qr-img">
+            <div class="qr-box">
+                <img src="{{ qr_url }}" alt="공고 QR 코드" class="qr-box-img" id="qr-img">
             </div>
-            <p class="qr-guide">QR 대신 아래 버튼으로 바로 신청할 수 있습니다.</p>
+            <p class="qr-box-guide">이 QR을 스캔하면 현재 공고 페이지가 열립니다.</p>
         </div>
         <div id="qr-error" style="display:none; margin-top:8px; font-size:13px; color:#dc2626;"></div>
     </div>
