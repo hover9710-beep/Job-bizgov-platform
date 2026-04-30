@@ -1588,7 +1588,9 @@ def detail(pid):
         flash("해당 공고를 찾을 수 없습니다.", "warning")
         return redirect(url_for("index"))
 
-    row_ui = normalize_display_item(_prepare_detail_row_for_template(row))
+    items = prepare_db_rows_for_ui([dict(row)], audit=False)
+    item = items[0]
+    item["recommend_reason"] = build_recommend_reason(item)
     if audit_ui_enabled():
         log_detail_consistency(
             get_db(),
@@ -1597,9 +1599,10 @@ def detail(pid):
             normalize_item=normalize_display_item,
         )
     return render_template(
-        "detail.html",
-        row=row_ui,
-        back_href=url_for("index"),
+        "project_detail.html",
+        item=item,
+        source_labels=SOURCE_LABELS,
+        is_admin=False,
     )
 
 
