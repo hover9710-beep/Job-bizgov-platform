@@ -699,6 +699,39 @@
             }
         }
 
+        /* === summary 카드 모바일 3열 강제 적용 === */
+        .summary-grid {
+            display: grid !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 10px !important;
+        }
+        .summary-card {
+            min-width: 0 !important;
+            padding: 12px 8px !important;
+            border-radius: 12px !important;
+        }
+        .summary-card .label,
+        .summary-card .summary-label {
+            font-size: 12px !important;
+            line-height: 1.2 !important;
+            word-break: keep-all;
+        }
+        .summary-card .value,
+        .summary-card .summary-value {
+            font-size: 20px !important;
+            line-height: 1.2 !important;
+            margin-top: 6px !important;
+        }
+        @media (max-width: 768px) {
+            .summary-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            }
+        }
+        @media (max-width: 380px) {
+            .summary-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            }
+        }
     </style>
 </head>
 <body>
