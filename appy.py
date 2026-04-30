@@ -1081,34 +1081,42 @@ def admin_traffic():
 def admin_status_debug():
     if not check_admin(request):
         return "unauthorized", 403
-    from datetime import date
+    try:
+        from datetime import date
 
-    today = date.today().isoformat()
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute("""
-            SELECT id, source, title, start_date, end_date, status, display_status
-            FROM biz_projects
-            ORDER BY id DESC
-            LIMIT 100
-        """).fetchall()
-    result = []
-    for r in rows:
-        end_date = r["end_date"]
-        if not end_date or end_date in ("-", "None", "null"):
-            calc = "확인 필요"
-        elif end_date >= today:
-            calc = "접수중"
-        else:
-            calc = "마감"
-        result.append({
-            "id": r["id"],
-            "source": r["source"],
-            "end_date": r["end_date"],
-            "display_status": r["display_status"],
-            "calc": calc,
-        })
-    return jsonify({"today": today, "rows": result})
+        today = date.today().isoformat()
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("""
+                SELECT id, source,
+                       substr(title,1,40) as title,
+                       end_date, display_status
+                FROM biz_projects
+                ORDER BY id DESC
+                LIMIT 50
+            """).fetchall()
+        result = []
+        for r in rows:
+            end = (r["end_date"] or "").strip()
+            ds = (r["display_status"] or "").strip()
+            if not end or end in ("-","None","null",""):
+                calc = "확인 필요"
+            elif end >= today:
+                calc = "접수중"
+            else:
+                calc = "마감"
+            result.append(
+                {
+                    "id": r["id"],
+                    "source": r["source"],
+                    "end_date": end,
+                    "display_status": ds,
+                    "calc": calc,
+                }
+            )
+        return jsonify({"today": today, "sample": result[:10]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/admin/clicks")
