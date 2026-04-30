@@ -413,6 +413,22 @@
             line-height: 1.5 !important;
             color: #64748b !important;
         }
+
+        .btn-share-kakao {
+            width: 100%;
+            margin-top: 10px;
+            padding: 14px;
+            border-radius: 12px;
+            background: #FEE500;
+            color: #000000;
+            font-weight: 700;
+            border: none;
+            font-size: 15px;
+            cursor: pointer;
+        }
+        .btn-share-kakao:active {
+            background: #e6cf00;
+        }
     </style>
 </head>
 <body>
@@ -485,6 +501,12 @@
         <p class="official-guide">
             ※ 공식 기관 페이지로 이동합니다. 최종 신청 전 공고문을 반드시 확인하세요.
         </p>
+        <button
+            class="btn-share-kakao"
+            type="button"
+            onclick="shareKakao('{{ (item.display_title or item.title or '')|e }}', 'https://job-bizgov-platform.onrender.com/project/{{ item.id }}?src=kakao')">
+            💬 카카오로 공유하기
+        </button>
         {% endif %}
     </div>
 
@@ -654,6 +676,38 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 });
+</script>
+<script src="https://developers.kakao.com/sdk/js/kakao.js"></script>
+<script>
+if (window.Kakao && !Kakao.isInitialized()) {
+  Kakao.init("7c482b7b3b3dc493ee01532cbc3f31e6");
+}
+
+function shareKakao(title, url) {
+  if (!window.Kakao || !Kakao.isInitialized()) {
+    alert("카카오 공유 준비 중입니다. 잠시 후 다시 눌러주세요.");
+    return;
+  }
+  Kakao.Share.sendDefault({
+    objectType: "feed",
+    content: {
+      title: title || "지원사업 공고",
+      description: "지원사업 공고를 확인해보세요.",
+      imageUrl: "https://job-bizgov-platform.onrender.com/static/og_image.png",
+      link: {
+        mobileWebUrl: url,
+        webUrl: url
+      }
+    },
+    buttons: [{
+      title: "공고 보러가기",
+      link: {
+        mobileWebUrl: url,
+        webUrl: url
+      }
+    }]
+  });
+}
 </script>
 </body>
 </html>
