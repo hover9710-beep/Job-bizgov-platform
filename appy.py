@@ -2444,7 +2444,7 @@ def _render_new_announcements_page(is_admin: bool):
     sql = """
         SELECT id, title, organization, start_date, end_date, status, url, description, ai_result, pdf_path,
                ministry, executing_agency, source,
-               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json,
+               receipt_start, receipt_end, biz_start, biz_end, raw_status, period_text, attachments_json,
                ai_summary, ai_summary_at, recommend_label, recommend_label_at
         FROM biz_projects
         WHERE 1=1
@@ -2458,6 +2458,22 @@ def _render_new_announcements_page(is_admin: bool):
 
     try:
         rows = get_db().execute(sql, params).fetchall()
+        from pipeline.normalize_project import infer_status
+        from datetime import date as _date
+
+        today_str = _date.today().isoformat()
+        processed = []
+        for r in rows:
+            r = dict(r)
+            if not r.get("display_status"):
+                r["display_status"] = infer_status(
+                    r.get("period_text") or "",
+                    r.get("start_date") or "",
+                    r.get("end_date") or "",
+                    today_str
+                )
+            processed.append(r)
+        rows = processed
     except Exception as e:
         print(f"[new/admin pipeline] DB 조회 실패: {e}", flush=True)
         rows = []
