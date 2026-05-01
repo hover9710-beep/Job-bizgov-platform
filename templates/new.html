@@ -860,9 +860,9 @@
     </div>
     {% endif %}
 
-    {# 요약 대시보드 — appy.index()._compute_ui_summary() 결과.
+    {# 요약 대시보드 — summary: 공고 집계 + visit_log 오늘/누적 방문.
        필터가 적용된 후의 결과 집합 기준 카운트. urgent = 접수중 & 오늘~D+3. #}
-    {% set s = summary|default({'total': count, 'open': 0, 'closed': 0, 'unknown': 0, 'urgent': 0}) %}
+    {% set s = summary|default({'total': count, 'open': 0, 'closed': 0, 'unknown': 0, 'urgent': 0, 'today_visits': 0, 'total_visits': 0}, true) %}
     <div class="summary-grid">
         <div class="summary-card">
             <span class="summary-label">전체</span>
@@ -886,7 +886,11 @@
         </div>
         <div class="summary-card">
             <span class="summary-label">오늘 방문</span>
-            <span class="summary-value">{{ today_visits | default(0) }}</span>
+            <span class="summary-value">{{ summary.today_visits | default(0) }}</span>
+        </div>
+        <div class="summary-card">
+            <span class="summary-label">누적 방문</span>
+            <span class="summary-value">{{ summary.total_visits | default(0) }}</span>
         </div>
     </div>
 
@@ -1030,6 +1034,7 @@
                 {% if item.url %}
                 <a class="btn-apply" href="{{ item.url }}" target="_blank" rel="noopener noreferrer" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">👉 지금 신청하기</a>
                 {% endif %}
+                <span class="item-click-stat" title="누적 클릭">👁 {{ item.click_count | default(0) }}</span>
             </td>
         </tr>
         {% endfor %}

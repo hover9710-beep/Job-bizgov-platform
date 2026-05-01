@@ -438,12 +438,26 @@ def _compute_ui_summary(items: List[dict]) -> dict:
             closed_n += 1
         else:
             unknown_n += 1
+    try:
+        db = get_db()
+        today_row = db.execute(
+            "SELECT COUNT(*) FROM visit_log WHERE date(created_at,'localtime')=date('now','localtime')"
+        ).fetchone()
+        today_visits = int(today_row[0]) if today_row else 0
+        total_row = db.execute("SELECT COUNT(*) FROM visit_log").fetchone()
+        total_visits = int(total_row[0]) if total_row else 0
+    except Exception as e:
+        print("[visit_log] summary visit counts error:", repr(e), flush=True)
+        today_visits = 0
+        total_visits = 0
     return {
         "total": total,
         "open": open_n,
         "closed": closed_n,
         "unknown": unknown_n,
         "urgent": urgent_n,
+        "today_visits": today_visits,
+        "total_visits": total_visits,
     }
 
 
@@ -502,13 +516,26 @@ def build_summary_by_end_date(items: List[dict]) -> dict:
             closed_n += 1
         else:
             unknown_n += 1
-
+    try:
+        db = get_db()
+        today_row = db.execute(
+            "SELECT COUNT(*) FROM visit_log WHERE date(created_at,'localtime')=date('now','localtime')"
+        ).fetchone()
+        today_visits = int(today_row[0]) if today_row else 0
+        total_row = db.execute("SELECT COUNT(*) FROM visit_log").fetchone()
+        total_visits = int(total_row[0]) if total_row else 0
+    except Exception as e:
+        print("[visit_log] summary visit counts error:", repr(e), flush=True)
+        today_visits = 0
+        total_visits = 0
     return {
         "total": total,
         "open": open_n,
         "closed": closed_n,
         "unknown": unknown_n,
         "urgent": urgent_n,
+        "today_visits": today_visits,
+        "total_visits": total_visits,
     }
 
 
@@ -1036,6 +1063,17 @@ def get_today_visit_count():
             return row[0] if row else 0
     except Exception as e:
         print("[visit_log] count error:", repr(e), flush=True)
+        return 0
+
+
+def get_total_visit_count():
+    """visit_log 전체 누적 건수 (/new 요약 카드용)."""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            row = conn.execute("SELECT COUNT(*) FROM visit_log").fetchone()
+            return row[0] if row else 0
+    except Exception as e:
+        print("[visit_log] total count error:", repr(e), flush=True)
         return 0
 
 
@@ -2545,6 +2583,28 @@ def _render_new_announcements_page(is_admin: bool):
                     today_str,
                 )
             processed.append(r)
+        click_counts = {}
+        try:
+            click_rows = get_db().execute(
+                "SELECT project_id, COUNT(*) as cnt FROM click_log GROUP BY project_id"
+            ).fetchall()
+            for cr in click_rows:
+                click_counts[cr["project_id"]] = cr["cnt"]
+                try:
+                    click_counts[int(cr["project_id"])] = cr["cnt"]
+                except (TypeError, ValueError):
+                    pass
+        except Exception as ce:
+            print(f"[new/admin pipeline] click_log 집계 실패: {ce}", flush=True)
+        for r in processed:
+            rid = r["id"]
+            v = click_counts.get(rid)
+            if v is None and rid is not None:
+                try:
+                    v = click_counts.get(int(rid))
+                except (TypeError, ValueError):
+                    v = None
+            r["click_count"] = int(v) if v is not None else 0
         rows = processed
     except Exception as e:
         print(f"[new/admin pipeline] DB 조회 실패: {e}", flush=True)
@@ -2652,7 +2712,6 @@ def _render_new_announcements_page(is_admin: bool):
             source_labels=SOURCE_LABELS,
             top_clicked=top_clicked,
             usage=usage,
-            today_visits=get_today_visit_count(),
             is_admin=is_admin,
         )
     )
