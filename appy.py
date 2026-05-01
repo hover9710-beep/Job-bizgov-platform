@@ -447,6 +447,71 @@ def _compute_ui_summary(items: List[dict]) -> dict:
     }
 
 
+def calc_status_by_end_date(row: dict) -> str:
+    end = (
+        row.get("end_date")
+        or row.get("receipt_end")
+        or row.get("biz_end")
+        or ""
+    )
+    end = str(end).strip() if end not in ("", None) else ""
+
+    if not end or end in ("-", "None", "null"):
+        return "확인 필요"
+
+    try:
+        d = datetime.fromisoformat(end[:10]).date()
+    except Exception:
+        return "확인 필요"
+
+    if d >= date.today():
+        return "접수중"
+    return "마감"
+
+
+def build_summary_by_end_date(items: List[dict]) -> dict:
+    today = date.today()
+    urgent_limit = today + timedelta(days=3)
+
+    total = len(items)
+    open_n = 0
+    closed_n = 0
+    unknown_n = 0
+    urgent_n = 0
+
+    for row in items:
+        status = calc_status_by_end_date(row)
+        row["display_status"] = status
+
+        if status == "접수중":
+            open_n += 1
+            end_raw = (
+                row.get("end_date")
+                or row.get("receipt_end")
+                or row.get("biz_end")
+                or ""
+            )
+            end = str(end_raw).strip() if end_raw not in ("", None) else ""
+            try:
+                d = datetime.fromisoformat(end[:10]).date()
+                if today <= d <= urgent_limit:
+                    urgent_n += 1
+            except Exception:
+                pass
+        elif status == "마감":
+            closed_n += 1
+        else:
+            unknown_n += 1
+
+    return {
+        "total": total,
+        "open": open_n,
+        "closed": closed_n,
+        "unknown": unknown_n,
+        "urgent": urgent_n,
+    }
+
+
 def _project_root() -> Path:
     return BASE_DIR
 
@@ -2458,30 +2523,16 @@ def _render_new_announcements_page(is_admin: bool):
 
     try:
         rows = get_db().execute(sql, params).fetchall()
-        from pipeline.normalize_project import infer_status
-        from datetime import date as _date
-
-        today_str = _date.today().isoformat()
-        processed = []
-        for r in rows:
-            r = dict(r)
-            if not r.get("display_status"):
-                r["display_status"] = infer_status(
-                    r.get("period_text") or "",
-                    r.get("start_date") or "",
-                    r.get("end_date") or "",
-                    today_str
-                )
-            processed.append(r)
-        rows = processed
     except Exception as e:
         print(f"[new/admin pipeline] DB 조회 실패: {e}", flush=True)
         rows = []
 
     rows_ui = prepare_db_rows_for_ui(rows)
+    for it in rows_ui:
+        it["display_status"] = calc_status_by_end_date(it)
     rows_ui = filter_items(
         rows_ui,
-        status=status_filter,
+        status="",
         source=source_filter,
         q=query,
         deadline=deadline or None,
@@ -2501,7 +2552,11 @@ def _render_new_announcements_page(is_admin: bool):
             if (sd := _safe_parse_date(it.get("start_date"))) is not None and sd >= cutoff
         ]
 
-    summary = _compute_ui_summary(rows_ui)
+    summary = build_summary_by_end_date(rows_ui)
+    if status_filter:
+        rows_ui = [
+            r for r in rows_ui if calc_status_by_end_date(r) == status_filter
+        ]
     label = "GET /admin/pipeline (목록 10)" if is_admin else "GET /new (목록 10)"
     if audit_ui_enabled():
         log_source_mismatch_and_parser(rows_ui[:10], label=label)
