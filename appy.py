@@ -2506,6 +2506,16 @@ def _render_new_announcements_page(is_admin: bool):
     source_filter = "" if source in ("", "전체") else source.lower()
     fq = request.args.to_dict(flat=True)
 
+    try:
+        from pipeline.normalize_project import infer_status as _infer_status
+    except ImportError:
+        def _infer_status(period_text, start_date, end_date, today_str):
+            if not end_date or end_date in ("-", "None", "null", ""):
+                return "확인 필요"
+            if end_date >= today_str:
+                return "접수중"
+            return "마감"
+
     sql = """
         SELECT id, title, organization, start_date, end_date, status, url, description, ai_result, pdf_path,
                ministry, executing_agency, source,
@@ -2523,6 +2533,19 @@ def _render_new_announcements_page(is_admin: bool):
 
     try:
         rows = get_db().execute(sql, params).fetchall()
+        today_str = date.today().isoformat()
+        processed = []
+        for r in rows:
+            r = dict(r)
+            if not r.get("display_status"):
+                r["display_status"] = _infer_status(
+                    r.get("period_text") or "",
+                    r.get("start_date") or "",
+                    r.get("end_date") or "",
+                    today_str,
+                )
+            processed.append(r)
+        rows = processed
     except Exception as e:
         print(f"[new/admin pipeline] DB 조회 실패: {e}", flush=True)
         rows = []
