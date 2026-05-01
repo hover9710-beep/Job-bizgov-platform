@@ -22,3 +22,6 @@ x.py
 
 # temp/debug scripts (moved out of root)
 scripts/debug/
+
+# DB 백업 파일
+db/*.bak_*

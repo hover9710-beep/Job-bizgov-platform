@@ -780,13 +780,19 @@
         <div class="filter-row">
             <span class="label">기관:</span>
             <a href="{{ index_url(source='') }}"
-               class="{% if src|lower not in ['jbexport', 'bizinfo', 'kstartup'] %}active{% endif %}">전체</a>
+               class="{% if src|lower not in ['jbexport', 'bizinfo', 'kstartup', 'jbtp', 'jbbi', 'jbtp_related'] %}active{% endif %}">전체</a>
             <a href="{{ index_url(source='jbexport') }}"
                class="{% if src|lower == 'jbexport' %}active{% endif %}">전북수출</a>
             <a href="{{ index_url(source='bizinfo') }}"
                class="{% if src|lower == 'bizinfo' %}active{% endif %}">기업마당</a>
             <a href="{{ index_url(source='kstartup') }}"
                class="{% if src|lower == 'kstartup' %}active{% endif %}">K-Startup</a>
+            <a href="{{ index_url(source='jbtp') }}"
+               class="{% if src|lower == 'jbtp' %}active{% endif %}">전북테크노파크</a>
+            <a href="{{ index_url(source='jbbi') }}"
+               class="{% if src|lower == 'jbbi' %}active{% endif %}">전북바이오</a>
+            <a href="{{ index_url(source='jbtp_related') }}"
+               class="{% if src|lower == 'jbtp_related' %}active{% endif %}">JBTP유관</a>
         </div>
         <div class="filter-row">
             <span class="label">옵션:</span>
