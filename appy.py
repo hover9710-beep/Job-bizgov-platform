@@ -438,104 +438,12 @@ def _compute_ui_summary(items: List[dict]) -> dict:
             closed_n += 1
         else:
             unknown_n += 1
-    try:
-        db = get_db()
-        today_row = db.execute(
-            "SELECT COUNT(*) FROM visit_log WHERE date(created_at,'localtime')=date('now','localtime')"
-        ).fetchone()
-        today_visits = int(today_row[0]) if today_row else 0
-        total_row = db.execute("SELECT COUNT(*) FROM visit_log").fetchone()
-        total_visits = int(total_row[0]) if total_row else 0
-    except Exception as e:
-        print("[visit_log] summary visit counts error:", repr(e), flush=True)
-        today_visits = 0
-        total_visits = 0
     return {
         "total": total,
         "open": open_n,
         "closed": closed_n,
         "unknown": unknown_n,
         "urgent": urgent_n,
-        "today_visits": today_visits,
-        "total_visits": total_visits,
-    }
-
-
-def calc_status_by_end_date(row: dict) -> str:
-    end = (
-        row.get("end_date")
-        or row.get("receipt_end")
-        or row.get("biz_end")
-        or ""
-    )
-    end = str(end).strip() if end not in ("", None) else ""
-
-    if not end or end in ("-", "None", "null"):
-        return "확인 필요"
-
-    try:
-        d = datetime.fromisoformat(end[:10]).date()
-    except Exception:
-        return "확인 필요"
-
-    if d >= date.today():
-        return "접수중"
-    return "마감"
-
-
-def build_summary_by_end_date(items: List[dict]) -> dict:
-    today = date.today()
-    urgent_limit = today + timedelta(days=3)
-
-    total = len(items)
-    open_n = 0
-    closed_n = 0
-    unknown_n = 0
-    urgent_n = 0
-
-    for row in items:
-        status = calc_status_by_end_date(row)
-        row["display_status"] = status
-
-        if status == "접수중":
-            open_n += 1
-            end_raw = (
-                row.get("end_date")
-                or row.get("receipt_end")
-                or row.get("biz_end")
-                or ""
-            )
-            end = str(end_raw).strip() if end_raw not in ("", None) else ""
-            try:
-                d = datetime.fromisoformat(end[:10]).date()
-                if today <= d <= urgent_limit:
-                    urgent_n += 1
-            except Exception:
-                pass
-        elif status == "마감":
-            closed_n += 1
-        else:
-            unknown_n += 1
-    try:
-        db = get_db()
-        today_row = db.execute(
-            "SELECT COUNT(*) FROM visit_log WHERE date(created_at,'localtime')=date('now','localtime')"
-        ).fetchone()
-        today_visits = int(today_row[0]) if today_row else 0
-        total_row = db.execute("SELECT COUNT(*) FROM visit_log").fetchone()
-        total_visits = int(total_row[0]) if total_row else 0
-    except Exception as e:
-        print("[visit_log] summary visit counts error:", repr(e), flush=True)
-        today_visits = 0
-        total_visits = 0
-    return {
-        "total": total,
-        "open": open_n,
-        "closed": closed_n,
-        "unknown": unknown_n,
-        "urgent": urgent_n,
-        "today_visits": today_visits,
-        "total_visits": total_visits,
     }
 
 
@@ -996,21 +904,37 @@ def api_favorite():
     project_id = str(data.get("project_id") or "")
     title = data.get("title") or ""
     source = data.get("source") or ""
+    act = (str(data.get("action") or "add")).strip().lower()
+    if act not in ("add", "remove"):
+        act = "add"
     if not project_id:
         return jsonify({"ok": False, "error": "missing_project_id"})
     _init_db()
     conn = sqlite3.connect(DB_PATH)
-    conn.execute(
-        """
-        INSERT OR IGNORE INTO favorite_projects
-        (visitor_id, project_id, title, source)
-        VALUES (?, ?, ?, ?)
-        """,
-        (visitor_id, project_id, title, source),
-    )
-    conn.commit()
-    conn.close()
-    resp = make_response(jsonify({"ok": True}))
+    try:
+        if act == "remove":
+            conn.execute(
+                "DELETE FROM favorite_projects WHERE visitor_id = ? AND project_id = ?",
+                (visitor_id, project_id),
+            )
+            conn.commit()
+            favorited = False
+            out_action = "removed"
+        else:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO favorite_projects
+                (visitor_id, project_id, title, source)
+                VALUES (?, ?, ?, ?)
+                """,
+                (visitor_id, project_id, title, source),
+            )
+            conn.commit()
+            favorited = True
+            out_action = "added"
+    finally:
+        conn.close()
+    resp = make_response(jsonify({"ok": True, "action": out_action, "favorited": favorited}))
     resp.set_cookie(
         "visitor_id",
         visitor_id,
@@ -1019,6 +943,28 @@ def api_favorite():
         samesite="Lax",
     )
     return resp
+
+
+@app.route("/api/favorite/list", methods=["GET"])
+def api_favorite_list():
+    visitor_id = request.cookies.get("visitor_id")
+    if not visitor_id:
+        return jsonify({"ids": []})
+    _init_db()
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        rows = conn.execute(
+            """
+            SELECT project_id FROM favorite_projects
+            WHERE visitor_id = ?
+            ORDER BY created_at DESC
+            """,
+            (visitor_id,),
+        ).fetchall()
+        ids = [str(r[0]) for r in rows if r[0] is not None]
+    finally:
+        conn.close()
+    return jsonify({"ids": ids})
 
 
 def detect_traffic_source():
@@ -1063,17 +1009,6 @@ def get_today_visit_count():
             return row[0] if row else 0
     except Exception as e:
         print("[visit_log] count error:", repr(e), flush=True)
-        return 0
-
-
-def get_total_visit_count():
-    """visit_log 전체 누적 건수 (/new 요약 카드용)."""
-    try:
-        with sqlite3.connect(DB_PATH) as conn:
-            row = conn.execute("SELECT COUNT(*) FROM visit_log").fetchone()
-            return row[0] if row else 0
-    except Exception as e:
-        print("[visit_log] total count error:", repr(e), flush=True)
         return 0
 
 
@@ -1122,6 +1057,15 @@ def admin_dashboard():
         """
     ).fetchall()
 
+    visit_today_raw = conn.execute(
+        "SELECT COUNT(*) FROM visit_log WHERE date(created_at,'localtime')=date('now','localtime')"
+    ).fetchone()[0]
+    visit_today_unique = conn.execute(
+        "SELECT COUNT(DISTINCT ip) FROM visit_log WHERE date(created_at,'localtime')=date('now','localtime')"
+    ).fetchone()[0]
+    visit_total_raw = conn.execute("SELECT COUNT(*) FROM visit_log").fetchone()[0]
+    visit_total_unique = conn.execute("SELECT COUNT(DISTINCT ip) FROM visit_log").fetchone()[0]
+
     conn.close()
 
     return render_template(
@@ -1134,6 +1078,10 @@ def admin_dashboard():
         consent_count=consent_count,
         click_count=click_count,
         req_count=req_count,
+        visit_today_raw=visit_today_raw,
+        visit_today_unique=visit_today_unique,
+        visit_total_raw=visit_total_raw,
+        visit_total_unique=visit_total_unique,
         recent_companies=recent_companies,
         recent_clicks=recent_clicks,
         top_projects=top_projects,
@@ -1350,8 +1298,6 @@ def index():
     # status 는 infer_status() 기반 display_status 기준이므로 DB raw status 로 SQL 필터를 걸지 않는다.
     # status 미지정·"전체" 는 상태 필터 해제.
     tab = (request.args.get("tab") or "").strip()
-    if len(request.args) == 0:
-        tab = "recommend"
 
     status = (request.args.get("status") or "").strip()
     source = (request.args.get("source") or "").strip()
@@ -1371,8 +1317,6 @@ def index():
     fq = request.args.to_dict(flat=True)
     if tab:
         fq["tab"] = tab
-    elif len(request.args) == 0:
-        fq["tab"] = "recommend"
     else:
         fq.pop("tab", None)
 
@@ -1475,6 +1419,42 @@ def index():
             source_labels=SOURCE_LABELS,
             top_clicked=top_clicked,
             usage=usage,
+            is_admin=False,
+            today_visits=get_today_visit_count(),
+        )
+    )
+    resp.set_cookie(
+        "visitor_id",
+        visitor_id,
+        max_age=60 * 60 * 24 * 365,
+        httponly=True,
+        samesite="Lax",
+    )
+    return resp
+
+
+@app.route("/favorites")
+def favorites_list():
+    visitor_id = get_or_create_visitor_id()
+    _init_db()
+    sql = """
+        SELECT b.id, b.title, b.organization, b.start_date, b.end_date, b.status, b.url, b.description, b.ai_result, b.pdf_path,
+               b.ministry, b.executing_agency, b.source,
+               b.receipt_start, b.receipt_end, b.biz_start, b.biz_end, b.raw_status, b.attachments_json,
+               b.ai_summary, b.ai_summary_at, b.recommend_label, b.recommend_label_at
+        FROM favorite_projects f
+        INNER JOIN biz_projects b ON CAST(b.id AS TEXT) = TRIM(f.project_id)
+        WHERE f.visitor_id = ?
+        ORDER BY f.created_at DESC
+        """
+    rows = get_db().execute(sql, (visitor_id,)).fetchall()
+    items_ui = prepare_db_rows_for_ui(rows)
+    resp = make_response(
+        render_template(
+            "favorites.html",
+            items=items_ui,
+            count=len(items_ui),
+            source_labels=SOURCE_LABELS,
             is_admin=False,
         )
     )
@@ -2526,6 +2506,7 @@ def run_pipeline_route():
 
 def _render_new_announcements_page(is_admin: bool):
     """DB 기반 신규 공고 화면. 관리자(/admin/pipeline)는 최근 7일 필터 없이 전체 표시."""
+    tab = (request.args.get("tab") or "").strip()
     status = request.args.get("status")
     if status is not None:
         status = status.strip()
@@ -2540,24 +2521,21 @@ def _render_new_announcements_page(is_admin: bool):
     has_attachments = (request.args.get("has_attachments") or "").strip()
     category = (request.args.get("category") or "").strip()
 
+    if tab == "recommend":
+        has_recommend_label = "1"
+
     status_filter = "" if status in (None, "", "전체") else status
     source_filter = "" if source in ("", "전체") else source.lower()
     fq = request.args.to_dict(flat=True)
-
-    try:
-        from pipeline.normalize_project import infer_status as _infer_status
-    except ImportError:
-        def _infer_status(period_text, start_date, end_date, today_str):
-            if not end_date or end_date in ("-", "None", "null", ""):
-                return "확인 필요"
-            if end_date >= today_str:
-                return "접수중"
-            return "마감"
+    if tab:
+        fq["tab"] = tab
+    else:
+        fq.pop("tab", None)
 
     sql = """
         SELECT id, title, organization, start_date, end_date, status, url, description, ai_result, pdf_path,
                ministry, executing_agency, source,
-               receipt_start, receipt_end, biz_start, biz_end, raw_status, period_text, attachments_json,
+               receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json,
                ai_summary, ai_summary_at, recommend_label, recommend_label_at
         FROM biz_projects
         WHERE 1=1
@@ -2571,51 +2549,14 @@ def _render_new_announcements_page(is_admin: bool):
 
     try:
         rows = get_db().execute(sql, params).fetchall()
-        today_str = date.today().isoformat()
-        processed = []
-        for r in rows:
-            r = dict(r)
-            if not r.get("display_status"):
-                r["display_status"] = _infer_status(
-                    r.get("period_text") or "",
-                    r.get("start_date") or "",
-                    r.get("end_date") or "",
-                    today_str,
-                )
-            processed.append(r)
-        click_counts = {}
-        try:
-            click_rows = get_db().execute(
-                "SELECT project_id, COUNT(*) as cnt FROM click_log GROUP BY project_id"
-            ).fetchall()
-            for cr in click_rows:
-                click_counts[cr["project_id"]] = cr["cnt"]
-                try:
-                    click_counts[int(cr["project_id"])] = cr["cnt"]
-                except (TypeError, ValueError):
-                    pass
-        except Exception as ce:
-            print(f"[new/admin pipeline] click_log 집계 실패: {ce}", flush=True)
-        for r in processed:
-            rid = r["id"]
-            v = click_counts.get(rid)
-            if v is None and rid is not None:
-                try:
-                    v = click_counts.get(int(rid))
-                except (TypeError, ValueError):
-                    v = None
-            r["click_count"] = int(v) if v is not None else 0
-        rows = processed
     except Exception as e:
         print(f"[new/admin pipeline] DB 조회 실패: {e}", flush=True)
         rows = []
 
     rows_ui = prepare_db_rows_for_ui(rows)
-    for it in rows_ui:
-        it["display_status"] = calc_status_by_end_date(it)
     rows_ui = filter_items(
         rows_ui,
-        status="",
+        status=status_filter,
         source=source_filter,
         q=query,
         deadline=deadline or None,
@@ -2635,11 +2576,10 @@ def _render_new_announcements_page(is_admin: bool):
             if (sd := _safe_parse_date(it.get("start_date"))) is not None and sd >= cutoff
         ]
 
-    summary = build_summary_by_end_date(rows_ui)
-    if status_filter:
-        rows_ui = [
-            r for r in rows_ui if calc_status_by_end_date(r) == status_filter
-        ]
+    if tab == "recommend":
+        rows_ui = sort_recommend_items(rows_ui)
+
+    summary = _compute_ui_summary(rows_ui)
     label = "GET /admin/pipeline (목록 10)" if is_admin else "GET /new (목록 10)"
     if audit_ui_enabled():
         log_source_mismatch_and_parser(rows_ui[:10], label=label)
@@ -2706,12 +2646,13 @@ def _render_new_announcements_page(is_admin: bool):
             has_recommend_label=has_recommend_label,
             has_attachments=has_attachments,
             category=category,
-            tab=(request.args.get("tab") or "").strip(),
+            tab=tab,
             fq=fq,
             summary=summary,
             source_labels=SOURCE_LABELS,
             top_clicked=top_clicked,
             usage=usage,
+            today_visits=get_today_visit_count(),
             is_admin=is_admin,
         )
     )

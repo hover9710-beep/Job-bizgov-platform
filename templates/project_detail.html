@@ -200,6 +200,12 @@
                 margin-bottom: 14px !important;
             }
 
+            .detail-title-row .detail-title-text {
+                font-size: 20px !important;
+                line-height: 1.45 !important;
+                margin-bottom: 0 !important;
+            }
+
             .meta-row,
             .detail-meta {
                 display: grid !important;
@@ -428,6 +434,43 @@
             font-family: inherit;
         }
         .btn-share-kakao:active { transform: scale(0.98); }
+
+        .detail-title-row {
+            display: flex;
+            flex-direction: row-reverse;
+            align-items: flex-start;
+            gap: 10px;
+            margin: 0 0 16px;
+        }
+        .detail-title-row .detail-title-text {
+            flex: 1;
+            margin: 0;
+            min-width: 0;
+            font-size: 28px;
+            font-weight: 700;
+            line-height: 1.35;
+        }
+        .detail-title-row .btn-star-fav {
+            flex: 0 0 auto;
+            width: 44px;
+            height: 44px;
+            min-width: 44px;
+            padding: 0;
+            margin: 0;
+            border: none;
+            background: transparent;
+            font-size: 1.45em;
+            line-height: 1;
+            cursor: pointer;
+            color: #ccc;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .detail-title-row .btn-star-fav.is-on { color: #f5a623; }
+        .detail-title-row .btn-star-fav:active { transform: scale(0.92); }
     </style>
 </head>
 <body>
@@ -448,7 +491,16 @@
         or (source_labels|default({})).get(src_key)
         or src_key or '-' %}
 
-    <h2>{{ item.get('title') or '(제목 없음)' }}</h2>
+    <div class="detail-title-row">
+        <button type="button" class="btn-star-fav" id="detail-star-btn"
+                title="즐겨찾기"
+                data-pid="{{ item.id }}"
+                data-title="{{ (item.display_title or item.title)|e }}"
+                data-source="{{ (item.source or '')|e }}"
+                aria-label="즐겨찾기"
+                aria-pressed="false">☆</button>
+        <h2 class="detail-title-text">{{ item.get('title') or '(제목 없음)' }}</h2>
+    </div>
 
     <div class="meta-row"><strong>기관</strong> {{ item.get('organization') or '-' }}</div>
     <div class="meta-row"><strong>상태</strong> {{ st }}</div>
@@ -691,6 +743,63 @@ async function shareProject(title, url) {
         alert("공유 실패: " + e.message);
     }
 }
+</script>
+<script>
+function detailSetStarVisual(btn, on) {
+  btn.textContent = on ? "\u2605" : "\u2606";
+  btn.classList.toggle("is-on", !!on);
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  btn.setAttribute("title", on ? "즐겨찾기 해제" : "즐겨찾기");
+}
+
+function detailInitFavoriteStar() {
+  var btn = document.getElementById("detail-star-btn");
+  if (!btn) { return; }
+  fetch("/api/favorite/list", { cache: "no-store" })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var ids = new Set((d.ids || []).map(String));
+      var pid = String(btn.getAttribute("data-pid") || "");
+      detailSetStarVisual(btn, ids.has(pid));
+    })
+    .catch(function () {});
+}
+
+function detailToggleFavorite(btn) {
+  var projectId = btn.getAttribute("data-pid") || "";
+  var title = btn.getAttribute("data-title") || "";
+  var source = btn.getAttribute("data-source") || "";
+  var on = btn.classList.contains("is-on");
+  var action = on ? "remove" : "add";
+  fetch("/api/favorite", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      project_id: projectId,
+      title: title,
+      source: source,
+      action: action,
+    }),
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.ok && typeof data.favorited === "boolean") {
+        detailSetStarVisual(btn, data.favorited);
+      }
+    })
+    .catch(function () {});
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  var btn = document.getElementById("detail-star-btn");
+  if (btn) {
+    btn.addEventListener("click", function (e) {
+      e.preventDefault();
+      detailToggleFavorite(btn);
+    });
+  }
+  detailInitFavoriteStar();
+});
 </script>
 </body>
 </html>

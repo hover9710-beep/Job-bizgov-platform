@@ -263,6 +263,43 @@
         .rec-title { font-size: 17px; font-weight: 700; line-height: 1.4; margin: 8px 0; }
         .rec-title a { color: #0f172a; text-decoration: none; }
         .rec-title a:hover { color: #2563eb; text-decoration: underline; }
+
+        .rec-title-with-fav {
+            display: flex;
+            flex-direction: row-reverse;
+            align-items: flex-start;
+            gap: 8px;
+            margin: 8px 0;
+        }
+        .rec-title-with-fav .rec-title-text {
+            flex: 1;
+            min-width: 0;
+            font-size: 17px;
+            font-weight: 700;
+            line-height: 1.4;
+            margin: 0;
+        }
+        .rec-title-with-fav .rec-title-text a { color: #0f172a; text-decoration: none; }
+        .rec-title-with-fav .rec-title-text a:hover { color: #2563eb; text-decoration: underline; }
+        .rec-title-with-fav .btn-star-fav {
+            flex: 0 0 auto;
+            width: 44px;
+            height: 44px;
+            min-width: 44px;
+            padding: 0;
+            border: none;
+            background: transparent;
+            font-size: 1.35em;
+            cursor: pointer;
+            color: #ccc;
+            line-height: 1;
+            -webkit-tap-highlight-color: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+        }
+        .rec-title-with-fav .btn-star-fav.is-on { color: #f5a623; }
         .reason-list { margin: 10px 0 14px; padding-left: 18px; color: #4b5563; line-height: 1.6; }
         .reason-list li { margin-bottom: 4px; }
 
@@ -328,6 +365,7 @@
             .top-recommend-box { padding: 14px; }
             .rec-card { padding: 14px; margin-bottom: 12px; }
             .rec-title { font-size: 15px; line-height: 1.45; }
+            .rec-title-with-fav .rec-title-text { font-size: 15px; line-height: 1.45; }
             .rec-actions { flex-direction: column; }
             .rec-actions a,
             .rec-actions button { min-height: 48px; font-size: 15px; }
@@ -679,12 +717,20 @@
         </div>
     </div>
 
+    <div id="recommend-list">
     {% for item in items %}
     <div class="recommend-card">
         <div class="rank-badge">TOP {{ loop.index }}</div>
         <div class="recommend-score">추천도 {{ item.score }}점</div>
-        <div class="rec-title">
+        <div class="rec-title rec-title-with-fav">
+            <button type="button" class="btn-star-fav" title="즐겨찾기"
+                    data-pid="{{ item.id }}"
+                    data-title="{{ (item.display_title or item.title)|e }}"
+                    data-source="{{ (item.source or '')|e }}"
+                    aria-label="즐겨찾기" aria-pressed="false">☆</button>
+            <div class="rec-title-text">
             <a href="{{ url_for('project_detail', pid=item.id) }}">{{ item.display_title or item.title }}</a>
+            </div>
         </div>
         <div class="reason-simple">
             {{ item.reason }}
@@ -740,6 +786,7 @@
         </div>
     </div>
     {% endfor %}
+    </div>
 
     <div class="mail-row">
         <form method="post" action="{{ url_for('recommend_send') }}" style="display:inline;">
@@ -768,6 +815,65 @@
     {% endif %}
     {% endif %}
 <script>
+function setStarVisual(btn, on) {
+  btn.textContent = on ? "\u2605" : "\u2606";
+  btn.classList.toggle("is-on", !!on);
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  btn.setAttribute("title", on ? "즐겨찾기 해제" : "즐겨찾기");
+}
+
+function initFavoriteStars() {
+  fetch("/api/favorite/list", { cache: "no-store" })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var ids = new Set((d.ids || []).map(String));
+      document.querySelectorAll("#recommend-list .btn-star-fav").forEach(function (btn) {
+        var pid = String(btn.getAttribute("data-pid") || "");
+        setStarVisual(btn, ids.has(pid));
+      });
+    })
+    .catch(function () {});
+}
+
+function toggleFavorite(btn) {
+  var projectId = btn.getAttribute("data-pid") || "";
+  var title = btn.getAttribute("data-title") || "";
+  var source = btn.getAttribute("data-source") || "";
+  var on = btn.classList.contains("is-on");
+  var action = on ? "remove" : "add";
+  fetch("/api/favorite", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      project_id: projectId,
+      title: title,
+      source: source,
+      action: action,
+    }),
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.ok && typeof data.favorited === "boolean") {
+        setStarVisual(btn, data.favorited);
+      }
+    })
+    .catch(function () {});
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  var root = document.getElementById("recommend-list");
+  if (root) {
+    root.addEventListener("click", function (e) {
+      var star = e.target.closest(".btn-star-fav");
+      if (!star) { return; }
+      e.preventDefault();
+      e.stopPropagation();
+      toggleFavorite(star);
+    });
+  }
+  initFavoriteStars();
+});
+
 function logClick(projectId, action, source, title) {
   try {
     fetch("/api/click", {

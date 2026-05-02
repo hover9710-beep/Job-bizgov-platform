@@ -46,6 +46,14 @@
   <div class="stat-card"><div class="stat-label">추천 제한 로그</div><div class="stat-value">{{ req_count }}</div></div>
 </div>
 
+<h2>🌐 방문 통계 (visit_log, unique=IP)</h2>
+<div class="stat-grid">
+  <div class="stat-card"><div class="stat-label">오늘 방문(raw)</div><div class="stat-value">{{ visit_today_raw }}</div></div>
+  <div class="stat-card"><div class="stat-label">오늘 방문(unique)</div><div class="stat-value">{{ visit_today_unique }}</div></div>
+  <div class="stat-card"><div class="stat-label">누적 방문(raw)</div><div class="stat-value">{{ visit_total_raw }}</div></div>
+  <div class="stat-card"><div class="stat-label">누적 방문(unique)</div><div class="stat-value">{{ visit_total_unique }}</div></div>
+</div>
+
 <h2>📂 소스별 공고</h2>
 <table>
   <tr><th>source</th><th>건수</th></tr>
