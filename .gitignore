@@ -1,7 +1,14 @@
 .env
 .env.*
 data/
-reports/
+reports/*
+!reports/__init__.py
+!reports/blueprints/
+reports/blueprints/data/
+reports/blueprints/__pycache__/
+reports/blueprints/*.json
+!reports/blueprints/__init__.py
+!reports/blueprints/connector_www_bizinfo_go_kr.py
 logs/
 __pycache__/
 *.pyc
