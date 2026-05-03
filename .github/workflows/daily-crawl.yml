@@ -59,14 +59,25 @@ jobs:
           python run_all.py --mode jbexport
           kill $PROXY_PID 2>/dev/null || true
 
-      - name: Commit updated data
+      # DISABLED 2026-05-03: DB auto-push removed to prevent overwriting
+      # dynamic tables (click_log, visit_log, companies, user_request_log,
+      # recommendations) on production (Render).
+      #
+      # Issue: GitHub Actions runner DB is empty/sandbox. Pushing it would
+      # replace production DB on next Render redeploy, losing all
+      # user-generated data accumulated since the last commit.
+      #
+      # Crawl steps above still run for verification (DB writes go to the
+      # ephemeral runner only and are discarded when the job ends).
+      #
+      # To re-enable safely, first implement one of:
+      #   1. Split dynamic tables into a separate events.db (not git-tracked)
+      #   2. Add a merge step that fetches production dynamic data before push
+      #   3. Use Render Cron Jobs instead (same DB, no overwrite)
+      - name: Crawl summary (no commit, no push)
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add db/biz.db data || true
-          if git diff --cached --quiet; then
-            echo "No data changes to commit."
-          else
-            git commit -m "chore: daily auto crawl data update"
-            git push
+          echo "[ci] DB auto-push is DISABLED for dynamic-data safety."
+          echo "[ci] Crawl ran in runner sandbox only. No commit, no push to main."
+          if [ -f db/biz.db ]; then
+            echo "[ci] runner db/biz.db size: $(stat -c%s db/biz.db) bytes (discarded)"
           fi
