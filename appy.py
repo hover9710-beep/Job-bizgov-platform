@@ -1001,10 +1001,12 @@ def check_admin(req: Any) -> bool:
 
 
 def get_today_visit_count():
+    """오늘 방문자 수(고유 IP). visit_log 행 수(PV)가 아님 — admin_dashboard 와 동일 기준."""
     try:
         with sqlite3.connect(DB_PATH) as conn:
             row = conn.execute(
-                "SELECT COUNT(*) FROM visit_log WHERE date(created_at,'localtime')=date('now','localtime')"
+                "SELECT COUNT(DISTINCT ip) FROM visit_log "
+                "WHERE date(created_at,'localtime')=date('now','localtime')"
             ).fetchone()
             return row[0] if row else 0
     except Exception as e:
