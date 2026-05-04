@@ -83,6 +83,61 @@ print('biz_projects:', c.execute('SELECT COUNT(*) FROM biz_projects').fetchone()
 - v1 git 롤백: `git revert <cherry-pick commit hash>` 또는 `git reset --hard HEAD~1` (push 전이라면)
 - Render rollback: Dashboard → Rollback 버튼 (이전 성공 deploy로)
 
+## Disaster Recovery (영구 disk 손실/재생성 시)
+
+### 위험 시나리오
+Phase 3에서 db/biz.db가 git에서 추적 해제된 후, /var/data/biz.db가 어떤 이유로 손실되면 ensure_db_file()의 fallback(`target.touch()`)이 동작하여 빈 파일이 생성되고, _init_db()가 빈 schema만 만든다 → 정적 데이터(biz_projects 등) 손실.
+
+### 발생 가능 상황
+- Render Persistent Disk 손상/삭제 (드뭄)
+- 신규 Render 환경 setup
+- 영구 disk mount path 변경
+
+### 복구 절차
+
+**1. 백업본 위치 (PC, 로컬 보관)**
+- v2: `db/biz_static_only.db` (15.3MB, md5: `0516959bda7e7601a8c3d6ff340eeda0`, 정적만)
+- v2: `db/biz_full_backup_20260504.db` (16.3MB, md5: `c23a5e98...`, 정적+동적 백업)
+- v1: `db/biz_v1_pre_deploy004_20260504.db` (16.5MB, md5: `fa19dba8...`, cherry-pick 직전 운영 스냅샷)
+- 추가: `biz_backup_20260504.b64` (4,620 bytes, 핵심 6테이블 base64 — 사용자 PC 메모장)
+
+**2. 큰 파일 복원 (15MB+, GitHub release/gist 활용)**
+PC → 임시 private GitHub release/gist 업로드 → Render Shell에서 wget/curl로 다운로드 → 사용 후 임시 업로드 삭제.
+
+```
+# Render Shell 예시
+wget -O /var/data/biz.db https://github.com/.../biz_static_only.db
+python -c "
+import sqlite3
+c = sqlite3.connect('/var/data/biz.db').cursor()
+print('biz_projects:', c.execute('SELECT COUNT(*) FROM biz_projects').fetchone()[0])
+print('projects    :', c.execute('SELECT COUNT(*) FROM projects').fetchone()[0])
+"
+# 기대: biz_projects 11722, projects 11290 (v2 정적 사본 기준)
+```
+
+**3. 작은 데이터셋 복원 (base64 paste)**
+biz_backup_20260504.b64 (4,620 bytes) 같은 핵심 6테이블만 복원 시:
+```
+# Render Shell
+echo '<base64 내용>' | base64 -d > /tmp/restore.db
+sqlite3 /var/data/biz.db "ATTACH '/tmp/restore.db' AS r; INSERT OR REPLACE INTO ... SELECT * FROM r....; DETACH r;"
+```
+
+**4. 검증**
+- `sqlite3 /var/data/biz.db "SELECT COUNT(*) FROM biz_projects"` → 정적 데이터 row 수 확인
+- 사이트 정상 응답
+- /opt/render/project/src/db/ 폴더에는 biz.db 없음 (정상, 추적 해제됨)
+
+**5. 다음 redeploy**
+- /var/data/biz.db 존재 → ensure_db_file()의 자동 복사 SKIP
+- 운영 그대로 유지
+
+### 예방 조치
+- PC 백업본을 OneDrive 외 별도 매체(USB/외장)에 추가 보관 권장
+- 정기적으로 PC 백업 ↔ /var/data/biz.db md5 비교 (예: 월 1회)
+- 신규 환경 setup 시 본 절차를 사전 실행 (빈 schema 시작 회피)
+
 ## 알려진 이슈 / 메모
 - v1과 v2의 db/biz.db는 운영 환경 차이로 row 수가 다름 (v1 11695 vs v2 11722/11290). cherry-pick은 v2 사본으로 통일.
 - ensure_db_file() 동작이 사실상 마이그레이션을 담당. 별도 마이그레이션 스크립트 불필요.
