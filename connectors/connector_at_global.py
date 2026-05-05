@@ -1,0 +1,204 @@
+# -*- coding: utf-8 -*-
+"""aT 한국농수산식품유통공사 (global.at.or.kr) 모집공고 목록 → biz_projects 저장. 상세 요청 없음."""
+from __future__ import annotations
+
+import os
+import re
+import sqlite3
+import time
+
+import requests
+import urllib3
+from bs4 import BeautifulSoup
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+_ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+BASE = "https://global.at.or.kr"
+LIST_URL = "https://global.at.or.kr/front/bizReq/brList.do"
+DETAIL_BASE = "https://global.at.or.kr/front/bizReq/brView.do"
+REFERER = "https://global.at.or.kr/front/bizReq/brList.do?_mtype=B&_dept1=3"
+MAX_PAGES = 25  # 안전 상한 (현재 실제 20)
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Referer": REFERER,
+}
+
+DB_PATH = os.path.join(_ROOT, "db", "biz.db")
+DEBUG_DIR = os.path.join(_ROOT, "data", "at_global", "debug")
+
+_SESSION = requests.Session()
+_SESSION.headers.update(HEADERS)
+_SESSION.verify = False
+
+_PROJ_RE = re.compile(r"goViewPage\(\s*['\"]?(\d+)['\"]?\s*,\s*['\"]?(\d+)['\"]?\s*\)")
+_PERIOD_RE = re.compile(r"(\d{4}-\d{2}-\d{2})\s*~\s*(\d{4}-\d{2}-\d{2})")
+
+
+def _debug_save(name: str, html: str) -> None:
+    os.makedirs(DEBUG_DIR, exist_ok=True)
+    with open(os.path.join(DEBUG_DIR, name), "w", encoding="utf-8") as f:
+        f.write(html)
+
+
+def _map_status(raw: str) -> str:
+    """진행중 → 접수중, 마감 → 마감, 그 외 → 빈값."""
+    if "진행중" in raw:
+        return "접수중"
+    if "마감" in raw:
+        return "마감"
+    return ""
+
+
+def parse_list_page(html: str, page_no: int) -> list[dict]:
+    soup = BeautifulSoup(html, "html.parser")
+    table = soup.select_one("table.boardList")
+    if not table:
+        _debug_save(f"list_no_table_page_{page_no}.html", html)
+        return []
+
+    out: list[dict] = []
+    tbody = table.find("tbody") or table
+    for tr in tbody.find_all("tr"):
+        tds = tr.find_all("td")
+        if len(tds) < 7:
+            continue
+
+        category = tds[1].get_text(strip=True)
+        subject_td = tds[2]
+        title = subject_td.get_text(strip=True)
+        if not title:
+            continue
+
+        proj_id = proj_detail_id = None
+        link = subject_td.find("a")
+        if link:
+            attr = (link.get("onclick") or "") + " " + (link.get("href") or "")
+            m = _PROJ_RE.search(attr)
+            if m:
+                proj_id, proj_detail_id = m.group(1), m.group(2)
+        if not proj_id:
+            continue
+
+        period_text = tds[3].get_text(strip=True)
+        pm = _PERIOD_RE.search(period_text)
+        start_date, end_date = (pm.group(1), pm.group(2)) if pm else ("", "")
+
+        raw_status = tds[4].get_text(" ", strip=True)
+        status = _map_status(raw_status)
+
+        url = f"{DETAIL_BASE}?proj_id={proj_id}&proj_detail_id={proj_detail_id}"
+
+        out.append({
+            "title": title,
+            "organization": "한국농수산식품유통공사",
+            "source": "at_global",
+            "region": "전국",
+            "url": url,
+            "start_date": start_date,
+            "end_date": end_date,
+            "status": status,
+            "summary": "",
+            "period_text": period_text,
+            # 추가 필드 (동적 매핑이라 컬럼 없으면 자동 제외)
+            "ministry": "농림축산식품부",
+            "executing_agency": "한국농수산식품유통공사",
+            "raw_status": raw_status,
+            "receipt_start": start_date,
+            "receipt_end": end_date,
+            "site": "at_global",
+        })
+
+    if not out:
+        _debug_save(f"list_parse_empty_page_{page_no}.html", html)
+    return out
+
+
+def fetch_list_page(page_no: int) -> str:
+    data = {
+        "proj_id": "",
+        "proj_detail_id": "",
+        "page": str(page_no),
+        "_mtype": "B",
+        "_dept1": "3",
+        "_type": "",
+    }
+    res = _SESSION.post(LIST_URL, data=data, timeout=20)
+    res.raise_for_status()
+    res.encoding = res.apparent_encoding or "utf-8"
+    return res.text
+
+
+def collect_all_pages() -> list[dict]:
+    by_url: dict[str, dict] = {}
+    for page_no in range(1, MAX_PAGES + 1):
+        try:
+            html = fetch_list_page(page_no)
+        except requests.RequestException as e:
+            print(f"[AT_GLOBAL] 목록 HTTP 실패 page={page_no}: {e}")
+            resp = getattr(e, "response", None)
+            body = (resp.text if resp is not None else "") or ""
+            if body:
+                _debug_save(f"list_http_error_page_{page_no}.html", body)
+            raise
+
+        items = parse_list_page(html, page_no)
+        if not items:
+            print(f"[AT_GLOBAL] page {page_no}: 0건 → 종료")
+            break
+
+        new_count = sum(1 for it in items if it["url"] not in by_url)
+        for it in items:
+            by_url[it["url"]] = it
+        print(f"[AT_GLOBAL] page {page_no:2d}: {len(items)}건 (신규 {new_count}건)")
+
+        if new_count == 0:
+            print(f"[AT_GLOBAL] 신규 없음 → 종료")
+            break
+
+        if page_no < MAX_PAGES:
+            time.sleep(0.5)
+
+    return list(by_url.values())
+
+
+def save_to_db(results: list[dict]) -> None:
+    """INSERT OR IGNORE — url UNIQUE 가정. 존재하는 컬럼만 INSERT."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    existing = {str(r[1]) for r in cur.execute("PRAGMA table_info(biz_projects)").fetchall()}
+
+    want = [
+        "title", "organization", "source", "region", "url",
+        "start_date", "end_date", "status", "summary", "period_text",
+        "ministry", "executing_agency", "raw_status",
+        "receipt_start", "receipt_end", "site",
+    ]
+    cols = [c for c in want if c in existing]
+    if not cols:
+        conn.close()
+        raise RuntimeError("biz_projects에 INSERT 가능한 컬럼이 없습니다.")
+
+    placeholders = ", ".join(["?"] * len(cols))
+    col_sql = ", ".join(cols)
+    sql = f"INSERT OR IGNORE INTO biz_projects ({col_sql}) VALUES ({placeholders})"
+
+    inserted = 0
+    for r in results:
+        cur.execute(sql, tuple(r.get(c, "") for c in cols))
+        inserted += cur.rowcount
+
+    conn.commit()
+    conn.close()
+    print(f"[AT_GLOBAL] DB 저장: 시도 {len(results)}건, 신규 {inserted}건 (중복 {len(results) - inserted}건)")
+
+
+def run() -> None:
+    results = collect_all_pages()
+    save_to_db(results)
+    print(f"[AT_GLOBAL] 완료: 수집 {len(results)}건")
+
+
+if __name__ == "__main__":
+    run()

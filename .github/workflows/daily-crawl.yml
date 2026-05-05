@@ -45,6 +45,15 @@ jobs:
         run: |
           python connectors/connector_kstartup.py
 
+      - name: Crawl AT global (collect only)
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          DB_PATH: db/biz.db
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python connectors/connector_at_global.py
+
       - name: Crawl jbexport (proxy + mode jbexport + merge + DB)
         continue-on-error: true
         timeout-minutes: 15
