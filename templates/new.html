@@ -66,7 +66,7 @@
         <div class="filter-row">
             <span class="label">기관:</span>
             <a href="{{ index_url(source='') }}"
-               class="{% if src|lower not in ['jbexport', 'bizinfo', 'kstartup', 'jbtp', 'jbbi', 'jbtp_related', 'at_global'] %}active{% endif %}">전체</a>
+               class="{% if src|lower not in ['jbexport', 'bizinfo', 'kstartup', 'jbtp', 'jbbi', 'jbtp_related', 'at_global', 'kseafood'] %}active{% endif %}">전체</a>
             <a href="{{ index_url(source='jbexport') }}"
                class="{% if src|lower == 'jbexport' %}active{% endif %}">전북수출</a>
             <a href="{{ index_url(source='bizinfo') }}"
@@ -81,6 +81,8 @@
                class="{% if src|lower == 'jbtp_related' %}active{% endif %}">JBTP유관</a>
             <a href="{{ index_url(source='at_global') }}"
                class="{% if src|lower == 'at_global' %}active{% endif %}">한국농수산식품유통공사(AT)</a>
+            <a href="{{ index_url(source='kseafood') }}"
+               class="{% if src|lower == 'kseafood' %}active{% endif %}">한국수산회</a>
         </div>
         <div class="filter-row">
             <span class="label">옵션:</span>
