@@ -50,6 +50,10 @@ SOURCE_LABELS = {
     "jbexport": "전북수출",
     "bizinfo": "기업마당",
     "kstartup": "K-Startup",
+    "jbtp": "전북TP",
+    "jbbi": "전북바이오",
+    "jbtp_related": "JBTP유관",
+    "at_global": "aT글로벌",
 }
 
 # 마감임박 배지 임계값(일 단위). D-3 이하는 danger(빨강), D-7 이하는 warn(주황).

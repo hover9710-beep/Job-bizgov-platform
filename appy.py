@@ -396,6 +396,10 @@ SOURCE_LABELS = {
     "jbexport": "전북수출",
     "bizinfo": "기업마당",
     "kstartup": "K-Startup",
+    "jbtp": "전북TP",
+    "jbbi": "전북바이오",
+    "jbtp_related": "JBTP유관",
+    "at_global": "aT글로벌",
 }
 
 

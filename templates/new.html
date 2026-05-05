@@ -329,11 +329,13 @@
                 {% endif %}
             </td>
             <td class="source-col"><span class="source-tag">{{ src_label }}</span></td>
-            <td class="action-col card-actions">
+            <td class="action-col">
+                <div class="card-actions">
                 <a class="btn-detail" href="{{ url_for('project_detail', pid=item.id) }}" onclick="logClick('{{ item.id }}', 'detail', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">공고 자세히 보기</a>
                 {% if item.url %}
                 <a class="btn-apply" href="{{ item.url }}" target="_blank" rel="noopener noreferrer" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">👉 지금 신청하기</a>
                 {% endif %}
+                </div>
             </td>
         </tr>
         {% endfor %}

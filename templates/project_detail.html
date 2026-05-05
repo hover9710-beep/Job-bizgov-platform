@@ -449,6 +449,8 @@
             font-size: 28px;
             font-weight: 700;
             line-height: 1.35;
+            word-break: keep-all;
+            overflow-wrap: break-word;
         }
         .detail-title-row .btn-star-fav {
             flex: 0 0 auto;
@@ -542,21 +544,36 @@
                 ⏰ 마감일 {{ item.end_date }}
             {% endif %}
         </div>
+        {% set _src = (item.get('source') or '')|lower %}
         <div class="cta-sub">
+            {% if _src == 'at_global' %}
+            ✔ 농수산식품 수출기업 / 전국 대상 사업
+            {% else %}
             ✔ 전북 기업 대상 / 지원사업
+            {% endif %}
         </div>
         {% if item.get('url') %}
         <a href="{{ item.url }}" target="_blank" rel="noopener" class="btn-apply primary-cta" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">
+            {% if _src == 'at_global' %}
+            📋 공고 원문 보기 (aT 공식 사이트)
+            {% else %}
             👉 공식 페이지 바로 신청
+            {% endif %}
         </a>
         <button type="button"
           class="btn-share-kakao"
           onclick='shareProject({{ (item.title or item.name or "지원사업 공고") | tojson }}, window.location.href)'>
           공유하기
         </button>
+        {% if _src == 'at_global' %}
+        <p class="official-guide">
+            ※ aT 공식 사이트로 이동합니다. 공고문·첨부 파일(HWP/PDF)은 해당 페이지에서 확인하세요.
+        </p>
+        {% else %}
         <p class="official-guide">
             ※ 공식 기관 페이지로 이동합니다. 최종 신청 전 공고문을 반드시 확인하세요.
         </p>
+        {% endif %}
         {% endif %}
     </div>
 
