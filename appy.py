@@ -1012,11 +1012,13 @@ def detect_traffic_source():
         return "unknown"
 
 
-def check_admin(req: Any) -> bool:
-    if (req.args.get("key") or "").strip() == ADMIN_KEY:
+def check_admin(request: Any) -> bool:
+    if (request.args.get("key") or "").strip() == ADMIN_KEY:
         return True
-    body = req.get_json(silent=True)
+    body = request.get_json(silent=True)
     if isinstance(body, dict) and str(body.get("key") or "").strip() == ADMIN_KEY:
+        return True
+    if (request.form.get("key") or "").strip() == ADMIN_KEY:
         return True
     return False
 
@@ -2174,6 +2176,7 @@ def recommend(company_id: Optional[int] = None):
             limit=5,
             total_candidates=0,
             shown_count=0,
+            is_admin=check_admin(request),
         )
 
     xfwd = (request.headers.get("X-Forwarded-For") or "").strip()
@@ -2243,6 +2246,7 @@ def recommend(company_id: Optional[int] = None):
             limit=5,
             total_candidates=0,
             shown_count=0,
+            is_admin=check_admin(request),
         )
         if visitor_cookie_new:
             resp = make_response(tmpl)
@@ -2275,6 +2279,7 @@ def recommend(company_id: Optional[int] = None):
         limit=5,
         total_candidates=total_candidates,
         shown_count=shown_count,
+        is_admin=check_admin(request),
     )
     if visitor_cookie_new:
         resp = make_response(tmpl)
@@ -2417,6 +2422,8 @@ def _tail_output(text: str, max_chars: int = LOG_TAIL_CHARS) -> str:
 @app.route("/run", methods=["GET", "POST"])
 def run_pipeline_route():
     """subprocess 로 pipeline/run_pipeline.py 실행 후 로그 일부 + 신규 공고 수 표시."""
+    if not check_admin(request):
+        return "403 Forbidden", 403
     if request.method == "GET":
         return render_template(
             "run_pipeline.html",
