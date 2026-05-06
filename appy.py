@@ -834,23 +834,40 @@ def load_top_clicked_projects(limit: int = 5) -> list:
 get_top_clicked_projects = load_top_clicked_projects
 
 
-def get_today_top_projects(limit: int = 5):
+def get_today_top_clicked(limit: int = 5) -> list:
+    """오늘 가장 많이 본 공고 — 사이트/기관 필터 무관, 전역 집계."""
+    sql = """
+        SELECT cl.project_id,
+               COUNT(*)                                              AS click_count,
+               SUM(CASE WHEN cl.action = 'apply'  THEN 1 ELSE 0 END) AS apply_count,
+               SUM(CASE WHEN cl.action = 'detail' THEN 1 ELSE 0 END) AS detail_count,
+               COALESCE(NULLIF(bp.title, ''),  cl.title)             AS title,
+               COALESCE(NULLIF(bp.source, ''), cl.source)            AS source
+        FROM click_log cl
+        LEFT JOIN biz_projects bp
+          ON CAST(bp.id AS TEXT) = CAST(cl.project_id AS TEXT)
+        WHERE date(cl.created_at, 'localtime') = date('now', 'localtime')
+        GROUP BY cl.project_id, COALESCE(NULLIF(bp.title, ''), cl.title), COALESCE(NULLIF(bp.source, ''), cl.source)
+        ORDER BY click_count DESC
+        LIMIT ?
+    """
     try:
         with sqlite3.connect(DB_PATH) as conn:
-            rows = conn.execute(
-                """
-                SELECT project_id, COUNT(*) as cnt
-                FROM click_log
-                WHERE date(created_at, 'localtime') = date('now', 'localtime')
-                GROUP BY project_id
-                ORDER BY cnt DESC
-                LIMIT ?
-                """,
-                (limit,),
-            ).fetchall()
-            return rows
+            rows = conn.execute(sql, (limit,)).fetchall()
+        return [
+            {
+                "project_id": r[0],
+                "click_count": r[1],
+                "apply_count": r[2],
+                "detail_count": r[3],
+                "score": r[1],
+                "title": clean_display_title(r[4]),
+                "source": r[5] or "",
+            }
+            for r in rows
+        ]
     except Exception as e:
-        print("[today_top] error:", repr(e), flush=True)
+        print("[today_top_clicked] error:", repr(e), flush=True)
         return []
 
 
@@ -1370,30 +1387,7 @@ def index():
                     prepare_row=_prepare_detail_row_for_template,
                     normalize_item=normalize_display_item,
                 )
-    today_top = get_today_top_projects()
-    today_ids = {row[0] for row in today_top}
-    items = rows_ui
-    id_set = {str(x) for x in today_ids}
-    matched = [item for item in items if str(item.get("id")) in id_set]
-    by_id = {str(i.get("id")): i for i in matched}
-    top_clicked = []
-    for project_id, cnt in today_top:
-        item = by_id.get(str(project_id))
-        if item is None:
-            continue
-        top_clicked.append(
-            dict(
-                project_id=item["id"],
-                title=clean_display_title(item.get("display_title") or item.get("title")),
-                source=str(item.get("source") or item.get("source_badge") or ""),
-                score=cnt,
-                click_count=cnt,
-                apply_count=0,
-                detail_count=cnt,
-            )
-        )
-    if not top_clicked:
-        top_clicked = get_top_clicked_projects()
+    top_clicked = get_today_top_clicked() or get_top_clicked_projects()
     visitor_id = get_or_create_visitor_id()
     user_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if user_ip and "," in user_ip:
@@ -2599,30 +2593,7 @@ def _render_new_announcements_page(is_admin: bool):
                     prepare_row=_prepare_detail_row_for_template,
                     normalize_item=normalize_display_item,
                 )
-    today_top = get_today_top_projects()
-    today_ids = {row[0] for row in today_top}
-    items = rows_ui
-    id_set = {str(x) for x in today_ids}
-    matched = [item for item in items if str(item.get("id")) in id_set]
-    by_id = {str(i.get("id")): i for i in matched}
-    top_clicked = []
-    for project_id, cnt in today_top:
-        item = by_id.get(str(project_id))
-        if item is None:
-            continue
-        top_clicked.append(
-            dict(
-                project_id=item["id"],
-                title=clean_display_title(item.get("display_title") or item.get("title")),
-                source=str(item.get("source") or item.get("source_badge") or ""),
-                score=cnt,
-                click_count=cnt,
-                apply_count=0,
-                detail_count=cnt,
-            )
-        )
-    if not top_clicked:
-        top_clicked = get_top_clicked_projects()
+    top_clicked = get_today_top_clicked() or get_top_clicked_projects()
     visitor_id = get_or_create_visitor_id()
     user_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if user_ip and "," in user_ip:
