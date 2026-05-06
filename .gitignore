@@ -33,3 +33,25 @@ scripts/debug/
 
 # DB 백업 파일
 db/*.bak_*
+
+# AI 도구 임시 파일 (2026-05-06 이후)
+_tmp_*.html
+_tmp_*.txt
+*_diff.txt
+*_diff_review.txt
+*.backup_*
+
+# 일회성 검증 스크립트 (작업 후 삭제 권장)
+check_log.py
+check_clicks.py
+quick_check.py
+add_test_clicks.py
+cleanup_test.py
+
+# 로컬 전용 DB 점검 스크립트
+check_db.py
+check_db2.py
+
+# 로컬 백업/유지보수 폴더
+backup/
+scripts/maintenance/
