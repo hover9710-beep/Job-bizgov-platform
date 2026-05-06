@@ -1,0 +1,46 @@
+﻿# BizGovPlanner Cursor Rules
+
+## 🛑 CRITICAL: 절대 자동 실행 금지
+
+NEVER execute these commands autonomously through tools/terminal:
+- git commit
+- git push
+- git reset --hard
+- git rebase
+- git push --force (any variant)
+- git cherry-pick (without explicit user request)
+
+INSTEAD: Output the exact commands as a copyable code block.
+The user runs git commit/push manually, always.
+
+If about to execute one of these, STOP and provide the command as text.
+
+## Surgical patch discipline
+
+When applying a patch:
+- Modify ONLY the specific lines/regions requested
+- Do NOT add unrelated changes (import sort, formatting, refactoring)
+- After patching, show `git diff` for user verification
+- DO NOT commit or push - wait for user
+
+## Production safety: v1 vs v2
+
+- hover9710-beep/Job-bizgov-platform = v1 운영 (live: https://job-bizgov-platform.onrender.com)
+- hover9710-beep/Job_bizgov_platform_dev = v2 dev
+- Direct push to v1 = immediate production deploy
+- Always require explicit user confirmation before v1 modification
+
+## Backup before critical files
+
+Before editing appy.py, run_pipeline.py, mail.py, suggest:
+`Copy-Item <file> <file>.backup_YYYY-MM-DD`
+
+## Test data conventions
+
+Test inserts MUST use marker (e.g., title=`테스트...`) for clean cleanup.
+Cleanup with `DELETE WHERE title LIKE '테스트%'`.
+
+## Korean communication
+
+Default to Korean (한국어).
+PowerShell command blocks: commands only - no Korean text or emoji inside (parser breaks).
