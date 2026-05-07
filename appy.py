@@ -856,18 +856,64 @@ def get_today_top_clicked(limit: int = 5) -> list:
             rows = conn.execute(sql, (limit,)).fetchall()
         return [
             {
-                "project_id": r[0],
-                "click_count": r[1],
-                "apply_count": r[2],
+                "project_id":   r[0],
+                "click_count":  r[1],
+                "apply_count":  r[2],
                 "detail_count": r[3],
-                "score": r[1],
-                "title": clean_display_title(r[4]),
-                "source": r[5] or "",
+                "score":        r[1],
+                "title":        clean_display_title(r[4]),
+                "source":       r[5] or "",
             }
             for r in rows
         ]
     except Exception as e:
         print("[today_top_clicked] error:", repr(e), flush=True)
+        return []
+
+
+def load_latest_by_source(source: str, limit: int = 5) -> list:
+    """source별 최신 5개. start_date >= 2026-01-01, created_at DESC 우선, 동률 시 id DESC."""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT id, title, organization, source,
+                       start_date, end_date, status, url, created_at
+                FROM biz_projects
+                WHERE source = ?
+                  AND COALESCE(start_date, '') >= '2026-01-01'
+                ORDER BY COALESCE(created_at, '') DESC, id DESC
+                LIMIT ?
+                """,
+                (source, limit),
+            ).fetchall()
+            return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"[latest_by_source:{source}] error:", repr(e), flush=True)
+        return []
+
+
+def load_latest_misc(limit: int = 5) -> list:
+    """기타 source 통합 최신 5개 (bizinfo, kstartup, jbtp_related, kseafood)."""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT id, title, organization, source,
+                       start_date, end_date, status, url, created_at
+                FROM biz_projects
+                WHERE source IN ('bizinfo', 'kstartup', 'jbtp_related', 'kseafood')
+                  AND COALESCE(start_date, '') >= '2026-01-01'
+                ORDER BY COALESCE(created_at, '') DESC, id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"[latest_misc] error:", repr(e), flush=True)
         return []
 
 
@@ -1390,6 +1436,11 @@ def index():
                     normalize_item=normalize_display_item,
                 )
     top_clicked = get_today_top_clicked() or get_top_clicked_projects()
+    latest_jbexport = load_latest_by_source("jbexport", 5)
+    latest_jbtp = load_latest_by_source("jbtp", 5)
+    latest_jbbi = load_latest_by_source("jbbi", 5)
+    latest_at_global = load_latest_by_source("at_global", 5)
+    latest_misc = load_latest_misc(5)
     visitor_id = get_or_create_visitor_id()
     user_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if user_ip and "," in user_ip:
@@ -1423,6 +1474,11 @@ def index():
             usage=usage,
             is_admin=False,
             today_visits=get_today_visit_count(),
+            latest_jbexport=latest_jbexport,
+            latest_jbtp=latest_jbtp,
+            latest_jbbi=latest_jbbi,
+            latest_at_global=latest_at_global,
+            latest_misc=latest_misc,
         )
     )
     resp.set_cookie(
@@ -2601,6 +2657,11 @@ def _render_new_announcements_page(is_admin: bool):
                     normalize_item=normalize_display_item,
                 )
     top_clicked = get_today_top_clicked() or get_top_clicked_projects()
+    latest_jbexport = load_latest_by_source("jbexport", 5)
+    latest_jbtp = load_latest_by_source("jbtp", 5)
+    latest_jbbi = load_latest_by_source("jbbi", 5)
+    latest_at_global = load_latest_by_source("at_global", 5)
+    latest_misc = load_latest_misc(5)
     visitor_id = get_or_create_visitor_id()
     user_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if user_ip and "," in user_ip:
@@ -2638,6 +2699,11 @@ def _render_new_announcements_page(is_admin: bool):
             usage=usage,
             today_visits=get_today_visit_count(),
             is_admin=is_admin,
+            latest_jbexport=latest_jbexport,
+            latest_jbtp=latest_jbtp,
+            latest_jbbi=latest_jbbi,
+            latest_at_global=latest_at_global,
+            latest_misc=latest_misc,
         )
     )
     resp.set_cookie(

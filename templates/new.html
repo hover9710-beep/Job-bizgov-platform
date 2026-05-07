@@ -208,6 +208,126 @@
     </section>
     {% endif %}
 
+    {% if latest_jbexport %}
+    <section class="latest-source-box">
+        <div class="latest-source-title">📦 전북수출통합지원센터 최신 5개</div>
+        <div class="latest-source-list">
+            {% for p in latest_jbexport %}
+            <a class="latest-source-item"
+               href="{{ url_for('project_detail', pid=p.id) }}"
+               onclick="logClick('{{ p.id }}', 'detail', '{{ p.source|e }}', '{{ p.title|e }}')">
+                <div class="latest-source-rank">{{ loop.index }}</div>
+                <div class="latest-source-body">
+                    <div class="latest-source-name">{{ p.title }}</div>
+                    <div class="latest-source-meta">
+                        <span class="latest-source-org">{{ p.organization or '' }}</span>
+                        <span class="latest-source-deadline">
+                            {% if p.end_date %}~ {{ p.end_date }}{% else %}상시/미정{% endif %}
+                        </span>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if latest_jbtp %}
+    <section class="latest-source-box">
+        <div class="latest-source-title">🏢 전북테크노파크 최신 5개</div>
+        <div class="latest-source-list">
+            {% for p in latest_jbtp %}
+            <a class="latest-source-item"
+               href="{{ url_for('project_detail', pid=p.id) }}"
+               onclick="logClick('{{ p.id }}', 'detail', '{{ p.source|e }}', '{{ p.title|e }}')">
+                <div class="latest-source-rank">{{ loop.index }}</div>
+                <div class="latest-source-body">
+                    <div class="latest-source-name">{{ p.title }}</div>
+                    <div class="latest-source-meta">
+                        <span class="latest-source-org">{{ p.organization or '' }}</span>
+                        <span class="latest-source-deadline">
+                            {% if p.end_date %}~ {{ p.end_date }}{% else %}상시/미정{% endif %}
+                        </span>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if latest_jbbi %}
+    <section class="latest-source-box">
+        <div class="latest-source-title">🧬 전북바이오융합원 최신 5개</div>
+        <div class="latest-source-list">
+            {% for p in latest_jbbi %}
+            <a class="latest-source-item"
+               href="{{ url_for('project_detail', pid=p.id) }}"
+               onclick="logClick('{{ p.id }}', 'detail', '{{ p.source|e }}', '{{ p.title|e }}')">
+                <div class="latest-source-rank">{{ loop.index }}</div>
+                <div class="latest-source-body">
+                    <div class="latest-source-name">{{ p.title }}</div>
+                    <div class="latest-source-meta">
+                        <span class="latest-source-org">{{ p.organization or '' }}</span>
+                        <span class="latest-source-deadline">
+                            {% if p.end_date %}~ {{ p.end_date }}{% else %}상시/미정{% endif %}
+                        </span>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if latest_at_global %}
+    <section class="latest-source-box">
+        <div class="latest-source-title">🌏 한국농수산식품유통공사(AT) 최신 5개</div>
+        <div class="latest-source-list">
+            {% for p in latest_at_global %}
+            <a class="latest-source-item"
+               href="{{ url_for('project_detail', pid=p.id) }}"
+               onclick="logClick('{{ p.id }}', 'detail', '{{ p.source|e }}', '{{ p.title|e }}')">
+                <div class="latest-source-rank">{{ loop.index }}</div>
+                <div class="latest-source-body">
+                    <div class="latest-source-name">{{ p.title }}</div>
+                    <div class="latest-source-meta">
+                        <span class="latest-source-org">{{ p.organization or '' }}</span>
+                        <span class="latest-source-deadline">
+                            {% if p.end_date %}~ {{ p.end_date }}{% else %}상시/미정{% endif %}
+                        </span>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if latest_misc %}
+    <section class="latest-source-box">
+        <div class="latest-source-title">📋 기타 기관 최신 5개</div>
+        <div class="latest-source-list">
+            {% for p in latest_misc %}
+            <a class="latest-source-item"
+               href="{{ url_for('project_detail', pid=p.id) }}"
+               onclick="logClick('{{ p.id }}', 'detail', '{{ p.source|e }}', '{{ p.title|e }}')">
+                <div class="latest-source-rank">{{ loop.index }}</div>
+                <div class="latest-source-body">
+                    <div class="latest-source-name">{{ p.title }}</div>
+                    <div class="latest-source-meta">
+                        <span class="latest-source-org">{{ p.organization or '' }}</span>
+                        <span class="latest-source-deadline">
+                            {% if p.end_date %}~ {{ p.end_date }}{% else %}상시/미정{% endif %}
+                        </span>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
     <div class="ai-disclaimer main-disclaimer">
         <strong>⚠</strong> AI는 보조 정보입니다. 반드시 공고 원문을 확인하세요.
     </div>

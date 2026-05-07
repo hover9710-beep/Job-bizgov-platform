@@ -121,12 +121,12 @@
         .summary-label { font-size: 12px; color: #6b7280; font-weight: 500; }
         .summary-value { font-size: 22px; color: #111827; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
 
-        .top-clicked-box { margin:16px 0; padding:14px; border:1px solid #e5e7eb; border-radius:14px; background:#fff7ed; }
-        .top-clicked-title { font-weight:800; margin-bottom:10px; color:#9a3412; }
-        .top-clicked-list { display:flex; flex-direction:column; gap:8px; }
-        .top-clicked-item { display:flex; gap:10px; padding:10px; border-radius:10px; background:#ffffff; text-decoration:none; color:inherit; border:1px solid #fed7aa; }
-        .top-clicked-rank { width:28px; height:28px; border-radius:999px; background:#f97316; color:white; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-        .top-clicked-name {
+        .top-clicked-box, .latest-source-box { margin:16px 0; padding:14px; border:1px solid #e5e7eb; border-radius:14px; background:#fff7ed; }
+        .top-clicked-title, .latest-source-title { font-weight:800; margin-bottom:10px; color:#9a3412; }
+        .top-clicked-list, .latest-source-list { display:flex; flex-direction:column; gap:8px; }
+        .top-clicked-item, .latest-source-item { display:flex; gap:10px; padding:10px; border-radius:10px; background:#ffffff; text-decoration:none; color:inherit; border:1px solid #fed7aa; }
+        .top-clicked-rank, .latest-source-rank { width:28px; height:28px; border-radius:999px; background:#f97316; color:white; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+        .top-clicked-name, .latest-source-name {
             font-weight: 700;
             line-height: 1.35;
             display: -webkit-box;
@@ -134,9 +134,9 @@
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
-        .top-clicked-meta { margin-top: 6px; font-size: 12px; color: #6b7280; display: flex; flex-direction: column; gap: 3px; }
-        .top-clicked-source { font-size: 11px; color: #9ca3af; }
-        .top-clicked-stats { font-size: 12px; color: #6b7280; }
+        .top-clicked-meta, .latest-source-meta { margin-top: 6px; font-size: 12px; color: #6b7280; display: flex; flex-direction: column; gap: 3px; }
+        .top-clicked-source, .latest-source-org { font-size: 11px; color: #9ca3af; }
+        .top-clicked-stats, .latest-source-deadline { font-size: 12px; color: #6b7280; }
 
         /* --- 제목 링크 --- */
         .title-link { color: #111827; text-decoration: none; }
@@ -467,11 +467,11 @@
           .usage-head { align-items: flex-start; }
           .usage-progress { font-size: 17px; }
 
-          .top-clicked-box { margin: 14px 0; padding: 14px 12px; }
-          .top-clicked-title { font-size:16px; }
-          .top-clicked-item { padding:12px; }
-          .top-clicked-name { font-size:15px; }
-          .top-clicked-meta { font-size:12px; }
+          .top-clicked-box, .latest-source-box { margin: 14px 0; padding: 14px 12px; }
+          .top-clicked-title, .latest-source-title { font-size:16px; }
+          .top-clicked-item, .latest-source-item { padding:12px; }
+          .top-clicked-name, .latest-source-name { font-size:15px; }
+          .top-clicked-meta, .latest-source-meta { font-size:12px; }
 
           /* 크롤링 패널 */
           .run-panel {
