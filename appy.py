@@ -876,17 +876,26 @@ def load_latest_by_source(source: str, limit: int = 5) -> list:
     try:
         with sqlite3.connect(DB_PATH) as conn:
             conn.row_factory = sqlite3.Row
+            # 임시 워크어라운드 (2026-05-07): source='jbexport'에 jbbi 332건 잘못
+            # 분류된 상태. 위젯 섞임 방지 위해 organization 추가 필터.
+            # 데이터 보정 후 제거 (백로그: organization 정합성 진단).
+            extra_where = ""
+            params = [source]
+            if source == "jbexport":
+                extra_where = " AND organization = ?"
+                params.append("전북수출통합지원시스템")
+            params.append(limit)
             rows = conn.execute(
-                """
+                f"""
                 SELECT id, title, organization, source,
                        start_date, end_date, status, url, created_at
                 FROM biz_projects
-                WHERE source = ?
+                WHERE source = ?{extra_where}
                   AND COALESCE(start_date, '') >= '2026-01-01'
                 ORDER BY COALESCE(created_at, '') DESC, id DESC
                 LIMIT ?
                 """,
-                (source, limit),
+                params,
             ).fetchall()
             return [dict(r) for r in rows]
     except Exception as e:
