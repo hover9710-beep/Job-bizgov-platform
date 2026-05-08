@@ -125,15 +125,25 @@ def _period_dates_from_string(val: str) -> Tuple[str, str]:
 
 def parse_jbexport_detail_html(html: str) -> Dict[str, str]:
     """
-    detail1.do HTML에서 status, start_date, end_date 추출.
-    반환 키: status(원문에 가깝게), start_date, end_date (YYYY-MM-DD)
+    detail1.do HTML에서 status, start_date, end_date, title 추출.
+    반환 키: status(원문에 가깝게), start_date, end_date (YYYY-MM-DD), title
+
+    백로그 035 (2026-05-08): list API 응답에서 title 필드 사라진 사이트 변경 대응.
+    detail HTML 의 <span class="titleView"> in <dd class="dd"> 첫 매치를 본문 title 로 추출.
     """
-    out: Dict[str, str] = {"status": "", "start_date": "", "end_date": ""}
+    out: Dict[str, str] = {"status": "", "start_date": "", "end_date": "", "title": ""}
     if not html or not str(html).strip():
         return out
 
     soup = BeautifulSoup(html, "html.parser")
     full_text = soup.get_text("\n", strip=True)
+
+    # 0) 본문 title — span.titleView 첫 매치 (백로그 035)
+    title_tag = soup.select_one("span.titleView")
+    if title_tag:
+        t = title_tag.get_text(" ", strip=True)
+        if t:
+            out["title"] = re.sub(r"\s+", " ", t).strip()
 
     def absorb_period(val: str) -> None:
         sd, ed = _period_dates_from_string(val)
@@ -275,8 +285,11 @@ def extract_period_status_from_jbexport_html(html: str) -> Tuple[str, str]:
     return period, status
 
 
-def enrich_detail_meta_from_url(detail_url: str) -> Tuple[str, str]:
-    """(기간 문자열, 상태 원문). parse_jbexport_detail_html 기반."""
+def enrich_detail_meta_from_url(detail_url: str) -> Tuple[str, str, str]:
+    """(기간 문자열, 상태 원문, title). parse_jbexport_detail_html 기반.
+
+    백로그 035 (2026-05-08): title 도 detail 에서 추출해 list 응답 누락 대응.
+    """
     fields = fetch_jbexport_detail_fields(detail_url)
     sd = str(fields.get("start_date") or "").strip()
     ed = str(fields.get("end_date") or "").strip()
@@ -287,7 +300,8 @@ def enrich_detail_meta_from_url(detail_url: str) -> Tuple[str, str]:
     else:
         period = ""
     status = str(fields.get("status") or "").strip()
-    return period, status
+    title = str(fields.get("title") or "").strip()
+    return period, status, title
 
 
 # =========================================================
@@ -339,11 +353,14 @@ def extract_announcement(row: Any) -> Optional[Dict[str, Any]]:
     detail_url = f"{DETAIL_BASE}?menuUUID={MENU_UUID}&spSeq={sp_seq}"
 
     if _FETCH_DETAIL_META:
-        p2, s2 = enrich_detail_meta_from_url(detail_url)
+        p2, s2, t2 = enrich_detail_meta_from_url(detail_url)
         if p2:
             period = p2
         if s2:
             status = s2
+        # 백로그 035: list 응답 title 비어있으면 detail 에서 추출한 title 사용
+        if t2 and not title:
+            title = t2
 
     sd, ed, _ = parse_dates_from_item(
         {"기간": period, "period": period},
