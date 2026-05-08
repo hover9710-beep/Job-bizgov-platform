@@ -350,6 +350,10 @@ def extract_announcement(row: Any) -> Optional[Dict[str, Any]]:
         body_fallback=period,
     )
 
+    # 백로그 034: 사이트 응답 create_dt(epoch ms 정수, 공고 등록일) 보존
+    # → biz_projects.notice_create_dt 컬럼에 저장 → 위젯 정렬용
+    notice_create_dt = row.get("create_dt") or row.get("createDt") or row.get("CREATE_DT")
+
     out = {
         "spSeq": sp_seq,
         "공고제목": title or f"spSeq={sp_seq}",
@@ -361,6 +365,7 @@ def extract_announcement(row: Any) -> Optional[Dict[str, Any]]:
         "start_date": sd,
         "end_date": ed,
         "status": status,
+        "notice_create_dt": notice_create_dt,
     }
     print(f"[jbexport] {out['status']} {out['start_date']}~{out['end_date']}")
     if _FETCH_DETAIL_META:

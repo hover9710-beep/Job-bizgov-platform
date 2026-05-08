@@ -144,6 +144,8 @@ def _init_db():
             cur.execute(
                 f"ALTER TABLE biz_projects ADD COLUMN {_jbcol} TEXT"
             )
+    # 백로그 034: jbexport 위젯 정렬용 (epoch ms 정수, NULL 가능)
+    _ensure_column(conn, "biz_projects", "notice_create_dt", "INTEGER")
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS companies (
@@ -879,11 +881,26 @@ def load_latest_by_source(source: str, limit: int = 5) -> list:
             # 임시 워크어라운드 (2026-05-07): source='jbexport'에 jbbi 332건 잘못
             # 분류된 상태. 위젯 섞임 방지 위해 organization 추가 필터.
             # 데이터 보정 후 제거 (백로그: organization 정합성 진단).
+            # 추가(2026-05-07): jbexport 위젯에 spSeq= / 공고 상세보기 / MENU 등
+            # 깨진 제목 노출 차단. 정식 fix 는 백로그 034 (notice_no 컬럼).
+            # 백로그 034 적용(2026-05-07): jbexport 분기 ORDER BY 를
+            # notice_create_dt(사이트 등록일 epoch ms) DESC 로 변경.
+            # NULL 행은 0 으로 → 양수 epoch 보다 항상 작음 → 후순위.
             extra_where = ""
+            order_by = "ORDER BY COALESCE(created_at, '') DESC, id DESC"
             params = [source]
             if source == "jbexport":
-                extra_where = " AND organization = ?"
-                params.append("전북수출통합지원시스템")
+                extra_where = (
+                    " AND organization = ?"
+                    " AND COALESCE(TRIM(title), '') != ''"
+                    " AND title NOT LIKE 'spSeq=%'"
+                    " AND title NOT IN (?, ?)"
+                )
+                params.extend(["전북수출통합지원시스템", "공고 상세보기", "MENU"])
+                order_by = (
+                    "ORDER BY COALESCE(notice_create_dt, 0) DESC, "
+                    "COALESCE(created_at, '') DESC, id DESC"
+                )
             params.append(limit)
             rows = conn.execute(
                 f"""
@@ -892,7 +909,7 @@ def load_latest_by_source(source: str, limit: int = 5) -> list:
                 FROM biz_projects
                 WHERE source = ?{extra_where}
                   AND COALESCE(start_date, '') >= '2026-01-01'
-                ORDER BY COALESCE(created_at, '') DESC, id DESC
+                {order_by}
                 LIMIT ?
                 """,
                 params,
