@@ -1,8 +1,9 @@
 @echo off
 REM ============================================================
-REM bizplnner daily wrapper - proxy auto-start + run_all.py
+REM bizplnner daily wrapper - proxy auto-start + run_all + ALERT
 REM Backlog 036 (2026-05-08): 5/2-5/7 stale = jbexport proxy down.
-REM Action: check proxy, auto-start if dead, run run_all.py, cleanup.
+REM Backlog 042 (2026-05-08): silent fail prevention - alert on non-zero exit.
+REM Action: check proxy, auto-start if dead, run run_all.py, cleanup, alert.
 REM bizplnner Task Action: cmd /c auto_run.bat
 REM ASCII-only. Path via %~dp0 (Start In = bat dir, no hardcoded korean).
 REM ============================================================
@@ -38,6 +39,8 @@ for /L %%i in (1,1,30) do (
 
 echo [auto_run] proxy failed to start in 30s
 echo [auto_run] %DATE% %TIME% proxy startup TIMEOUT exit 2 >> "%LOG%"
+REM proxy startup timeout still triggers alert (5/2-5/7 chain prevention)
+py scripts\send_alert.py --exit-code 2 --log "%LOG%" --tail-lines 50 >> "%LOG%" 2>&1
 exit /b 2
 
 :proxy_ready
@@ -57,6 +60,13 @@ if "!PROXY_STARTED!"=="1" (
         taskkill /F /PID %%a >NUL 2>&1
     )
     echo [auto_run] %DATE% %TIME% proxy cleanup done >> "%LOG%"
+)
+
+REM 5) Send alert email if run_all failed (silent fail prevention - backlog 042)
+if !RUN_ALL_EXIT! NEQ 0 (
+    echo [auto_run] sending alert for exit=!RUN_ALL_EXIT!
+    echo [auto_run] %DATE% %TIME% alert exit=!RUN_ALL_EXIT! >> "%LOG%"
+    py scripts\send_alert.py --exit-code !RUN_ALL_EXIT! --log "%LOG%" --tail-lines 50 >> "%LOG%" 2>&1
 )
 
 exit /b !RUN_ALL_EXIT!

@@ -125,13 +125,19 @@ def _period_dates_from_string(val: str) -> Tuple[str, str]:
 
 def parse_jbexport_detail_html(html: str) -> Dict[str, str]:
     """
-    detail1.do HTML에서 status, start_date, end_date, title 추출.
-    반환 키: status(원문에 가깝게), start_date, end_date (YYYY-MM-DD), title
+    detail1.do HTML에서 status, start_date, end_date, title, organization 추출.
+    반환 키: status(원문에 가깝게), start_date, end_date (YYYY-MM-DD), title, organization
 
     백로그 035 (2026-05-08): list API 응답에서 title 필드 사라진 사이트 변경 대응.
-    detail HTML 의 <span class="titleView"> in <dd class="dd"> 첫 매치를 본문 title 로 추출.
+    백로그 032-1 (2026-05-08): organization 하드코딩 → detail HTML 의 주관기관 라벨 추출.
     """
-    out: Dict[str, str] = {"status": "", "start_date": "", "end_date": "", "title": ""}
+    out: Dict[str, str] = {
+        "status": "",
+        "start_date": "",
+        "end_date": "",
+        "title": "",
+        "organization": "",
+    }
     if not html or not str(html).strip():
         return out
 
@@ -169,6 +175,13 @@ def parse_jbexport_detail_html(html: str) -> Dict[str, str]:
         ):
             if len(val) < 80 and not re.search(r"function\s*\(", val):
                 out["status"] = val
+        # 백로그 032-1: organization 라벨 매칭 (jbexport detail)
+        if not out["organization"] and any(
+            k in label
+            for k in ("사업주관기관", "사업수행기관", "주관기관", "수행기관", "담당기관", "지원기관")
+        ):
+            if val and len(val) < 80 and not re.search(r"function\s*\(", val):
+                out["organization"] = re.sub(r"\s+", " ", val).strip()
 
     # 2) dl dt / dd
     for dt in soup.find_all("dt"):
@@ -184,6 +197,36 @@ def parse_jbexport_detail_html(html: str) -> Dict[str, str]:
         if any(k in label for k in ("진행상태", "접수상태", "공고상태", "상태")):
             if len(val) < 80:
                 out["status"] = val
+        if not out["organization"] and any(
+            k in label
+            for k in ("사업주관기관", "사업수행기관", "주관기관", "수행기관", "담당기관", "지원기관")
+        ):
+            if val and len(val) < 80:
+                out["organization"] = re.sub(r"\s+", " ", val).strip()
+
+    # 2.5) jbexport-specific: <td class="th"> 라벨 + 다음 <td> 가 값 (백로그 032-1)
+    for td_label in soup.select("td.th"):
+        label = td_label.get_text(" ", strip=True)
+        td_val = td_label.find_next_sibling("td")
+        if not td_val:
+            continue
+        val = td_val.get_text(" ", strip=True)
+        if not val:
+            continue
+        if any(k in label for k in ("접수기간", "신청기간", "모집기간", "공고기간", "사업기간")):
+            absorb_period(val)
+        if any(
+            k in label
+            for k in ("진행상태", "접수상태", "공고상태", "상태", "진행 상태")
+        ):
+            if not out["status"] and len(val) < 80 and not re.search(r"function\s*\(", val):
+                out["status"] = val
+        if not out["organization"] and any(
+            k in label
+            for k in ("사업주관기관", "사업수행기관", "주관기관", "수행기관", "담당기관", "지원기관")
+        ):
+            if val and len(val) < 80:
+                out["organization"] = re.sub(r"\s+", " ", val).strip()
 
     # 3) 정규식 (플레인 텍스트)
     if not out["status"]:
@@ -285,10 +328,11 @@ def extract_period_status_from_jbexport_html(html: str) -> Tuple[str, str]:
     return period, status
 
 
-def enrich_detail_meta_from_url(detail_url: str) -> Tuple[str, str, str]:
-    """(기간 문자열, 상태 원문, title). parse_jbexport_detail_html 기반.
+def enrich_detail_meta_from_url(detail_url: str) -> Tuple[str, str, str, str]:
+    """(기간 문자열, 상태 원문, title, organization). parse_jbexport_detail_html 기반.
 
     백로그 035 (2026-05-08): title 도 detail 에서 추출해 list 응답 누락 대응.
+    백로그 032-1 (2026-05-08): organization 4번째 반환값 추가 (detail HTML 의 주관기관).
     """
     fields = fetch_jbexport_detail_fields(detail_url)
     sd = str(fields.get("start_date") or "").strip()
@@ -301,7 +345,8 @@ def enrich_detail_meta_from_url(detail_url: str) -> Tuple[str, str, str]:
         period = ""
     status = str(fields.get("status") or "").strip()
     title = str(fields.get("title") or "").strip()
-    return period, status, title
+    organization = str(fields.get("organization") or "").strip()
+    return period, status, title, organization
 
 
 # =========================================================
@@ -352,8 +397,9 @@ def extract_announcement(row: Any) -> Optional[Dict[str, Any]]:
 
     detail_url = f"{DETAIL_BASE}?menuUUID={MENU_UUID}&spSeq={sp_seq}"
 
+    detail_organization = ""
     if _FETCH_DETAIL_META:
-        p2, s2, t2 = enrich_detail_meta_from_url(detail_url)
+        p2, s2, t2, o2 = enrich_detail_meta_from_url(detail_url)
         if p2:
             period = p2
         if s2:
@@ -361,6 +407,9 @@ def extract_announcement(row: Any) -> Optional[Dict[str, Any]]:
         # 백로그 035: list 응답 title 비어있으면 detail 에서 추출한 title 사용
         if t2 and not title:
             title = t2
+        # 백로그 032-1: detail HTML 에서 주관기관 추출되면 hardcoded 대신 사용
+        if o2:
+            detail_organization = o2
 
     sd, ed, _ = parse_dates_from_item(
         {"기간": period, "period": period},
@@ -374,7 +423,7 @@ def extract_announcement(row: Any) -> Optional[Dict[str, Any]]:
     out = {
         "spSeq": sp_seq,
         "공고제목": title or f"spSeq={sp_seq}",
-        "기관": "전북수출통합지원시스템",
+        "기관": detail_organization or "전북수출통합지원시스템",
         "기간": period,
         "상태": status,
         "상세URL": detail_url,

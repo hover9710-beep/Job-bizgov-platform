@@ -6,7 +6,11 @@ import re
 from typing import Any, Dict, Optional, Tuple
 
 KNOWN_SOURCES = frozenset(
-    {"jbexport", "bizinfo", "kstartup", "jbba", "jbtp", "kotra", "unknown"}
+    {
+        "jbexport", "bizinfo", "kstartup", "jbba", "jbtp", "kotra", "unknown",
+        # 백로그 041 (2026-05-08): 4 source 매핑 누락 fix
+        "jbtp_related", "jbbi", "at_global", "kseafood",
+    }
 )
 
 
@@ -32,12 +36,23 @@ def infer_source(
         return "bizinfo"
     if "k-startup.go.kr" in u or "kstartup" in blob or "k-startup" in blob:
         return "kstartup"
+    # 백로그 041 (2026-05-08): jbtp_related 보다 먼저 식별 — BBS_0000007 board ID
+    # (case-sensitive, raw url 사용. lower 한 u 에는 'BBS_0000007' 가 'bbs_0000007' 이라 url 원문 검사)
+    if "jbtp.or.kr" in u and "BBS_0000007" in (url or ""):
+        return "jbtp_related"
     if "jbba" in blob:
         return "jbba"
     if "jbtp" in blob:
         return "jbtp"
     if "kotra" in blob:
         return "kotra"
+    # 백로그 041: 누락된 4 source URL host 매핑
+    if "jif.re.kr" in u:
+        return "jbbi"
+    if "global.at.or.kr" in u:
+        return "at_global"
+    if "biz.k-seafoodtrade.kr" in u:
+        return "kseafood"
 
     # URL이 없을 때 organization/title로 출처 추정 (기업마당·전북수출·창업진흥원 등)
     if "기업마당" in o or "기업마당" in t:
@@ -58,6 +73,13 @@ def infer_source(
         return "jbba"
     if "jbtp" in combo or "테크노파크" in combo:
         return "jbtp"
+    # 백로그 041: organization/title 힌트로 4 source 추정
+    if "전북바이오융합" in o or "전북바이오융합" in t:
+        return "jbbi"
+    if "한국농수산식품유통공사" in o or "한국농수산식품유통공사" in t:
+        return "at_global"
+    if "한국수산회" in o or "수협중앙회" in o or "한국수산무역협회" in o or "k-seafood" in t:
+        return "kseafood"
 
     ex = (explicit or "").strip().lower()
     if ex in KNOWN_SOURCES:
