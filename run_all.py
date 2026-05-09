@@ -333,7 +333,13 @@ def _run_mail_chain(args: argparse.Namespace) -> int:
         print("\n[run_all] 완료 (일부 스텝 실패):", flush=True)
         for t, rc in failures:
             print(f"  - {t} (exit {rc})", flush=True)
-        return 0 if args.test else 1
+        # 백로그 046 (2026-05-09): non-fatal 단계 실패는 종합 exit code 에서 제외.
+        # 진짜 fatal (NON_FATAL_STEPS 외 단계) 실패만 exit 1. nonfatal 만 fail 이면 exit 0.
+        # → auto_run.bat alert 시스템 (백로그 042) false positive 차단.
+        has_fatal = any(t not in NON_FATAL_STEPS for t, _ in failures)
+        if has_fatal:
+            return 0 if args.test else 1
+        return 0
 
     print("\nALL PIPELINE COMPLETED", flush=True)
     return 0
