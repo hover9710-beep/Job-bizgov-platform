@@ -144,12 +144,31 @@ def parse_jbexport_detail_html(html: str) -> Dict[str, str]:
     soup = BeautifulSoup(html, "html.parser")
     full_text = soup.get_text("\n", strip=True)
 
-    # 0) 본문 title — span.titleView 첫 매치 (백로그 035)
-    title_tag = soup.select_one("span.titleView")
-    if title_tag:
-        t = title_tag.get_text(" ", strip=True)
-        if t:
-            out["title"] = re.sub(r"\s+", " ", t).strip()
+    # 0) 본문 title (백로그 047): 표 td.th='지원사업' 옆 td.
+    #    백로그 035 의 span.titleView 는 ul.board_bottom (이전/다음 게시물 nav)
+    #    를 잡고 있어 인접 사업의 title 로 백필되는 버그가 있었음. 표 기반으로 교체.
+    #    표 매칭 실패 시 <script>$('title').text('... | 사업명')</script> regex fallback.
+    for tr in soup.select("table tr"):
+        th_td = tr.select_one("td.th")
+        if th_td and "지원사업" in th_td.get_text(strip=True):
+            sib = th_td.find_next_sibling("td")
+            if sib:
+                # 도비지원/국비지원 등 sub-badge 제거
+                for noise in sib.select(
+                    "span.blue_txt, span.red_txt, span.green_txt, .new_icon"
+                ):
+                    noise.decompose()
+                t = sib.get_text(" ", strip=True)
+                if t:
+                    out["title"] = re.sub(r"\s+", " ", t).strip()
+                    break
+    if not out["title"]:
+        m = re.search(r"\$\('title'\)\.text\('([^']+)'\)", html)
+        if m:
+            full = m.group(1).strip()
+            parts = [p.strip() for p in full.split("|")]
+            if parts:
+                out["title"] = re.sub(r"\s+", " ", parts[-1]).strip()
 
     def absorb_period(val: str) -> None:
         sd, ed = _period_dates_from_string(val)
@@ -1039,6 +1058,64 @@ def _load_snapshot_today() -> List[Dict[str, Any]]:
     return []
 
 
+def sync_status_to_db(all_items: List[Dict[str, Any]]) -> Dict[str, int]:
+    """list API 결과의 raw 상태로 DB jbexport row 의 status 를 sync (백로그 048).
+
+    filter_open_announcements 가 마감 사업을 today.json 에서 제거하기 때문에
+    update_db 흐름으로는 기존 row 의 status 변동이 반영되지 않는다. 여기서는
+    메일/알림 흐름에 영향 없이 DB 의 status / raw_status 만 갱신한다.
+
+    매칭: url 정확 일치. update_db 의 canonical_url 처리 때문에 일부 row 가
+    매칭 안 될 수 있으나, 사이트 raw URL 형태가 update_db 가 canonical 화하는
+    sp_seq 형태와 일치하므로 실용상 무방.
+    """
+    import sqlite3 as _sqlite3
+
+    db_path = _ROOT / "db" / "biz.db"
+    if not db_path.exists():
+        log(f"[status-sync] db not found: {db_path}")
+        return {"updated": 0, "skipped": 0, "missing": 0}
+
+    open_raw = {"접수중", "공고중"}
+    updated = skipped = missing = 0
+
+    conn = _sqlite3.connect(str(db_path))
+    try:
+        for item in all_items:
+            url = str(item.get("상세URL") or "").strip()
+            raw_status = str(item.get("상태") or "").strip()
+            if not url or not raw_status:
+                continue
+            cur = conn.execute(
+                "SELECT id, status, raw_status FROM biz_projects "
+                "WHERE source='jbexport' AND url=?",
+                (url,),
+            ).fetchone()
+            if not cur:
+                missing += 1
+                continue
+            db_id, db_status, db_raw = cur
+            new_status = "진행" if raw_status in open_raw else "마감"
+            if db_status == new_status and (db_raw or "") == raw_status:
+                skipped += 1
+                continue
+            conn.execute(
+                "UPDATE biz_projects SET status=?, raw_status=?, "
+                "updated_at=datetime('now','localtime') WHERE id=?",
+                (new_status, raw_status, db_id),
+            )
+            updated += 1
+        conn.commit()
+    finally:
+        conn.close()
+
+    log(
+        f"[status-sync] updated={updated} skipped={skipped} missing={missing} "
+        f"(total list items={len(all_items)})"
+    )
+    return {"updated": updated, "skipped": skipped, "missing": missing}
+
+
 def run_daily() -> Dict[str, Any]:
     prev_snapshot = _load_snapshot_today()
 
@@ -1058,6 +1135,9 @@ def run_daily() -> Dict[str, Any]:
         log(f"[스냅샷] {snap_path} (이전 today → yesterday)")
     else:
         log("[스냅샷] 수집 결과가 비어 있어 today.json/yesterday.json 은 갱신하지 않습니다.")
+
+    # 백로그 048: list raw 결과로 DB status sync (마감으로 바뀐 사업 반영)
+    sync_status_to_db(all_items)
 
     print_new_announcements(new_items)
 
