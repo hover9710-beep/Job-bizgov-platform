@@ -259,6 +259,25 @@ def parse_jbexport_detail_html(html: str) -> Dict[str, str]:
             if cand and len(cand) < 80:
                 out["status"] = cand
 
+    # 백로그 050 (2026-05-10): th/dt/td.th selector 가 모두 실패한 경우 대비
+    # plain-text regex 로 organization 추출. label 변형(공백·콜론 차이) 흡수.
+    if not out["organization"]:
+        m = re.search(
+            r"(?:사업주관기관|사업수행기관|주관기관|수행기관|담당기관|지원기관)\s*[:：]?\s*([^\n\r<]+?)(?:\n|<|$)",
+            full_text,
+            re.IGNORECASE,
+        )
+        if m:
+            cand = re.sub(r"\s+", " ", m.group(1)).strip()
+            # function(/ 같은 JS 잡음 + 너무 긴 문자열 방어 + label 자체 재포함 방어
+            if (
+                cand
+                and len(cand) < 80
+                and not re.search(r"function\s*\(", cand)
+                and not re.search(r"(주관기관|수행기관|담당기관|지원기관)", cand)
+            ):
+                out["organization"] = cand
+
     if not (out["start_date"] and out["end_date"]):
         line = extract_period_line_from_text(full_text)
         if line:

@@ -212,6 +212,21 @@ def _is_empty_recommend_label(val: Any) -> bool:
     return str(val).strip() == ""
 
 
+# 백로그 050 (2026-05-10): source 기본 fallback organization 값.
+# 진짜 기관명을 fallback 으로 덮어쓰는 사고를 update_db UPDATE 머지 단계에서 차단.
+_FALLBACK_ORGS = {
+    "전북수출통합지원시스템",  # jbexport_daily / merge_jb default
+    "기업마당",                  # bizinfo default
+}
+
+
+def _is_fallback_organization(val: Any) -> bool:
+    s = str(val or "").strip()
+    if not s:
+        return True
+    return s in _FALLBACK_ORGS
+
+
 def _normalize_attachments_json_field(raw: Any) -> str:
     if raw is None:
         return ""
@@ -422,7 +437,7 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
 
     cur = conn.execute(
         "SELECT ai_result, pdf_path, attachments_json, ai_summary, recommend_label, "
-        "notice_chk, notice_order "
+        "notice_chk, notice_order, organization "
         "FROM biz_projects WHERE id = ?",
         (eid,),
     ).fetchone()
@@ -434,7 +449,8 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
         old_rl,
         old_nchk,
         old_nord,
-    ) = (cur or (None, None, None, None, None, None, None))
+        old_org,
+    ) = (cur or (None, None, None, None, None, None, None, None))
 
     new_ai = old_ai if ai_result is None else ai_result
     new_pdf = old_pdf if pdf_path is None else pdf_path
@@ -450,6 +466,14 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
     merged_rl = row["recommend_label"]
     if _is_empty_recommend_label(merged_rl) and not _is_empty_recommend_label(old_rl):
         merged_rl = str(old_rl).strip()
+
+    # 백로그 050: organization 머지 — 새 값이 비었거나 source 기본 fallback 값
+    # ('전북수출통합지원시스템', '기업마당') 인데 옛 값이 진짜 기관명이면 옛 값 보존.
+    # jbexport detail fetch 일시 실패 / 환경변수 비활성 (JBEXPORT_FETCH_DETAIL_META=0)
+    # 등으로 fallback 만 들어왔을 때 진짜 기관명을 보호.
+    merged_org = row["organization"]
+    if _is_fallback_organization(merged_org) and not _is_fallback_organization(old_org):
+        merged_org = str(old_org or "").strip()
 
     # 백로그 049: notice_chk/notice_order 머지 — 새 값이 0(=NULL/누락 정규화 결과)이면
     # 기존 값 보존. jbexport 외 source upsert 가 jbexport 행 정렬 키를 0 으로 덮는 사고 방지.
@@ -484,7 +508,7 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
         """,
         (
             row["title"],
-            row["organization"],
+            merged_org,
             row["ministry"],
             row["executing_agency"],
             row["source"],

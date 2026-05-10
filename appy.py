@@ -887,21 +887,21 @@ def load_latest_by_source(source: str, limit: int = 5) -> list:
             # 데이터 보정 후 제거 (백로그: organization 정합성 진단).
             # 추가(2026-05-07): jbexport 위젯에 spSeq= / 공고 상세보기 / MENU 등
             # 깨진 제목 노출 차단. 정식 fix 는 백로그 034 (notice_no 컬럼).
-            # 백로그 049 적용(2026-05-10): jbexport 분기 ORDER BY 를 사이트 정렬 키
-            # (notiChk DESC, oder DESC) 매핑으로 변경. notice_create_dt 정렬은 update_db
-            # 단계에서 컬럼 미반영(전부 NULL)이라 사실상 무력했음.
-            # 사이트 jbexport.or.kr: 1차 notiChk DESC (공지 핀), 2차 oder DESC (등록 연번).
+            # 백로그 049 적용(2026-05-10): jbexport ORDER BY 를 사이트 정렬 키
+            # (notiChk DESC, oder DESC) 로 매핑. 백로그 050 적용(2026-05-10): organization
+            # 추출 selector 강화 + 65건 fallback 백필 + update_db merge 보호 후, 임시
+            # organization='전북수출통합지원시스템' 필터 제거 (옵션 A). source='jbexport'
+            # 자체가 url 도메인 jbexport.or.kr 100% 일치라 추가 필터 불필요.
             extra_where = ""
             order_by = "ORDER BY COALESCE(created_at, '') DESC, id DESC"
             params = [source]
             if source == "jbexport":
                 extra_where = (
-                    " AND organization = ?"
                     " AND COALESCE(TRIM(title), '') != ''"
                     " AND title NOT LIKE 'spSeq=%'"
                     " AND title NOT IN (?, ?)"
                 )
-                params.extend(["전북수출통합지원시스템", "공고 상세보기", "MENU"])
+                params.extend(["공고 상세보기", "MENU"])
                 order_by = (
                     "ORDER BY COALESCE(notice_chk, 0) DESC, "
                     "COALESCE(notice_order, 0) DESC, "
