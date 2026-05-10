@@ -1071,7 +1071,8 @@ def sync_status_to_db(all_items: List[Dict[str, Any]]) -> Dict[str, int]:
     """
     import sqlite3 as _sqlite3
 
-    db_path = _ROOT / "db" / "biz.db"
+    from db_path import resolve_db_path as _resolve_db_path  # 백로그 044
+    db_path = _resolve_db_path()
     if not db_path.exists():
         log(f"[status-sync] db not found: {db_path}")
         return {"updated": 0, "skipped": 0, "missing": 0}

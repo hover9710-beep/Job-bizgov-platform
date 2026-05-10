@@ -249,6 +249,10 @@ def _post_merge_steps(args: argparse.Namespace) -> int:
             "4d) Update DB (biz.db)",
             [PY, str(ROOT / "pipeline" / "update_db.py")],
         ),
+        (
+            "4e) Sync kstartup status (백로그 048 패턴)",
+            [PY, str(ROOT / "connectors" / "connector_kstartup.py"), "--sync-status-only"],
+        ),
     ]
     failures: list[tuple[str, int]] = []
     for title, cmd in steps:

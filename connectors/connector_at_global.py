@@ -15,6 +15,11 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 _ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
+import sys as _sys
+if _ROOT not in _sys.path:
+    _sys.path.insert(0, _ROOT)
+from db_path import resolve_db_path as _resolve_db_path  # noqa: E402
+
 BASE = "https://global.at.or.kr"
 LIST_URL = "https://global.at.or.kr/front/bizReq/brList.do"
 DETAIL_BASE = "https://global.at.or.kr/front/bizReq/brView.do"
@@ -25,7 +30,7 @@ HEADERS = {
     "Referer": REFERER,
 }
 
-DB_PATH = os.path.join(_ROOT, "db", "biz.db")
+DB_PATH = str(_resolve_db_path())  # 백로그 044: env DB_PATH 우선
 DEBUG_DIR = os.path.join(_ROOT, "data", "at_global", "debug")
 
 _SESSION = requests.Session()

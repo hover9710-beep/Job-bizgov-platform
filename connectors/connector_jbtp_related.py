@@ -15,6 +15,11 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 _ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
+import sys as _sys
+if _ROOT not in _sys.path:
+    _sys.path.insert(0, _ROOT)
+from db_path import resolve_db_path as _resolve_db_path  # noqa: E402
+
 BASE_LIST = (
     "https://www.jbtp.or.kr/board/list.jbtp?"
     "boardId=BBS_0000007&listRow=10&listCel=1&menuCd=DOM_000000102002000000"
@@ -23,7 +28,7 @@ BASE_LIST = (
 MAX_PAGES = 7
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
-DB_PATH = os.path.join(_ROOT, "db", "biz.db")
+DB_PATH = str(_resolve_db_path())  # 백로그 044: env DB_PATH 우선
 DEBUG_DIR = os.path.join(_ROOT, "data", "jbtp_related", "debug")
 
 _DEFAULT_ORG = "전북테크노파크 유관기관"

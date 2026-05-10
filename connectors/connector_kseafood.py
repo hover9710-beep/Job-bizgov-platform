@@ -25,6 +25,11 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 _ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
+import sys as _sys
+if _ROOT not in _sys.path:
+    _sys.path.insert(0, _ROOT)
+from db_path import resolve_db_path as _resolve_db_path  # noqa: E402
+
 BASE = "https://biz.k-seafoodtrade.kr"
 LIST_URL = f"{BASE}/apply/export_list.php"
 DETAIL_BASE = f"{BASE}/apply/export_view.php"
@@ -38,7 +43,7 @@ HEADERS = {
 # AT 커넥터(백로그 024)와 중복되는 수행기관 — skip.
 AT_ORG_TOKEN = "한국농수산식품유통공사"
 
-DB_PATH = os.path.join(_ROOT, "db", "biz.db")
+DB_PATH = str(_resolve_db_path())  # 백로그 044: env DB_PATH 우선
 DEBUG_DIR = os.path.join(_ROOT, "data", "kseafood", "debug")
 
 _SESSION = requests.Session()

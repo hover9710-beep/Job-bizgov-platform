@@ -51,10 +51,28 @@ def sync_status_to_db(all_items: List[Dict[str, Any]]) -> Dict[str, int]:
 
 검증: 단독 호출로 stale row 1건 → 마감 정정 OK, missing url skip OK.
 
-## 영향 범위 평가 필요
+## 영향 범위 — 7 source 점검 결과 (2026-05-10)
 
-- 다른 source (bizinfo, kstartup, jbbi 등) 에 동일 패턴 결함이 있는지 점검
-- `id<10000` 의 마감 사업 중 사이트는 진행 중인 case 가 있을 수 있음 (역방향)
+| source | 패턴 | DB 진행 / 마감 | risk |
+|---|---|---|---|
+| jbexport | filter 가 마감 drop | 23 / 45 | ✅ fix 완료 (sync_status_to_db) |
+| **kstartup** | URL `bizpbanc-ongoing.do` (진행만 fetch) + status 하드코딩 | **459 / 0** | ✅ fix 완료 (sync_status_to_db, 203 row 정정) |
+| jbbi | INSERT OR IGNORE | 0 / 358 | MED — 기존 row update 안 됨 |
+| jbtp | INSERT OR IGNORE | 31 / 82 | MED |
+| jbtp_related | INSERT OR IGNORE + status 하드코딩 | 0 / 71 | MED |
+| at_global | INSERT OR IGNORE | 0 / 192 | MED |
+| kseafood | INSERT OR IGNORE | 0 / 236 | MED |
+| bizinfo | UPSERT (update_db._upsert_one) | 0 / 2,035 | LOW |
+
+`jbbi/jbtp_related/at_global/kseafood` 가 `진행=0` 인 건 `INSERT OR IGNORE` 로 옛 status 만 남기고, normalize_status 가 다른 라벨로 매핑하기 때문. 사이트 변동 추적 안 됨 — 후속 백로그.
+
+## kstartup fix (2026-05-10 추가)
+
+`connectors/connector_kstartup.py` 에 `sync_status_to_db()` 추가, `--sync-status-only` CLI 모드 + run_all.py 4e 단계.
+
+원리: 사이트 API 가 `bizpbanc-ongoing.do` (진행중만) 만 반환 → connector 도 진행중만 수집 → 사업 마감 시 사이트 list 에서 빠지지만 DB 에는 진행 그대로 남음. 매일 daily 실행 후 update_db 다음에 sync 가 진행 url set 과 DB 진행 row 를 대조해 누락된 row 를 마감으로 마킹.
+
+검증: v1 DB 1회 sync 실행 → 459 진행 → 256 진행 / 203 마감. 사례 row 들의 end_date 가 5/5~5/7 (최근 마감) — 정확.
 
 ## 관련 파일
 

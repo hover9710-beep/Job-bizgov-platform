@@ -16,6 +16,11 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 _ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
+import sys as _sys
+if _ROOT not in _sys.path:
+    _sys.path.insert(0, _ROOT)
+from db_path import resolve_db_path as _resolve_db_path  # noqa: E402
+
 BASE = "https://www.jbtp.or.kr"
 BASE_LIST = (
     "https://www.jbtp.or.kr/board/list.jbtp?"
@@ -24,8 +29,8 @@ BASE_LIST = (
 MAX_PAGES = 9
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
-# 프로젝트 루트 기준 (작업 디렉터리와 무관하게 동작)
-DB_PATH = os.path.join(_ROOT, "db", "biz.db")
+# 백로그 044: env DB_PATH 우선 (Render /var/data/biz.db 호환)
+DB_PATH = str(_resolve_db_path())
 DEBUG_DIR = os.path.join(_ROOT, "data", "jbtp", "debug")
 
 _SESSION = requests.Session()

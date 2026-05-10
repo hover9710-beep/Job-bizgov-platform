@@ -150,6 +150,75 @@ def run(with_detail: bool = False) -> List[Dict[str, Any]]:
     return items
 
 
+def sync_status_to_db(json_path: Path = OUT_PATH) -> Dict[str, int]:
+    """K-Startup 의 진행중 url set 을 기준으로 DB 의 status='진행' row 중 사이트에서
+    사라진 row 를 '마감' 으로 마킹 (백로그 048 동일 패턴).
+
+    K-Startup 사이트 list 는 `bizpbanc-ongoing.do` (진행중) 만 반환하고 connector 도
+    이를 따라 진행중만 수집한다. 따라서 사업이 마감되면 사이트 list 에서 빠지지만
+    DB 에는 status='진행' 으로 남아 stale 된다.
+
+    이 함수는 update_db 이후에 호출되어, json_path 의 진행중 url 집합과 DB 의
+    source='kstartup' AND status='진행' row 를 대조해 누락 row 를 마감으로 마킹.
+    """
+    import sqlite3 as _sqlite3
+
+    if str(_ROOT) not in sys.path:
+        sys.path.insert(0, str(_ROOT))
+    from db_path import resolve_db_path as _resolve_db_path  # 백로그 044
+    db_path = _resolve_db_path()
+    if not db_path.exists():
+        print(f"[kstartup-sync] db not found: {db_path}", flush=True)
+        return {"updated": 0, "ongoing": 0, "checked": 0}
+
+    if not json_path.exists():
+        print(f"[kstartup-sync] json not found: {json_path}", flush=True)
+        return {"updated": 0, "ongoing": 0, "checked": 0}
+
+    items = json.loads(json_path.read_text(encoding="utf-8"))
+    ongoing_urls = {str(it.get("url") or "").strip() for it in items if it.get("url")}
+    if not ongoing_urls:
+        print("[kstartup-sync] ongoing url set is empty — skip", flush=True)
+        return {"updated": 0, "ongoing": 0, "checked": 0}
+
+    updated = 0
+    conn = _sqlite3.connect(str(db_path))
+    try:
+        rows = conn.execute(
+            "SELECT id, url FROM biz_projects WHERE source='kstartup' AND status='진행'"
+        ).fetchall()
+        checked = len(rows)
+        for rid, url in rows:
+            if (url or "").strip() not in ongoing_urls:
+                conn.execute(
+                    "UPDATE biz_projects SET status='마감', "
+                    "updated_at=datetime('now','localtime') WHERE id=?",
+                    (rid,),
+                )
+                updated += 1
+        conn.commit()
+    finally:
+        conn.close()
+
+    print(
+        f"[kstartup-sync] ongoing={len(ongoing_urls)} checked={checked} updated={updated}",
+        flush=True,
+    )
+    return {"updated": updated, "ongoing": len(ongoing_urls), "checked": checked}
+
+
 if __name__ == "__main__":
-    # 파이프라인 진입점: 전체 수집 후 kstartup_all.json 저장
-    run(with_detail=False)
+    import argparse as _argparse
+
+    _ap = _argparse.ArgumentParser()
+    _ap.add_argument(
+        "--sync-status-only",
+        action="store_true",
+        help="수집 없이 DB status sync 만 수행 (백로그 048 패턴, kstartup_all.json 사용)",
+    )
+    _args = _ap.parse_args()
+    if _args.sync_status_only:
+        sync_status_to_db()
+    else:
+        # 파이프라인 진입점: 전체 수집 후 kstartup_all.json 저장
+        run(with_detail=False)

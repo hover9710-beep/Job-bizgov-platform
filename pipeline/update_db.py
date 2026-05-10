@@ -30,6 +30,8 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 _PIPELINE_DIR = Path(__file__).resolve().parent
 if str(_PIPELINE_DIR) not in sys.path:
     sys.path.insert(0, str(_PIPELINE_DIR))
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))  # 백로그 044: db_path 모듈 import
 
 from mirror_projects import mirror_biz_projects_to_projects
 from normalize_project import infer_status
@@ -42,15 +44,7 @@ from project_quality import (
 from url_utils import canonical_url
 
 
-def _resolve_db_path() -> Path:
-    """Flask/Render 의 DB_PATH 와 동일 DB 파일 사용 (상대 경로는 프로젝트 루트 기준)."""
-    raw = (os.getenv("DB_PATH") or "db/biz.db").strip()
-    p = Path(raw)
-    if not p.is_absolute():
-        p = (ROOT_DIR / p).resolve()
-    else:
-        p = p.resolve()
-    return p
+from db_path import resolve_db_path as _resolve_db_path  # 백로그 044
 
 
 ALL_JSON_PATH = ROOT_DIR / "data" / "all_jb" / "all_jb.json"
