@@ -892,6 +892,7 @@ def load_latest_by_source(source: str, limit: int = 5) -> list:
             # 추출 selector 강화 + 65건 fallback 백필 + update_db merge 보호 후, 임시
             # organization='전북수출통합지원시스템' 필터 제거 (옵션 A). source='jbexport'
             # 자체가 url 도메인 jbexport.or.kr 100% 일치라 추가 필터 불필요.
+            # 백로그 051 (2026-05-10): 공지(notice_chk=1) 위젯 제외. 연번만 노출 사용자 정책.
             extra_where = ""
             order_by = "ORDER BY COALESCE(created_at, '') DESC, id DESC"
             params = [source]
@@ -900,11 +901,11 @@ def load_latest_by_source(source: str, limit: int = 5) -> list:
                     " AND COALESCE(TRIM(title), '') != ''"
                     " AND title NOT LIKE 'spSeq=%'"
                     " AND title NOT IN (?, ?)"
+                    " AND COALESCE(notice_chk, 0) = 0"
                 )
                 params.extend(["공고 상세보기", "MENU"])
                 order_by = (
-                    "ORDER BY COALESCE(notice_chk, 0) DESC, "
-                    "COALESCE(notice_order, 0) DESC, "
+                    "ORDER BY COALESCE(notice_order, 0) DESC, "
                     "COALESCE(created_at, '') DESC, id DESC"
                 )
             params.append(limit)
