@@ -908,6 +908,20 @@ def load_latest_by_source(source: str, limit: int = 5) -> list:
                     "ORDER BY COALESCE(notice_order, 0) DESC, "
                     "COALESCE(created_at, '') DESC, id DESC"
                 )
+            elif source == "jbtp":
+                # 백로그 053 (2026-05-10): jbtp 위젯 정렬 키 + 공지 제외 (jbexport 051 동일 정책).
+                # notice_chk DESC → notice_order DESC → created_at DESC → id DESC.
+                # 공지(32/122=26%) 위젯 제외 — 일반 공고만 노출.
+                # 정렬 키 (실측, v2 connector_jbtp 참고):
+                #   - 공지: dataSid DESC (페이지 내 표시순)
+                #   - 일반: td[0] seq DESC (사이트 표시 순서, dataSid 와 단조 무관)
+                # connector_jbtp.normalize 가 분기 처리 → notice_order 통합.
+                # connector 자체 patch 는 백로그 029 (v1/v2 sync) 동시 처리 시 적용 예정.
+                extra_where = " AND COALESCE(notice_chk, 0) = 0"
+                order_by = (
+                    "ORDER BY COALESCE(notice_order, 0) DESC, "
+                    "COALESCE(created_at, '') DESC, id DESC"
+                )
             params.append(limit)
             rows = conn.execute(
                 f"""
