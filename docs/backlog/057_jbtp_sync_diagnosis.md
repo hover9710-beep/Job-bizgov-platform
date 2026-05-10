@@ -99,3 +99,174 @@ H1 / H2 / H3 중 어느 것인지 확정하고 해결 방향 합의.
 - 본 백로그 진단 결과에 따라 052 와 통합될 수도, 분리될 수도 있음
 - 만약 H1 (sync 자동화 부재) 으로 확정되면 052 + 057 = 동일 본질 → 한 백로그로 합치고 057 close
 - 5/2~5/7 동안 운영 측 daily 가 어떻게 동작했는지 확인이 핵심 — Render Dashboard / cron logs 가 1차 자료
+
+---
+
+# Phase 1 진단 결과 (2026-05-10)
+
+## 핵심 발견 — deploy-004 가 sync 메커니즘 자체를 break
+
+### 한 줄 결론
+**5/4 deploy-004 가 "GitHub Actions → db/biz.db git push → Render 자동 재배포 → 운영 DB 갱신" 메커니즘을 의도적으로 끊음. 이후 운영 DB 갱신 메커니즘이 사실상 부재. 5/2~5/7 stale = 메커니즘 부재의 자연스러운 결과.**
+
+## 코드 evidence
+
+### 1) 5/3 까지 알려진 메커니즘 — `docs/release/deploy-002_v1.1.md` line 80~86
+
+```
+### 시스템 아키텍처
+- 메일: Apps Script 매일 09:13
+- 크롤링: GitHub Actions 매일 06:00
+- DB: GitHub push → Render 자동 재배포
+- 카톡: appy.py L2371
+```
+
+→ 5/3 시점 명문 기록: 운영 DB 는 **GitHub Actions 가 db/biz.db 를 push → Render auto-deploy 가 받아옴** 으로 갱신됨.
+
+### 2) GitHub Actions workflow — `.github/workflows/daily-crawl.yml`
+
+```yaml
+on:
+  schedule:
+    - cron: "0 23 * * *"   # UTC = KST 08:00 (LATEST.md 의 06:00 기록과 차이는 별건)
+jobs:
+  crawl:
+    steps:
+      - run: python run_all.py --mode bizinfo
+      - run: |
+          git add db/biz.db data || true
+          if git diff --cached --quiet; then ...
+          else git commit -m "chore: daily auto crawl data update" && git push; fi
+```
+
+핵심 한계:
+- **`--mode bizinfo` 만 실행** — `run_all.py` main() 시작에 `run_connector("JBBI"/"JBTP"/"JBTP_RELATED"/"AT_GLOBAL"/"KSEAFOOD")` 가 항상 실행되긴 하나, GitHub Actions runner 는 **해외 IP** 라 jbtp.or.kr 차단 가능성 (053 follow-up #2 패턴 동일)
+- 그러나 이 한계는 **2차** — 1차는 아래 deploy-004 break
+
+### 3) deploy-004 (2026-05-04) 의 break — `release/2026-05-04_deploy-004/MANIFEST.md`
+
+명문 변경:
+| 항목 | 변경 |
+|---|---|
+| Render Persistent Disk | 1GB 추가, mount `/var/data` |
+| 환경변수 | `DB_PATH=/var/data/biz.db` |
+| db/biz.db | 정적 사본 (11,694건 정적만, 동적 7테이블 비움) |
+| ensure_db_file() | `if not target.exists()` → /var/data/biz.db 존재 시 **자동 복사 SKIP** |
+| Phase 3 | `.gitignore` 에 db/biz.db 추가 + `git rm --cached` |
+
+→ deploy-004 의 의도는 **redeploy 마다 동적 데이터(visit_log/click_log) reset 차단**. 부수효과로 **GitHub push 의 db 갱신이 운영에 도달하지 못함**.
+
+### 4) `.gitignore` 확정 — line 18
+
+```
+# db/biz.db: 운영은 영구 disk (/var/data/biz.db) 사용 — git 추적 해제 (deploy-004)
+```
+
+git log 확인:
+```
+de23b77 chore(v2): db/biz.db git 추적 해제 + DR 절차 문서화 (deploy-004 Phase 3)
+25522fe deploy-004 A2: db/biz.db 정적 사본 적용
+```
+
+→ 5/4 이후 daily-crawl.yml 의 `git add db/biz.db` 는 `.gitignore` 에 의해 무시됨 → `git diff --cached --quiet` 가 항상 true → **commit 자체가 일어나지 않음** → workflow 는 cron 돌더라도 실효 0.
+
+→ **5/4 이후 daily-crawl.yml = dead workflow**.
+
+### 5) 운영 자체 갱신 경로 — `appy.py /run` (2524) + `/api/run` (2774)
+
+웹 앱 자체에 trigger endpoint 가 있음:
+- `POST /run` → `subprocess.run(pipeline/run_pipeline.py)` (10분 timeout)
+- `POST /api/run` → `_run_pipeline_background(mode)` → `run_all.py --mode <mode>` 백그라운드
+
+`run_pipeline.py` (line 167) 흐름: bizinfo connector → merge_all → detect_new → detect_deadline → recommend → make_report_pdf → make_mail → mailer → kakao.
+→ **bizinfo 만**. jbtp/jbexport/jbbi/at_global/kseafood 누락.
+
+`appy.py:_effective_pipeline_mode()` (line 500): `RENDER` env var 있으면 `all → bizinfo` 강제. 즉 운영에서 `/api/run all` 호출해도 bizinfo 만.
+
+### 6) 외부 trigger — 코드 내 흔적 없음
+
+| grep 결과 | 의미 |
+|---|---|
+| `requests.post.*\/run` | 0 매치 — 코드 내 자기 호출 없음 |
+| `crontab\|render-cron\|onrender` 호출 코드 | 0 매치 |
+| `render.yaml` | 파일 없음 — Render Cron Job 설정은 dashboard 수동 등록만 가능 |
+| auto_run.bat | v1 로컬 `run_all.py` 만 실행, 운영 push 0 |
+
+→ **5/4 이후 외부에서 `/api/run` 을 매일 자동 호출하는 메커니즘 = 코드 흔적 없음**.
+
+## 가설 판정
+
+| 가설 | 판정 | Evidence |
+|---|---|---|
+| **H1** GitHub Actions / scheduled workflow | ❌ Dead (5/4~) | daily-crawl.yml 존재하나 `.gitignore` 로 git push 무효화. 5/3 까지는 정상 동작했을 가능성 |
+| **H2** Render Cron Job (자체) | ❓ render.yaml 없음 | Render Dashboard 에서 별도 Cron Job 서비스 등록 가능. **사용자 확인 필요** |
+| **H3** v1 로컬 → Render API push | ❌ 흔적 없음 | auto_run.bat / run_all.py / requests.post 모두 운영 도메인 호출 0 |
+| **H4** 외부 트리거 (Apps Script 등) | ❓ 가능 | LATEST.md "메일: Apps Script 매일 09:13" — 메일만 트리거인지 `/api/run` 도 같이 트리거인지 **사용자 GAS 코드 확인 필요** |
+
+## 5/2~5/7 stale 시나리오 (가설 우세)
+
+**Timeline 재구성**:
+
+| 일자 | 이벤트 | 운영 DB 영향 |
+|---|---|---|
+| ~5/3 | GitHub Actions cron + db/biz.db git push + Render auto-deploy → 운영 DB 매일 동기화 | 정상 누적 (jbtp 113 까지 도달했을 시점) |
+| **5/4** | **deploy-004 적용**: Persistent disk 도입 + db/biz.db .gitignore + ensure_db_file SKIP | sync break. /var/data/biz.db 는 5/3 까지의 last state 로 동결 |
+| 5/4~5/7 | GitHub Actions cron 은 돌지만 git push 무효 (gitignore). 외부 trigger 없으면 운영 DB 정지 | jbtp 113 stale, 5/4~5/7 신규 row 미반영 |
+| 5/8 | 백로그 036 wrapper proxy fix (v1 only) | 영향 0 (v1 로컬만) |
+| 5/9 | v1 로컬 jbtp 백필 + sync 누적으로 128 도달 | 운영 미반영 |
+| 5/10 | 053 follow-up #2 — 사용자가 운영 stale 발견 → sync_jbtp_v1_to_render.py UPSERT | 운영 113 → 128 (수동 1회) |
+
+**핵심**: 5/2~5/7 stale = "메커니즘이 멈췄다" 가 아니라 **"5/4 이후 메커니즘 자체가 사실상 부재"**. v1 만 누적되고 운영은 동결.
+
+→ **가설 H1 (sync 자동화 부재) 우세**. 백로그 052 와 동일 본질 가능성 높음.
+
+## Render IP 차단 (053 follow-up #2) 와의 관계
+
+053 에서 발견: Render Shell 에서 `python backfill_jbtp.py` 실행 시 `jbtp.or.kr` ConnectTimeout. 즉 **운영 측이 daily 를 돌리려 해도 jbtp.or.kr fetch 자체 불가**.
+
+→ 가령 사용자가 H2 (Render Cron) 또는 H4 (외부 trigger) 를 등록하더라도, jbtp 사이트는 IP 차단으로 fetch 실패. 본격 해결책 (백로그 052 옵션 B+D) 에서 **GitHub Actions / Render Cron 어느 쪽이든 IP 차단 우회 필요**.
+
+## 운영 DB 의 다른 source 는 어떻게 채워졌나? (별도 진단 필요)
+
+| Source | v1 로컬 | 운영(Render) 추정 | 확인 필요 |
+|---|---|---|---|
+| jbtp | 128 | 113 (053 sync 전) | 5/2~5/7 + 5/4~5/7 누락 |
+| jbexport | 68 | 65~66 (052 sync 전) | 052 와 동일 chain |
+| bizinfo | 10,684+ | ? | 5/4 이후 누적되었는지 |
+| kstartup | 400 | ? | 동일 |
+| jbbi | 362 | ? | 동일 |
+| at_global | ? | ? | 동일 |
+| kseafood | ? | ? | 동일 |
+
+**실증 필요**: Render Shell SQL 로 운영 DB 의 source 별 `MAX(created_at)` 확인. 만약 모든 source 가 5/3~5/4 부근에서 stale 이면 **H1 우세 + 5/4 이후 메커니즘 부재 확정**. 일부 source 만 누적되면 다른 메커니즘 부분 동작 가능성.
+
+---
+
+# 다음 단계 권장 (Phase 2 — 다음 주)
+
+## 즉시 (자율, ~30min)
+1. **운영 DB source 별 MAX(created_at) 확인** — Render Shell SQL
+   ```sql
+   SELECT source, MAX(created_at), COUNT(*) FROM biz_projects GROUP BY source;
+   ```
+   → 5/4 이후 stale 분포 확정
+
+## 사용자 액션 필요
+2. **Render Dashboard 점검**
+   - Cron Job 서비스 등록 여부 (web service 외 별도)
+   - 5/4 이후 deploy 이력 (/var/data/biz.db 영향 안 받지만 기준점)
+3. **Google Apps Script 코드 확인**
+   - 09:13 mail 외에 `/api/run` 호출도 있는지
+   - 있으면 H4 부분 인정, 없으면 H4 ❌ 확정
+4. **외부 cron-as-a-service** 사용 여부 (사용자 멘탈 모델)
+   - cron-job.org / EasyCron / IFTTT 등록 여부
+
+## Phase 3 (가설 확정 후)
+- H1 (sync 자동화 부재) 확정 시: **백로그 052 와 통합** → 한 백로그로 합치고 057 close
+- H2 (Render Cron 부분 동작) 확정 시: jbtp 만 별도 IP 차단 우회 (053 sync 패턴 정기 실행) + 다른 source 는 기존 메커니즘 유지
+- 본격: 052 옵션 B (사이트 list API 직접 호출, IP 차단 우회) + D (Render Cron 또는 GitHub Actions 한국 IP proxy)
+
+## 임시 조치 (모니터링)
+- 053 의 `sync_jbtp_v1_to_render.py` UPSERT 패턴을 매주 1회 수동 실행
+- 052 의 `sync_two_rows.py` 도 jbexport 매주 1회 수동 실행
+- Phase 3 본격 해결 까지의 단기 buffer
