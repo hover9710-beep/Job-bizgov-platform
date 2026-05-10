@@ -164,6 +164,45 @@ list API 를 한 번 더 fetch 해서 spSeq(또는 동등한 PK) 매칭으로 UP
   (`docs/daily/2026-05-08`). 049 는 정렬 키 자체를 사이트 기준
   (`notiChk` / `oder`) 으로 갈아탄 결정.
 
+### jbexport organization 추출 (2026-05-10, 백로그 050)
+
+- **카테고리**: B 필드 추출 정확도 (049 의 정렬 카테고리와 다름 —
+  동일 source 의 다른 측면)
+- **선행 상태**: 백로그 032-1 (5/8) selector
+  (`table td.th="사업주관기관/사업수행기관/주관기관/수행기관/담당기관/지원기관"`)
+  가 거의 모든 row 에서 실패. 추출 성공률 1.5% (1/66, 다른 코트라
+  1건은 별건)
+- **selector 보강**: `pipeline/jbexport_daily.py:243-258` — th/dt/td.th
+  selector 모두 실패 시 plain-text regex fallback (label 변형·콜론·
+  공백 흡수, `function(` JS 잡음 + label 자체 재포함 방어)
+- **update_db 머지 보호**: `pipeline/update_db.py:221-232, 476-481` —
+  `_FALLBACK_ORGS = {'전북수출통합지원시스템', '기업마당'}`. 새 값이
+  fallback 이고 옛 값이 진짜 기관명이면 옛 값 보존 (049 동일 패턴:
+  ai_summary / attachments_json / recommend_label / notice_chk /
+  notice_order 와 같은 머지 정책)
+- **위젯 필터 정책 (Phase 6)**: 옵션 A 채택 — `appy.py:891` jbexport
+  분기 `organization = '전북수출통합지원시스템'` 필터 제거. 백필 결과
+  9개 진짜 기관명 모두 위젯 노출. `source = 'jbexport'` 자체가
+  url 도메인 `jbexport.or.kr` 100% 일치라 추가 필터 불필요.
+- **백필 스크립트**: `release/2026-05-10_jbexport_org_fix/backfill_organization.py`
+- **운영 DB 분포 (백필 후, 67건)**:
+  - 46 (재)전북특별자치도 경제통상진흥원
+  - 6 코트라 전북지원본부
+  - 4 한국무역협회 전북지역본부
+  - 3 전주시
+  - 3 전북특별자치도
+  - 2 전북지방우정청
+  - 1 한국무역보험공사 전북지사
+  - 1 전주상공회의소
+  - 1 (재)전북바이오융합산업진흥원
+- **추출 성공률 (050 후)**: 100% (66/66 → 진짜 기관명)
+- **commit**:
+  - v2 fix `8e9780e` / docs `25097eb`
+  - v1 fix `b8df16f` / docs `90d449c`
+- **운영(Render) 적용**: 2026-05-10 Render Shell, backup
+  `biz.db.backup_20260510_080638_050_org_fix_87b69ccc6d75`
+- **검증**: 운영 위젯 1~5위 ↔ `jbexport.or.kr` 사이트 일치 ✅
+
 ### [다음 source 처리 시 동일 형식으로 항목 추가]
 
 ## 5. 다음 source 후보 (적용 우선순위)
