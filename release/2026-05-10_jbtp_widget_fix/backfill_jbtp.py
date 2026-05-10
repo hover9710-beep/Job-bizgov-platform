@@ -17,7 +17,7 @@
 흐름:
   1) DB 자동 탐색 → SHA256 + 타임스탬프 백업 사본 (DRY_RUN 시 생략)
   2) 컬럼 자동 보장 (notice_chk + notice_order, INTEGER DEFAULT 0)
-  3) 사이트 fetch (connector_jbtp.fetch + parse) — MAX_PAGES=9 + 0.5s sleep
+  3) 사이트 fetch (인라인 fetch + parse, self-contained) — MAX_PAGES=9 + 0.5s sleep
   4) RawRow → {data_sid: {is_notice, reg_date, end_date, status, title}} 인덱싱
   5) DB row 순회 → url 의 dataSid 추출 → 매칭 → UPDATE (변경된 필드만)
   6) 결과 요약 (matched / updated / unchanged / no_match) + 위젯 분포
@@ -40,14 +40,74 @@ from typing import Any, Dict, List, Optional
 
 _HERE = Path(__file__).resolve()
 _ROOT = _HERE.parent.parent.parent
-sys.path.insert(0, str(_ROOT))
 
-# connector_jbtp 의 fetch + parse 직접 재사용 (single source of truth)
-from connectors import connector_jbtp as cjbtp  # noqa: E402
+# 백로그 029 (v1/v2 connector sync) 통째 보류 → backfill self-contained.
+# v1 legacy connector (fetch_list_page) 와 v2 4단계 분리 (fetch/parse) 둘 다
+# 호환되도록 사이트 fetch/parse 를 인라인. connector_jbtp module 의존 없음.
+import requests  # noqa: E402
+import urllib3  # noqa: E402
+from bs4 import BeautifulSoup  # noqa: E402
 
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+_BASE_LIST = (
+    "https://www.jbtp.or.kr/board/list.jbtp?"
+    "boardId=BBS_0000006&menuCd=DOM_000000102001000000&paging=ok&pageNo={page}"
+)
+_MAX_PAGES = 9
+_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+}
 
 _DATASID_RE = re.compile(r"dataSid=(\d+)")
 _DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
+
+
+def _fetch_page(page_no: int) -> str:
+    url = _BASE_LIST.format(page=page_no)
+    r = requests.get(url, headers=_HEADERS, timeout=15, verify=False)
+    r.raise_for_status()
+    return r.text
+
+
+def _parse_page(html: str) -> List[Dict[str, Any]]:
+    """list HTML → [{data_sid, title, is_notice, reg_date_text, seq_text}].
+
+    백필에 필요한 필드만 추출 (v2 connector_jbtp.parse 의 부분집합):
+      - data_sid     : a[href] 의 dataSid=NNN (매칭 키)
+      - is_notice    : tr td[0].class 에 'notice'
+      - reg_date_text: td[6] (등록일 → start_date)
+      - seq_text     : td[0] (일반글 sort 키, 공지는 '[공지]')
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    out: List[Dict[str, Any]] = []
+    for row in soup.select("table tbody tr"):
+        a = row.select_one("td.txt_left a") or row.select_one("a")
+        if not a:
+            continue
+        title = a.get_text(strip=True)
+        if not title:
+            continue
+        href = (a.get("href") or "").strip()
+        m = _DATASID_RE.search(href)
+        if not m:
+            continue
+        tds = row.select("td")
+        td0_cls = tds[0].get("class") if tds else None
+        is_notice = bool(td0_cls and "notice" in td0_cls)
+        reg_date_text = tds[6].get_text(" ", strip=True) if len(tds) >= 7 else ""
+        seq_text = tds[0].get_text(strip=True) if tds else ""
+        out.append(
+            {
+                "data_sid": m.group(1),
+                "title": title,
+                "is_notice": is_notice,
+                "reg_date_text": reg_date_text,
+                "seq_text": seq_text,
+            }
+        )
+    return out
 
 
 def _resolve_db_path() -> Path:
@@ -93,13 +153,13 @@ def _fetch_site_index() -> Dict[str, Dict[str, Any]]:
     """사이트 9페이지 fetch → {data_sid: {is_notice, reg_date, ...}}."""
     import time
     out: Dict[str, Dict[str, Any]] = {}
-    for page_no in range(1, cjbtp.MAX_PAGES + 1):
+    for page_no in range(1, _MAX_PAGES + 1):
         try:
-            html = cjbtp.fetch(page_no)
+            html = _fetch_page(page_no)
         except Exception as e:
             print(f"[b053] page {page_no} fetch 실패: {e!r} → skip", flush=True)
             continue
-        items = cjbtp.parse(html, page_no)
+        items = _parse_page(html)
         new_count = 0
         for it in items:
             sid = it["data_sid"]
@@ -125,7 +185,7 @@ def _fetch_site_index() -> Dict[str, Dict[str, Any]]:
             }
             new_count += 1
         print(f"[b053] page {page_no}: {len(items)}건 (신규 {new_count}건)", flush=True)
-        if page_no < cjbtp.MAX_PAGES:
+        if page_no < _MAX_PAGES:
             time.sleep(0.5)
     print(f"[b053] 사이트 인덱스 총: {len(out)}건", flush=True)
     return out
