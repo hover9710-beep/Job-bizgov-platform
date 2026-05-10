@@ -439,6 +439,21 @@ def extract_announcement(row: Any) -> Optional[Dict[str, Any]]:
     # → biz_projects.notice_create_dt 컬럼에 저장 → 위젯 정렬용
     notice_create_dt = row.get("create_dt") or row.get("createDt") or row.get("CREATE_DT")
 
+    # 백로그 049 (2026-05-10): 사이트 정렬 키 (notiChk DESC, oder DESC) 보존.
+    # 사이트가 실제로 사용하는 정렬 필드 — 위젯 SQL 도 동일 키로 정렬.
+    def _to_int(v: Any) -> int:
+        try:
+            return int(v) if v is not None and str(v).strip() != "" else 0
+        except (TypeError, ValueError):
+            return 0
+
+    notice_chk = _to_int(
+        row.get("notiChk") if row.get("notiChk") is not None else row.get("NOTICHK")
+    )
+    notice_order = _to_int(
+        row.get("oder") if row.get("oder") is not None else row.get("ODER")
+    )
+
     out = {
         "spSeq": sp_seq,
         "공고제목": title or f"spSeq={sp_seq}",
@@ -451,6 +466,8 @@ def extract_announcement(row: Any) -> Optional[Dict[str, Any]]:
         "end_date": ed,
         "status": status,
         "notice_create_dt": notice_create_dt,
+        "notice_chk": notice_chk,
+        "notice_order": notice_order,
     }
     print(f"[jbexport] {out['status']} {out['start_date']}~{out['end_date']}")
     if _FETCH_DETAIL_META:

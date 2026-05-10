@@ -91,6 +91,21 @@ def _init_db(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "biz_projects", "ai_summary_at", "TEXT")
     _ensure_column(conn, "biz_projects", "recommend_label", "TEXT")
     _ensure_column(conn, "biz_projects", "recommend_label_at", "TEXT")
+    # 백로그 049 (2026-05-10): jbexport 위젯 정렬 키 (사이트 notiChk/oder 매핑).
+    # _ensure_column 헬퍼는 col_type 화이트리스트라 DEFAULT 절 못 받음 → 직접 ALTER.
+    _cols_now = {
+        str(c[1]) for c in conn.execute("PRAGMA table_info(biz_projects)").fetchall()
+    }
+    if "notice_chk" not in _cols_now:
+        conn.execute(
+            "ALTER TABLE biz_projects ADD COLUMN notice_chk INTEGER DEFAULT 0"
+        )
+        print("[update_db] add column: biz_projects.notice_chk (INTEGER DEFAULT 0)")
+    if "notice_order" not in _cols_now:
+        conn.execute(
+            "ALTER TABLE biz_projects ADD COLUMN notice_order INTEGER DEFAULT 0"
+        )
+        print("[update_db] add column: biz_projects.notice_order (INTEGER DEFAULT 0)")
     _ensure_column(conn, "projects", "source")
     _ensure_column(conn, "projects", "site")
     _ensure_column(conn, "projects", "collected_at")
@@ -278,6 +293,22 @@ def _prepare_row(item: Dict[str, Any]) -> Tuple[Dict[str, Any], str, str]:
     attachments_json = _normalize_attachments_json_field(item.get("attachments_json"))
     ai_s = item.get("ai_summary")
     rl = item.get("recommend_label")
+
+    # 백로그 049: jbexport 정렬 키. NULL/빈값/오타이면 0 으로 정규화.
+    def _to_int_or_zero(v: Any) -> int:
+        if v is None:
+            return 0
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            try:
+                return int(str(v).strip() or "0")
+            except (TypeError, ValueError):
+                return 0
+
+    notice_chk = _to_int_or_zero(item.get("notice_chk"))
+    notice_order = _to_int_or_zero(item.get("notice_order"))
+
     row = {
         "title": title,
         "organization": organization,
@@ -295,6 +326,8 @@ def _prepare_row(item: Dict[str, Any]) -> Tuple[Dict[str, Any], str, str]:
         "attachments_json": attachments_json,
         "ai_summary": str(ai_s).strip() if ai_s is not None else "",
         "recommend_label": str(rl).strip() if rl is not None else "",
+        "notice_chk": notice_chk,
+        "notice_order": notice_order,
     }
     return row, title, url
 
@@ -355,9 +388,10 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
                 ai_result, pdf_path, collected_at, period_text, attachments_json,
                 ai_summary, ai_summary_at,
                 recommend_label, recommend_label_at,
+                notice_chk, notice_order,
                 created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """,
             (
                 row["title"],
@@ -380,16 +414,27 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
                 None,
                 row["recommend_label"] or None,
                 None,
+                row["notice_chk"],
+                row["notice_order"],
             ),
         )
         return
 
     cur = conn.execute(
-        "SELECT ai_result, pdf_path, attachments_json, ai_summary, recommend_label "
+        "SELECT ai_result, pdf_path, attachments_json, ai_summary, recommend_label, "
+        "notice_chk, notice_order "
         "FROM biz_projects WHERE id = ?",
         (eid,),
     ).fetchone()
-    old_ai, old_pdf, old_aj, old_asum, old_rl = (cur or (None, None, None, None, None))
+    (
+        old_ai,
+        old_pdf,
+        old_aj,
+        old_asum,
+        old_rl,
+        old_nchk,
+        old_nord,
+    ) = (cur or (None, None, None, None, None, None, None))
 
     new_ai = old_ai if ai_result is None else ai_result
     new_pdf = old_pdf if pdf_path is None else pdf_path
@@ -406,6 +451,25 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
     if _is_empty_recommend_label(merged_rl) and not _is_empty_recommend_label(old_rl):
         merged_rl = str(old_rl).strip()
 
+    # 백로그 049: notice_chk/notice_order 머지 — 새 값이 0(=NULL/누락 정규화 결과)이면
+    # 기존 값 보존. jbexport 외 source upsert 가 jbexport 행 정렬 키를 0 으로 덮는 사고 방지.
+    merged_nchk = row["notice_chk"]
+    if merged_nchk == 0 and old_nchk is not None:
+        try:
+            old_nchk_int = int(old_nchk)
+            if old_nchk_int != 0:
+                merged_nchk = old_nchk_int
+        except (TypeError, ValueError):
+            pass
+    merged_nord = row["notice_order"]
+    if merged_nord == 0 and old_nord is not None:
+        try:
+            old_nord_int = int(old_nord)
+            if old_nord_int != 0:
+                merged_nord = old_nord_int
+        except (TypeError, ValueError):
+            pass
+
     conn.execute(
         """
         UPDATE biz_projects
@@ -413,7 +477,9 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
             source = ?, start_date = ?, end_date = ?, status = ?, url = ?,
             description = ?, site = ?, ai_result = ?, pdf_path = ?,
             collected_at = ?, period_text = ?, attachments_json = ?,
-            ai_summary = ?, recommend_label = ?, updated_at = CURRENT_TIMESTAMP
+            ai_summary = ?, recommend_label = ?,
+            notice_chk = ?, notice_order = ?,
+            updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
         """,
         (
@@ -435,6 +501,8 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
             merged_aj or None,
             merged_as or None,
             merged_rl or None,
+            merged_nchk,
+            merged_nord,
             eid,
         ),
     )

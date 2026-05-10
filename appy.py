@@ -146,6 +146,10 @@ def _init_db():
             )
     # 백로그 034: jbexport 위젯 정렬용 (epoch ms 정수, NULL 가능)
     _ensure_column(conn, "biz_projects", "notice_create_dt", "INTEGER")
+    # 백로그 049 (2026-05-10): 사이트 정렬 키 (notiChk DESC, oder DESC).
+    # notice_create_dt 는 update_db 단계에서 미반영 → notice_chk + notice_order 로 정식 매핑.
+    _ensure_column(conn, "biz_projects", "notice_chk", "INTEGER DEFAULT 0")
+    _ensure_column(conn, "biz_projects", "notice_order", "INTEGER DEFAULT 0")
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS companies (
@@ -883,9 +887,10 @@ def load_latest_by_source(source: str, limit: int = 5) -> list:
             # 데이터 보정 후 제거 (백로그: organization 정합성 진단).
             # 추가(2026-05-07): jbexport 위젯에 spSeq= / 공고 상세보기 / MENU 등
             # 깨진 제목 노출 차단. 정식 fix 는 백로그 034 (notice_no 컬럼).
-            # 백로그 034 적용(2026-05-07): jbexport 분기 ORDER BY 를
-            # notice_create_dt(사이트 등록일 epoch ms) DESC 로 변경.
-            # NULL 행은 0 으로 → 양수 epoch 보다 항상 작음 → 후순위.
+            # 백로그 049 적용(2026-05-10): jbexport 분기 ORDER BY 를 사이트 정렬 키
+            # (notiChk DESC, oder DESC) 매핑으로 변경. notice_create_dt 정렬은 update_db
+            # 단계에서 컬럼 미반영(전부 NULL)이라 사실상 무력했음.
+            # 사이트 jbexport.or.kr: 1차 notiChk DESC (공지 핀), 2차 oder DESC (등록 연번).
             extra_where = ""
             order_by = "ORDER BY COALESCE(created_at, '') DESC, id DESC"
             params = [source]
@@ -898,7 +903,8 @@ def load_latest_by_source(source: str, limit: int = 5) -> list:
                 )
                 params.extend(["전북수출통합지원시스템", "공고 상세보기", "MENU"])
                 order_by = (
-                    "ORDER BY COALESCE(notice_create_dt, 0) DESC, "
+                    "ORDER BY COALESCE(notice_chk, 0) DESC, "
+                    "COALESCE(notice_order, 0) DESC, "
                     "COALESCE(created_at, '') DESC, id DESC"
                 )
             params.append(limit)
