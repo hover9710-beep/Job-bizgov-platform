@@ -64,19 +64,45 @@ git push origin main
 v1 의 `connectors/connector_jbtp.py` (legacy 단일파일) 와 `appy.py` 에 동일 patch 적용. v2 commit 을 cherry-pick 하거나 수동 patch.
 
 ### 3) Render Shell 백필 (운영 DB)
+
+⚠️ **2026-05-10 추가 발견**: Render Shell 에서 `backfill_jbtp.py` 실행 시
+`ConnectTimeout: HTTPSConnectionPool(host='www.jbtp.or.kr')` — Render 해외 IP
+가 jbtp.or.kr 에서 차단되는 것으로 추정. 사이트 fetch 자체가 운영에서 막힘.
+
+→ 우회: `sync_jbtp_v1_to_render.py` (v2 백필 ground-truth → 운영 DB sync, HTTP 호출 없음).
+
 ```bash
 # DRY_RUN 먼저 (영향 없음)
-DRY_RUN=1 python release/2026-05-10_jbtp_widget_fix/backfill_jbtp.py
+DRY_RUN=1 python release/2026-05-10_jbtp_widget_fix/sync_jbtp_v1_to_render.py
 
 # apply
-python release/2026-05-10_jbtp_widget_fix/backfill_jbtp.py
+python release/2026-05-10_jbtp_widget_fix/sync_jbtp_v1_to_render.py
 ```
+
+#### sync 스크립트 정책
+- **데이터 출처**: v2 로컬 DB (053 백필 apply 완료) → `v1_jbtp_dump.json` snapshot (128 row)
+- **갱신 대상**: notice_chk, notice_order, start_date — **3 필드만**
+- **운영 row 의 다른 모든 필드 (title, organization, status, ai_summary, ...) 는 그대로 보존** → 백로그 029 (v1/v2 connector divergence) 영향 0
+- **UPDATE only**: 운영에 url 없는 snapshot row 는 skip (운영 권위)
+- **멱등성**: 같은 값이면 UPDATE 0
+- **사이트 영향**: 0 (HTTP 호출 없음)
+
+#### v1 로컬 DRY_RUN 결과 (운영 시뮬레이션)
+v1 로컬 DB = 백필 미적용 (운영과 동일 stale 상태) 로 시뮬:
+```
+matched: 128  updated: 122  unchanged: 6  no_match: 0  snapshot_only: 0
+```
+- BEFORE: notice_chk=1=0, start_date 채워짐=33, notice_order>0=0
+- AFTER:  notice_chk=1=32, start_date 채워짐=122, notice_order>0=122
+- 위젯 시뮬 top 5 = 사이트 seq **2198 / 2197 / 2196 / 2195 / 2194** 정확 매칭
 
 ### 4) 위젯 시각 검증
 운영 위젯 jbtp 5건 ↔ jbtp.or.kr page 1 일반글 1~5위 비교.
 
 ## 산출
-- `backfill_jbtp.py` — 사이트 9페이지 fetch + dataSid 매칭 + UPDATE + DRY_RUN ROLLBACK 시뮬
+- `backfill_jbtp.py` — 사이트 9페이지 fetch + dataSid 매칭 + UPDATE + DRY_RUN ROLLBACK 시뮬 (로컬용)
+- `sync_jbtp_v1_to_render.py` — v2 snapshot → 운영 DB UPDATE 우회 (Render IP 차단 대응)
+- `v1_jbtp_dump.json` — v2 백필 ground-truth (128 row, 3 필드)
 - `MANIFEST.md` (이 파일)
 
 ## 참고
