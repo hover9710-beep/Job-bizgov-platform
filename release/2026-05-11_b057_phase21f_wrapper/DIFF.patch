@@ -1,0 +1,31 @@
+3c3
+< REM bizplnner daily wrapper - proxy auto-start + run_all + ALERT
+---
+> REM bizplnner daily wrapper - proxy auto-start + run_all + sync + ALERT
+6c6,7
+< REM Action: check proxy, auto-start if dead, run run_all.py, cleanup, alert.
+---
+> REM Backlog 057 (2026-05-11): Phase 2.1f - opt-in Render sync step.
+> REM Action: check proxy, auto-start if dead, run run_all.py, cleanup, sync, alert.
+65c66,84
+< REM 5) Send alert email if run_all failed (silent fail prevention - backlog 042)
+---
+> REM 5) Sync to Render (Backlog 057 Phase 2.1f) - opt-in via ENABLE_RENDER_SYNC env var.
+> REM   Activated only after Phase 2.1e Render deploy completes. Default: OFF (silent skip).
+> REM   Activation: set ENABLE_RENDER_SYNC=1 (system env var, persists across sessions).
+> REM   sync_to_render reads WHERE synced_to_render=0 from local DB, POSTs /api/sync,
+> REM   marks flag=1 on success. Failure = log only (no alert, retry next day per idempotency).
+> if defined ENABLE_RENDER_SYNC (
+>     if !RUN_ALL_EXIT! EQU 0 (
+>         echo [auto_run] sync_to_render start
+>         echo [auto_run] %DATE% %TIME% sync_to_render start >> "%LOG%"
+>         py pipeline\sync_to_render.py >> "%LOG%" 2>&1
+>         set "SYNC_EXIT=!ERRORLEVEL!"
+>         echo [auto_run] %DATE% %TIME% sync_to_render exit=!SYNC_EXIT! >> "%LOG%"
+>     ) else (
+>         echo [auto_run] sync_to_render skipped run_all_exit=!RUN_ALL_EXIT!
+>         echo [auto_run] %DATE% %TIME% sync_to_render skipped run_all_exit=!RUN_ALL_EXIT! >> "%LOG%"
+>     )
+> )
+> 
+> REM 6) Send alert email if run_all failed (silent fail prevention - backlog 042)

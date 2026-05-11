@@ -150,6 +150,10 @@ def _init_db():
     # notice_create_dt 는 update_db 단계에서 미반영 → notice_chk + notice_order 로 정식 매핑.
     _ensure_column(conn, "biz_projects", "notice_chk", "INTEGER DEFAULT 0")
     _ensure_column(conn, "biz_projects", "notice_order", "INTEGER DEFAULT 0")
+    # 백로그 057 Phase 2.1a (2026-05-11): 운영 DB sync 추적 (옵션 A Incremental Sync).
+    # 0 = 미동기, 1 = 동기. connector INSERT / appy UPDATE 시 0 reset, sync 성공 시 1.
+    _ensure_column(conn, "biz_projects", "synced_to_render", "INTEGER DEFAULT 0")
+    _ensure_column(conn, "biz_projects", "synced_at", "TIMESTAMP")
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS companies (
@@ -2770,6 +2774,136 @@ def new_announcements():
     `/` 와 달리 status 쿼리 기본값 없음(미지정 시 전체 상태). 이후 7일 필터 적용.
     """
     return _render_new_announcements_page(is_admin=False)
+
+
+# 백로그 057 Phase 2.1b — /api/sync UPSERT whitelist
+# v1 master → Render 운영 DB 동기 시 갱신 허용 컬럼 (사이트 master 데이터).
+# 동적/enrich 컬럼 (ai_summary, view_count 등) 은 의도적으로 제외 → 운영 enrich 보호.
+SYNC_UPDATE_WHITELIST = (
+    "title",
+    "organization",
+    "start_date",
+    "end_date",
+    "status",
+    "description",
+    "source",
+    "site",
+    "collected_at",
+    "ministry",
+    "executing_agency",
+    "receipt_start",
+    "receipt_end",
+    "biz_start",
+    "biz_end",
+    "raw_status",
+    "attachments_json",
+    "period_text",
+    "apply_url",
+    "pdf_path",
+    "notice_create_dt",
+    "notice_chk",
+    "notice_order",
+)
+
+
+@app.route("/api/sync", methods=["POST"])
+def api_sync():
+    """백로그 057 Phase 2.1b — v1 master → Render 운영 DB 동기 (옵션 A Incremental Sync).
+
+    body: {"key": ADMIN_KEY, "source": "<source>", "rows": [{...}, ...]}
+
+    - biz_projects 만 UPSERT (url unique). 동적 테이블 (click_log/visit_log/companies/
+      user_request_log/recommendations) 절대 미터치.
+    - UPDATE 시 SYNC_UPDATE_WHITELIST 컬럼만 적용 → 운영 enrich (ai_summary, view_count,
+      recommend_label, attachment_text, score 등) 보호.
+    - INSERT 시 client 가 보낸 whitelist + url + source(body) 만 set. 기타 컬럼은 default.
+    - 빈 rows → no-op (정책 #5 empty payload skip).
+    - 응답: {ok, source, inserted, updated, count, errors[]}
+    """
+    if not check_admin(request):
+        return jsonify({"ok": False, "error": "admin key required"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    source = str(payload.get("source") or "").strip()
+    rows = payload.get("rows")
+
+    if not source:
+        return jsonify({"ok": False, "error": "source required"}), 400
+    if not isinstance(rows, list):
+        return jsonify({"ok": False, "error": "rows must be a list"}), 400
+    if not rows:
+        return jsonify(
+            {"ok": True, "source": source, "inserted": 0, "updated": 0, "count": 0, "errors": []}
+        )
+
+    inserted = 0
+    updated = 0
+    errors: list[dict[str, Any]] = []
+
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        for idx, row in enumerate(rows):
+            if not isinstance(row, dict):
+                errors.append({"idx": idx, "error": "row must be a dict"})
+                continue
+            url = str(row.get("url") or "").strip()
+            if not url:
+                errors.append({"idx": idx, "error": "url required"})
+                continue
+
+            existing = conn.execute(
+                "SELECT id FROM biz_projects WHERE url = ?", (url,)
+            ).fetchone()
+
+            if existing:
+                update_pairs: list[str] = []
+                update_values: list[Any] = []
+                for col in SYNC_UPDATE_WHITELIST:
+                    if col in row:
+                        update_pairs.append(f"{col} = ?")
+                        update_values.append(row[col])
+                if update_pairs:
+                    update_pairs.append("updated_at = CURRENT_TIMESTAMP")
+                    update_values.append(url)
+                    conn.execute(
+                        f"UPDATE biz_projects SET {', '.join(update_pairs)} WHERE url = ?",
+                        update_values,
+                    )
+                    updated += 1
+            else:
+                insert_cols: list[str] = ["url"]
+                insert_vals: list[Any] = [url]
+                for col in SYNC_UPDATE_WHITELIST:
+                    if col in row:
+                        insert_cols.append(col)
+                        insert_vals.append(row[col])
+                if "source" not in insert_cols:
+                    insert_cols.append("source")
+                    insert_vals.append(source)
+                placeholders = ", ".join("?" * len(insert_cols))
+                cols_sql = ", ".join(insert_cols)
+                conn.execute(
+                    f"INSERT INTO biz_projects ({cols_sql}) VALUES ({placeholders})",
+                    insert_vals,
+                )
+                inserted += 1
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"ok": False, "error": f"DB error: {repr(e)}"}), 500
+    finally:
+        conn.close()
+
+    return jsonify(
+        {
+            "ok": True,
+            "source": source,
+            "inserted": inserted,
+            "updated": updated,
+            "count": len(rows),
+            "errors": errors,
+        }
+    )
 
 
 @app.route("/api/run", methods=["POST"])
