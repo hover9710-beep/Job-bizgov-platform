@@ -270,3 +270,170 @@ de23b77 chore(v2): db/biz.db git 추적 해제 + DR 절차 문서화 (deploy-004
 - 053 의 `sync_jbtp_v1_to_render.py` UPSERT 패턴을 매주 1회 수동 실행
 - 052 의 `sync_two_rows.py` 도 jbexport 매주 1회 수동 실행
 - Phase 3 본격 해결 까지의 단기 buffer
+
+---
+
+# Phase 2 정식 명세 (2026-05-11 결정)
+
+## 5/11 핵심 발견 — Phase 1 진단 일부 정정
+
+Phase 1 (5/10) 의 우세 가설은 "deploy-004 (5/4) 가 GitHub Actions 의 db git push 를 `.gitignore` 로 무효화 → sync break". 5/11 실제 확인 결과 **부분 정정** 필요.
+
+### Evidence
+
+1. **GitHub Actions cron 매일 정상 실행**
+   - workflow runs #5 (5/4) ~ #12 (5/11) 모두 success
+   - 즉 cron job 자체는 멈춘 적 없음
+
+2. **`.github/workflows/daily-crawl.yml` 의 마지막 step 에 5/3 의식적 disabled 주석 존재**
+   ```yaml
+   # DISABLED 2026-05-03: DB auto-push removed to prevent overwriting
+   # dynamic tables (click_log, visit_log, companies, user_request_log,
+   # recommendations)
+   ```
+   → deploy-004 (5/4) 가 `.gitignore` 로 끊은 게 아니라, **5/3 시점에 의식적으로 마지막 step (`git add db/biz.db && git push`) 자체를 disable** 한 것.
+
+3. **사용자 PC daily run (Win Task 20:37) = v1 로컬 누적 master**
+   - 매일 사용자 PC 에서 `auto_run.bat` (백로그 036) 가 wrapper → `run_all.py` 전체 mode 실행
+   - 결과는 **v1 로컬 DB 에 누적**
+   - GitHub Actions runner (해외 IP) 대신 **사용자 PC (한국 IP)** 가 사이트 fetch 담당 — IP 차단 영향 0
+
+4. **운영 DB stale 진짜 원인 = Actions 가 결과 폐기 (의도적 보호)**
+   - Actions 는 매일 crawl 까지는 수행하나 결과를 git push 하지 않음
+   - 즉 운영 DB 갱신 메커니즘은 **5/3 시점부터 의도적으로 부재**
+   - 동적 테이블 (click_log/visit_log/companies/user_request_log/recommendations) 덮어쓰기 방지 = 5/3 결정의 정당한 이유
+
+### Phase 1 진단표 갱신
+
+| 가설 | 5/10 판정 | 5/11 갱신 |
+|---|---|---|
+| H1 GitHub Actions sync 자동화 부재 | ✅ 우세 (5/4 deploy-004 break) | ✅ 확정 (단, 시작은 **5/3 의식적 disable**, deploy-004 는 사후 보강) |
+| H2 Render Cron Job 자체 | ❓ render.yaml 없음 | ❌ (의식적으로 안 만든 것) |
+| H3 v1 로컬 → Render API push | ❌ 흔적 없음 | ❌ 확정 |
+| H4 외부 트리거 (Apps Script 등) | ❓ | ❌ (mail 만 trigger, /api/run 호출 없음) |
+
+→ **본질 = "운영 DB 갱신 메커니즘이 의식적으로 부재한 상태"**. 5/3 결정 (동적 테이블 보호) 의 정당성은 유지하되, **정적 데이터 (biz_projects) 만 선택적으로 sync 하는 새 메커니즘** 필요.
+
+---
+
+## 채택: 옵션 A — Incremental Sync
+
+### 배경
+
+| 옵션 | 내용 | 평가 |
+|---|---|---|
+| B | 정적/동적 테이블 분리 (별도 DB 또는 별도 service) | 큰 리팩토링 + 마이그레이션 위험 → W22 이후 |
+| **A** | **/api/sync 엔드포인트로 정적 데이터만 incremental sync** | **1주 작업, 즉시 정상화 가능, 5/3 동적 보호 정책 유지** |
+
+→ **A 채택**. B 는 장기 옵션으로 별도 백로그.
+
+### 핵심 정책 (5/10~5/11 결정)
+
+1. **Incremental sync** — 변경분만 동적 sync (full row dump X)
+2. **url unique 기준 UPSERT** — biz_projects.url 을 unique key 로
+3. **연번 (notice_order) ≠ sync 기준** — 위젯 정렬용일 뿐, sync delta 추적에 사용하지 않음
+4. **`synced_to_render` flag 로 delta 추적** — 0=미동기 / 1=동기됨
+5. **Empty payload skip** — sync 대상 row 0 건 → API 호출 자체 skip (noise 감소)
+6. **동적 테이블 절대 안 건드림** — click_log / visit_log / companies / user_request_log / recommendations (5/3 정책 유지)
+
+> 5/10 일지의 "연번 기반 incremental sync" sketch 는 **5/11 정책 #3 으로 정정**. 연번은 위젯 표시 정렬에만 사용. sync delta 는 `synced_to_render` flag 가 단일 source-of-truth.
+
+## Phase 2.1 — /api/sync 엔드포인트 (모든 source 공통)
+
+운영 측 `appy.py` 에 신규 엔드포인트 추가:
+
+```python
+@app.route('/api/sync', methods=['POST'])
+def api_sync():
+    # 1. ADMIN_KEY 인증
+    if request.headers.get('X-Admin-Key') != os.getenv('ADMIN_KEY'):
+        return jsonify({'error': 'unauthorized'}), 401
+
+    # 2. body: { source, rows: [...] }
+    data = request.get_json()
+    source = data.get('source')
+    rows = data.get('rows', [])
+
+    if not source or not rows:
+        return jsonify({'error': 'missing source or rows'}), 400
+
+    # 3. url unique 기준 UPSERT (biz_projects 만)
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        inserted = updated = 0
+        for row in rows:
+            url = row.get('url')
+            if not url:
+                continue
+            existing = conn.execute(
+                'SELECT id FROM biz_projects WHERE url=?', (url,)
+            ).fetchone()
+            if existing:
+                # UPDATE (049 merge 보호 패턴 적용)
+                updated += 1
+            else:
+                # INSERT (full row)
+                inserted += 1
+        conn.commit()
+    finally:
+        conn.close()
+
+    # 4. 동적 테이블 (click_log/visit_log/...) 절대 안 건드림
+    # 5. 응답: { inserted, updated, count }
+    return jsonify({
+        'source': source,
+        'inserted': inserted,
+        'updated': updated,
+        'count': len(rows),
+    })
+```
+
+### 설계 포인트
+
+- **`biz_projects` 만 대상**. 동적 테이블 6종 모두 미터치 (정책 #6)
+- **`url` unique** — 이미 053 sync 스크립트에서 검증된 패턴
+- **`UPDATE` 시 049 merge 보호 패턴 적용** — 운영 측에 이미 채워진 필드 (예: ai_summary, organization 백필) 를 v1 dump 가 덮어쓰지 않도록 보호 (구체 컬럼 화이트리스트는 Phase 2.2 에서 확정)
+- **응답 통계** — inserted/updated/count 로 호출자가 결과 검증
+- **`source` 파라미터** — 1회 호출에 1 source 만. 멀티 source 는 호출자가 source 별로 순차 호출
+
+### 호출자 (v1 로컬 측)
+
+별도 스크립트 `pipeline/sync_to_render.py` (가칭) — `run_all.py` 완료 후 호출:
+
+1. v1 로컬 DB 에서 `WHERE synced_to_render=0` row 조회
+2. source 별로 그룹핑 → 각 source 별 `/api/sync` POST
+3. 응답 OK → 해당 row 들의 `synced_to_render=1` UPDATE
+4. 실패 (network / 401 / 500) → flag 갱신 X → 다음 실행 시 재시도 (멱등성)
+
+### 변경 범위
+
+| 항목 | 변경 |
+|---|---|
+| v2 `appy.py` | `/api/sync` 엔드포인트 신규 추가 |
+| v2 `db/schema.py` (또는 migrate) | `biz_projects.synced_to_render INTEGER DEFAULT 0` 컬럼 추가 |
+| v2 `pipeline/sync_to_render.py` | 신규 스크립트 (v1 로컬 → Render push) |
+| v2 connectors | INSERT 시 `synced_to_render=0` 명시 (대부분 default 로 충족) |
+| v2 `appy.py` `/api/run` 등 update 경로 | UPDATE 시 `synced_to_render=0` 으로 reset (변경분 재sync) |
+| `.github/workflows/daily-crawl.yml` | **변경 0** (5/3 disable 정책 유지). Actions 는 그대로 crawl 만 하고 결과 폐기 |
+| v1 `auto_run.bat` (036) | `run_all.py` 완료 후 `sync_to_render.py` 호출 step 추가 |
+| 운영 deploy | 신규 엔드포인트 + 스키마 migrate 적용 |
+
+### 단계
+
+1. Phase 2.1a — v2 에 스키마 컬럼 추가 + migrate 스크립트
+2. Phase 2.1b — v2 `appy.py` `/api/sync` 구현 + 단위 테스트
+3. Phase 2.1c — v2 `pipeline/sync_to_render.py` 호출자 구현
+4. Phase 2.1d — 로컬 시뮬 (v1 사본 DB → v2 dev appy `/api/sync`) 검증
+5. Phase 2.1e — release/ 후보 등록 → v1 cherry-pick → 운영 deploy
+6. Phase 2.1f — auto_run.bat 에 sync_to_render.py step 추가 → 1주 모니터링
+
+### 합쳐질 백로그
+
+- **052 (jbexport proxy/sync 자동화)** — 본질 동일 (운영 DB sync 메커니즘 부재). Phase 2 완료 시 close
+- **053 sync_jbtp_v1_to_render.py** — Phase 2 의 prototype. 정식 sync 도입 후 retire (또는 임시 fallback 유지)
+
+### W19 외 후속 (W20+)
+
+- Phase 2.2 — UPDATE merge 보호 컬럼 화이트리스트 확정 (049 패턴 확장)
+- Phase 2.3 — sync 실패 알림 (kakao / mail)
+- Phase 2.4 — 동기화 통계 대시보드 (마지막 sync 시각, source 별 pending row 수)
