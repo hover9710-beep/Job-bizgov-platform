@@ -432,8 +432,120 @@ def api_sync():
 - **052 (jbexport proxy/sync 자동화)** — 본질 동일 (운영 DB sync 메커니즘 부재). Phase 2 완료 시 close
 - **053 sync_jbtp_v1_to_render.py** — Phase 2 의 prototype. 정식 sync 도입 후 retire (또는 임시 fallback 유지)
 
-### W19 외 후속 (W20+)
+## Phase 2.2 — 우선 source 2개 (연번 있음, 첫 sync bootstrap)
 
-- Phase 2.2 — UPDATE merge 보호 컬럼 화이트리스트 확정 (049 패턴 확장)
-- Phase 2.3 — sync 실패 알림 (kakao / mail)
-- Phase 2.4 — 동기화 통계 대시보드 (마지막 sync 시각, source 별 pending row 수)
+대상:
+- **jbexport** (전북수출통합시스템) — 049/050 백필 완료
+- **jbtp** (전북테크노파크) — 053 백필 완료
+
+첫 sync 예상 row: 약 **4~8건** (5/4~5/11 신규)
+
+### 첫 sync (one-time bootstrap) — 연번 기반 delta
+
+`synced_to_render` flag 가 도입되기 전에는 v1 / Render 양쪽 모두 flag 값이 없으므로, **첫 sync 한 번은 연번 (notice_order) 기반으로 delta 추출** 후 sync 종료 시점에 flag 를 1 로 일괄 UPDATE.
+
+```sql
+-- Render 측에서 source 별 last_synced_order 조회
+SELECT source, MAX(notice_order) AS last_synced_order
+FROM biz_projects
+WHERE source IN ('jbtp', 'jbexport')
+GROUP BY source;
+
+-- v1 측에서 delta 추출
+SELECT * FROM biz_projects
+WHERE source IN ('jbtp', 'jbexport')
+  AND notice_order > :last_synced_order  -- source 별로 다르게 바인딩
+ORDER BY source, notice_order;
+```
+
+→ Render 로 POST → 성공 응답 시 v1 측 `UPDATE biz_projects SET synced_to_render=1, synced_at=CURRENT_TIMESTAMP WHERE ...`.
+
+### 정상 운영 (steady-state) — flag delta
+
+첫 sync 이후 모든 신규 / 수정 row 는 `synced_to_render=0` 으로 INSERT/RESET. 매일 sync:
+
+```sql
+SELECT * FROM biz_projects
+WHERE source IN ('jbtp', 'jbexport') AND synced_to_render=0;
+```
+
+> 연번 (notice_order) 은 **첫 sync bootstrap 한 번만** 사용. 그 후엔 `synced_to_render` flag 가 단일 source-of-truth (정책 #3, #4).
+
+---
+
+## Phase 2.3 — 나머지 source (점진적)
+
+연번이 없거나 부분 누락이어도 **url unique 로 UPSERT 가능**. 첫 sync 는 source 전체 dump 를 보내고 Render 가 url 기준으로 INSERT/UPDATE 분기.
+
+| source | v1 row | Render 누락 추정 | 비고 |
+|---|---|---|---|
+| **bizinfo** | 10,684 | **1,688건** | 가장 큼, 첫 sync 시 일괄 |
+| kstartup | 400 | 60건 | |
+| jbbi | 362 | 7건 | 위젯 후순위 |
+| jbtp_related | (소수) | 1건 | |
+| at_global | (소수) | 3건 | 백로그 058 진단 대상 |
+| kseafood | 65 | (확인 필요) | **위젯 제외** (연번 부재) — **sync 자체는 진행** |
+
+→ 첫 sync 총 약 **1,800건** (대부분 bizinfo). 그 후 매일 incremental delta (보통 수십 건 수준).
+
+### delta 추출 = `synced_to_render` flag (가장 안전)
+
+연번 없는 source 도, 연번 있는 source 의 first-sync 이후도 모두 동일 패턴:
+
+```sql
+SELECT * FROM biz_projects
+WHERE source = :source AND synced_to_render = 0
+ORDER BY id;
+```
+
+### kseafood 정책 정정
+
+5/10 일지 메모 "kseafood 위젯 제외 (연번 부재) → sync 대상 X" 는 **위젯 정책** 과 **sync 정책** 을 혼동. 정정:
+- **위젯 표시 정책**: 연번 부재 → 정렬 키 검토 (별도 백로그, W20+). 일단 위젯 제외 유지
+- **sync 정책**: `synced_to_render` flag 가 단일 추적 → kseafood 도 **sync 대상 포함**
+
+---
+
+## v1 schema 변경
+
+```sql
+ALTER TABLE biz_projects ADD COLUMN synced_to_render INTEGER DEFAULT 0;
+ALTER TABLE biz_projects ADD COLUMN synced_at TIMESTAMP;
+```
+
+### 적용 절차
+
+1. **v2 dev DB 에서 먼저 ALTER 실행 + 단위 테스트** (스키마 호환성 확인, ai_summary 등 기존 컬럼 미영향)
+2. **v1 로컬 DB ALTER 실행** (auto_run.bat 정지 시간대에)
+3. **Render 운영 DB ALTER 실행** (동적 테이블 미터치, /var/data/biz.db)
+4. 적용 후 검증: `SELECT COUNT(*) FROM biz_projects WHERE synced_to_render = 0;` 으로 전체 row 가 default 0 인지 확인
+
+### `synced_at` 컬럼 용도
+
+- 마지막 성공 sync 시각 기록 (디버깅 / 통계 / Phase 2.4 대시보드 재료)
+- sync 실패 시 미갱신 → 재시도 시점 추적 용이
+- TIMESTAMP DEFAULT 없음 (NULL 허용, sync 성공 시 명시적 set)
+
+### INSERT/UPDATE 경로별 동작
+
+| 경로 | synced_to_render | synced_at |
+|---|---|---|
+| v1 connector INSERT (신규 row) | 0 (default) | NULL |
+| v1 appy UPDATE (운영 보호 컬럼 제외, ai_summary 백필 등) | **0 으로 reset** | NULL 로 reset |
+| sync_to_render.py 성공 응답 시 | 1 | CURRENT_TIMESTAMP |
+| sync 실패 | (미갱신) | (미갱신) |
+
+### 호환성 검토
+
+- 기존 SELECT 쿼리 → 컬럼 추가만 하므로 영향 0
+- 기존 INSERT 쿼리 → DEFAULT 값으로 자동 채워짐, 코드 수정 불필요
+- 단, **명시적으로 컬럼 나열한 INSERT 가 있다면 수정 필요** (확인 필요 — Phase 2.1a 작업)
+
+---
+
+## W19 외 후속 (W20+)
+
+- Phase 2.4 — UPDATE merge 보호 컬럼 화이트리스트 확정 (049 패턴 확장)
+- Phase 2.5 — sync 실패 알림 (kakao / mail)
+- Phase 2.6 — 동기화 통계 대시보드 (마지막 synced_at, source 별 pending row 수)
+- 별도 백로그 — kseafood 위젯 정렬 키 정책 (연번 부재 source 일반화)
