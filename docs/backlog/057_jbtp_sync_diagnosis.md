@@ -549,3 +549,55 @@ ALTER TABLE biz_projects ADD COLUMN synced_at TIMESTAMP;
 - Phase 2.5 — sync 실패 알림 (kakao / mail)
 - Phase 2.6 — 동기화 통계 대시보드 (마지막 synced_at, source 별 pending row 수)
 - 별도 백로그 — kseafood 위젯 정렬 키 정책 (연번 부재 source 일반화)
+
+---
+
+# Phase 2.1f follow-up (2026-05-12 밤) — jbtp 사이트 url 변경 + v1 누적 갱신
+
+## 발견
+저녁 jbexport fix 검증 후 사용자가 jbtp 위젯 점검 → 사이트 5/11 신규 (oder 2200 농식품, 2201 ILP 4차) 가 운영 위젯 미반영.
+
+## 진단 — 3중 원인 동시 발생
+
+1. **jbtp connector 5/8 이후 미실행** — v1 DB `MAX(created_at)=2026-05-07`, 5/11 신규 부재. v1 에서 `connector_jbtp` import 0건 (`__main__` 만) → 매번 수동 실행 필요한 구조
+2. **connector 의 oder/chk/start_date 추출 로직 부재** — 053 v2 fix 가 v1 미반영 (029 surgical 결정). 128 row 전부 `notice_order=0`
+3. **사이트 a[href] 파라미터 순서 변경** — 옛 `boardId&dataSid&menuCd` → 새 `menuCd&boardId&dataSid`. `idx_url UNIQUE` 우회 위험
+
+## Fix B' — connector surgical 14줄
+
+`connectors/connector_jbtp.py`:
+- `_normalize_detail_url(href)` — dataSid 기반 url 정규화 (옛 형식으로 통일)
+- `parse_list_page`: `urljoin(BASE, href)` → `_normalize_detail_url(href)`
+
+→ 백로그 029 통째 sync 보류 정책 유지. `notice_order` 추출은 여전히 `backfill_jbtp.py` 의존.
+
+## 결과
+
+| 단계 | 결과 |
+|---|---|
+| connector 재실행 | 128 → 137 (+9), 중복 dataSid 0 |
+| backfill apply | matched=126, updated=126, no_match=11 (deep row) |
+| AFTER | `notice_chk=1`:36, `start_date` 채워짐:126, `MAX(notice_order)`:20248 |
+| Render sync (`--source jbtp`) | inserted=9, updated=128, errors=0, marked_synced=137 |
+| 운영 위젯 검증 | 사이트 oder 2203/2202/2201/2200/2199 = 위젯 top5 **5/5 매칭** |
+
+## 사고 (해결됨)
+
+1. **첫 실행 중복 INSERT** (url 변경 미인지) — 117 dataSid 중복. 백업 (`biz.db.backup_b057_jbtp_fixB_20260512_221131`) 복원으로 원복
+2. **backfill DRY_RUN 미적용** (PowerShell env 문법이 Bash 툴에서 미주입) — 곧장 apply 됐으나 스크립트 자체 백업 + 결과 의도 일치, 멱등
+3. **Render sync 403** (`ADMIN_KEY` env 미상속, `.env` 부재) — 사용자 1회 키 주입으로 해결
+
+## 잔존 / 후속
+
+- **scheduler 부재**: v1 어디서도 `connector_jbtp` import 0 → 5/13 신규 row 들어오려면 사용자 PC 수동 실행. 별도 백로그 후보 (058 v1 connector 정지 진단과 연관)
+- **백로그 029 통째 sync 보류**: `notice_order` 추출 backfill 의존 유지
+- **ADMIN_KEY 회전 권장**: 본 작업 대화에 평문 1회 노출
+- **사이트 url 변경 모니터링**: 다른 source 사이트도 동일 패턴 (파라미터 순서 변경) 가능성 — 백로그 061 (전체 파이프라인 명세) 에서 검토 항목 추가
+
+## 정책 시사점 (백로그 061/062 와 연관)
+
+| 항목 | 시사 |
+|---|---|
+| connector UNIQUE 키 | url string 매칭은 사이트 url 변경에 취약. dataSid/seq 같은 안정 키를 정규화 후 url 빌드 (또는 `(source, seq) UNIQUE` 인덱스 추가) |
+| connector 미호출 검출 | data/&lt;source&gt;/debug/ 빈 디렉토리, MAX(created_at) 일자 차이 등으로 detect 가능 — 백로그 062 (E2E hook) 후보 |
+| `_normalize_detail_url` 패턴 | 다른 connector 에도 url 정규화 함수 일관 도입 검토 (jbexport/bizinfo 등) |
