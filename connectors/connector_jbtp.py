@@ -38,6 +38,19 @@ _SESSION.headers.update(HEADERS)
 _SESSION.verify = False
 
 _DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
+_DATASID_RE = re.compile(r"dataSid=(\d+)")
+
+
+def _normalize_detail_url(href: str) -> str:
+    # 사이트가 2026-05 a[href] 파라미터 순서를 menuCd&boardId&dataSid 로 변경.
+    # 옛 row(boardId&dataSid&menuCd) 와 url string 매칭 위해 옛 형식으로 통일 (idx_url UNIQUE 호환).
+    m = _DATASID_RE.search(href or "")
+    if not m:
+        return urljoin(BASE, href)
+    return (
+        f"{BASE}/board/view.jbtp?"
+        f"boardId=BBS_0000006&dataSid={m.group(1)}&menuCd=DOM_000000102001000000"
+    )
 
 
 def _debug_save(name: str, html: str) -> None:
@@ -83,7 +96,7 @@ def parse_list_page(html: str, page_no: int) -> list[dict]:
         m = re.search(r"dataSid=(\d+)", href)
         if not m:
             continue
-        detail_url = urljoin(BASE, href)
+        detail_url = _normalize_detail_url(href)
         end_date = _parse_row_end_date(row)
         status = _parse_row_status(row)
         out.append(
