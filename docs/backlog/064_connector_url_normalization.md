@@ -1,7 +1,8 @@
 # 064. 4개 connector url 정규화 — #1 scheduler 등록 사전조건
 
-**상태**: 🟢 신규 (다음 사이클)
+**상태**: 🟡 Phase 2 (3/4 connector 완료, kseafood Phase 2-B 잔존). #1 활성화 완료
 **발견일**: 2026-05-12 밤 (b029 sync dry-test 부수효과)
+**완료일**: 2026-05-12 한밤중 (3 connector + #1) / kseafood 잔존
 **우선순위**: 높음 — #1 (run_all.py aux crawlers 자동 호출) 의 사전조건
 **연관**: 029 (v1/v2 connector divergence), 057 (Phase 2.1f follow-up — jbtp url 정규화 surgical), 061 (전체 파이프라인 명세), 062 (E2E 파이프라인 hook)
 
@@ -104,3 +105,84 @@ def _normalize_detail_url(href: str) -> str:
 - 본 백로그는 **#1 scheduler 등록의 사전조건**. 064 완료 전 #1 적용 시 자동 893 row 사고 위험
 - 029 통째 sync (jbtp 만) 는 이미 commit `fd79792` 로 완료 — jbtp 는 본 백로그 대상 외
 - 사용자 명시: ADMIN_KEY 회전 권고 항목은 본 작업 보고에서 제외 (memory `feedback-admin-key-rotation`)
+
+---
+
+# 실행 결과 (2026-05-12 한밤중)
+
+## Phase 1 진단 결과
+
+| connector | 옛 DB url 패턴 | 현재 connector 빌드 | Fix 방식 |
+|---|---|---|---|
+| at_global | `proj_detail_id=0&proj_id=8182` (203건 동일) | `proj_id=...&proj_detail_id=...` | 빌드 순서 1줄 변경 |
+| jbtp_related | `boardId=BBS_0000007&...&dataSid=...&menuCd=DOM_...` (71건) | `menuCd=...&boardId=...&dataSid=...` | 빌드 순서 1줄 변경 (jbtp 와 동일 패턴) |
+| jbbi | `boardArticleUUID=...&boardUUID=...&categoryGroup=0&menuUUID=...&page=1&rowCount=10` (369건, 알파벳 순) | dict 정의 순 (`boardUUID, menuUUID, boardArticleUUID, ...`) | `urlencode(q)` 의 dict 키 알파벳 순으로 정렬 |
+| kseafood | `?biz_data=<Base64(idx=N&startPage=X&listNo=Y&table=cs_biz&...)>%7C%7C` (244건, 페이지마다 다른 startPage/listNo) | 사이트 a[href] 그대로 urljoin (full string 그대로) | **본질 다름** — Base64 안에 페이지 컨텍스트 포함, 같은 detail 도 클릭 페이지마다 다른 string. Phase 2-B 별도 처리 |
+
+## Phase 2 — 3 connector 정규화 적용 (commit `9b9398a`)
+
+### 변경
+| 파일 | 변경 |
+|---|---|
+| `connectors/connector_at_global.py` | url 빌드 1줄 (`proj_detail_id` 먼저) |
+| `connectors/connector_jbtp_related.py` | url 빌드 1줄 (`boardId` 먼저) |
+| `connectors/connector_jbbi.py` | `build_view_url()` 의 dict 키 알파벳 순 정렬 |
+
+### 단독 검증 (각 connector 1회 실행)
+
+| connector | BEFORE | AFTER | 사이트 실제 신규 |
+|---|---|---|---|
+| at_global | 203 | 206 | +3 |
+| jbtp_related | 71 | 72 | +1 |
+| jbbi | 369 | 372 | +3 |
+
+→ 옛 row 와 url string 매칭 성공 (중복 INSERT 0). 사이트 실제 신규 분만 +N.
+
+## #1 scheduler 등록 활성화 (commit `9b9398a`)
+
+`run_all.py` 에 `run_aux_crawlers()` 추가:
+- 4 connector (jbtp / jbbi / at_global / jbtp_related) non-fatal 자동 호출
+- master 3종 (jbexport / bizinfo / kstartup) 실패는 fatal 유지 (기존 정책)
+- kseafood 는 Phase 2-B 후 추가 예정
+
+### 통합 dry-test (run_aux_crawlers 2회 연속 실행)
+
+| connector | 1차 실행 | 2차 실행 |
+|---|---|---|
+| jbtp | 137 (+0) | 137 (+0) |
+| jbbi | 372 (+0, 1차에서 이미 +3) | 372 (+0) |
+| at_global | 206 (+0, 1차에서 이미 +3) | 206 (+0) |
+| jbtp_related | 72 (+0, 1차에서 이미 +1) | 72 (+0) |
+
+→ **idempotent 검증 PASS**. 매일 daily run 시 사이트 실제 신규 분만 INSERT, 옛 row 중복 0.
+
+## Phase 2-B — kseafood 별도 처리 (잔존)
+
+### 본질
+사이트가 `biz_data` Base64 안에 페이지 컨텍스트 (`startPage`, `listNo`) 를 포함:
+- 같은 idx=100522 detail 도 page1 클릭 vs page2 클릭 시 다른 Base64 → 다른 url string
+- 옛 244 row 의 url 모두 다른 페이지 컨텍스트 — 통일 형식 없음
+
+### 진행 방향 (다음 사이클)
+
+| 단계 | 내용 |
+|---|---|
+| 2-B1 | 옛 244 row 의 url 을 모두 idx-only 표준 url 로 백필 (`?biz_data=<Base64(idx=N)>%7C%7C` 또는 `?idx=N` 직접). 표준 형식 결정 |
+| 2-B2 | `connector_kseafood.py` 의 `full_url` 빌드를 표준 형식으로 변경 |
+| 2-B3 | dry-test 후 동일하게 변동 0 검증 |
+| 2-B4 | Render sync 으로 운영 DB 244 row UPDATE |
+| 2-B5 | `run_all.py` 의 `run_aux_crawlers()` 에 kseafood 추가 |
+
+### 우선순위
+中 — kseafood 는 위젯 후순위 source (백로그 053 메모 참조). #1 의 다른 4 connector 가 자동화되면 마스터 흐름 회복. 다만 kseafood 의 신규 row 가 매주 ~5건 발생 가능성 — 단기 모니터링 위해 수동 실행 또는 별도 사이클.
+
+## 사고 회고 (이번 사이클)
+
+본 사이클 사고 0회. dry-test 가 자동 호출 활성화 전 사고 사전 발견 → 백로그 062 가치 입증. 사이클 분리 (064 → #1) 가 안전성 보장.
+
+## 정책 시사점 (백로그 061/062 연관)
+
+1. **connector url 빌드 패턴 표준화** — 사이트가 a[href] 변경하더라도 connector 가 안정 키 (id/uuid) 만 추출해 자체 빌드 시 회피 가능
+2. **dict 키 순서 의존**: Python 3.7+ dict 가 insertion order 유지 → 의도치 않게 url string 달라짐. **알파벳 순 또는 `sorted(q.items())` 표준** 검토
+3. **사이트 url 변경 시점 미상**: 5/12 우연 발견. 다른 connector (bizinfo, kstartup) 도 동일 잠재 — 점검 필요 (별도 백로그)
+4. **사이트 url 디자인 가변성**: kseafood 처럼 Base64 + 페이지 컨텍스트 패턴은 url string 매칭 불가능 — DB 스키마 차원에서 `(source, 안정 키) UNIQUE` 인덱스 검토 (장기)
