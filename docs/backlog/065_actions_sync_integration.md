@@ -172,3 +172,88 @@ Actions 가 매일 정상 갱신 검증 (5/13~5/14 모니터링) 후:
 - ADMIN_KEY GitHub Secrets 저장은 사용자 1회 액션 필요 (Settings UI)
 - Phase 2A dry-run 결과는 사용자 합의 후 본 실행 (자동 적용 금지)
 - 5/12 새벽 사용자 정정 직후 신설 — fix 는 W20 사이클부터
+
+---
+
+# Phase 1 진단 결과 (2026-05-12 새벽)
+
+## 시나리오 판정: **A 확정** (Actions fetch 정상)
+
+GitHub Actions `Daily BizGov Crawl` workflow run **#13 (5/11 schedule)** 로그 직접 검토:
+
+- 미국 IP (Azure runner) 의 한국 사이트 fetch = **정상 작동**
+- `pipeline/jbexport_daily.py` 가 jbexport **70건 수집 + 상세 메타 + 첨부파일 다운로드 성공**
+- 5/11 신규 공고 (oder 67, 68) 도 정상 수집 (filter-diag log 에서 신규 url 2건 확인)
+
+→ Phase 2A (sync step 추가) 경로 가능. B1/B2/B3 우회 불필요.
+
+## 발견 1 — DB schema mismatch (Actions runner DB 측)
+
+run #13 종료 시점 traceback:
+
+```
+sqlite3.OperationalError: no such column: raw_status
+  File "pipeline/jbexport_daily.py", line 1126, in sync_status_to_db
+```
+
+원인:
+- `pipeline/jbexport_daily.py` 의 `sync_status_to_db()` 가 `raw_status` 컬럼 UPDATE 시도
+- Actions runner 의 `db/biz.db` (5/3 시점 정적 사본 또는 매 run 초기화) 에 `raw_status` 컬럼 부재
+- 5/3 DB auto-push disable 이후 schema 동기화 메커니즘이 없어 v1 로컬 / 운영 / Actions DB 간 컬럼 divergence
+- v1 로컬에서는 어느 시점 ALTER 로 추가됐으나 Actions runner 의 sqlite 파일에는 미반영
+
+영향:
+- fetch 까지는 성공해도 sync_status_to_db 단계에서 traceback → 후속 단계 (merge / detect_new / mail / 등) 미실행
+- 즉 **Actions 가 매일 jbexport crawl 까진 성공하나 DB write 단계에서 9일간 실패**
+
+## 발견 2 — Actions success 표시 거짓 (CI status 신뢰성)
+
+GitHub UI 의 Status 표시 **"Success"** vs 실제 log 의 **"Process completed with exit code 1"**:
+
+- 사용자 메모리의 "Actions #5~#12 모두 success" → 실제로는 9일간 모두 동일 traceback 으로 실패였을 가능성 (run #13 이 #12 다음 schedule 이므로 동일 패턴 추정)
+- workflow yaml 의 `continue-on-error` 또는 step-level error 처리 정책이 step 실패를 masking
+- CI status = 자동화 실효 X — 백로그 062 (E2E hook) 의 가치 재입증
+
+→ 사용자 머릿속 ("Actions success = 정상") vs 코드 ("exit 1 but masked") 의 또 한 층 divergence.
+
+## Phase 2 작업 — 사전 fix 다수 필요
+
+본래 계획 (Phase 2A: yaml 끝에 sync_to_render.py step 추가) 만으로는 부족. 다음 사전 fix 필요:
+
+### 사전 fix 1 — `raw_status` 컬럼 처리
+
+| 옵션 | 내용 | 평가 |
+|---|---|---|
+| **A** | `pipeline/jbexport_daily.py` 의 `sync_status_to_db()` 가 컬럼 부재 시 `ALTER TABLE` 또는 skip (defensive) | 본 함수 한 곳만 수정. Actions / v1 / 운영 환경 차이 흡수. 우선 |
+| B | `scripts/migrate_*.py` 에 `raw_status` 마이그레이션 추가 + Actions yaml 의 init step 에서 호출 | 정공법이나 마이그레이션 인프라 일관성 필요 (별도 백로그?) |
+| C | 코드 측에서 `raw_status` 사용 제거 (다른 컬럼으로 대체) | 의미 손실 가능 — 사용처 전수조사 선행 |
+
+→ W20 사이클에서 결정. A 우세 추정 (영향 최소화).
+
+### 사전 fix 2 — Actions success/failure 표시 정합성
+
+`.github/workflows/daily-crawl.yml` 의 step error 처리 점검:
+- `continue-on-error: true` 사용처 식별 → 의도된 곳 (외부 의존 step) 만 남기고 핵심 step 은 `false`
+- 또는 step `if: failure()` 활용으로 traceback step 후 명시적 exit
+- 검증: workflow_dispatch 수동 trigger 로 의도적 실패 1회 → UI 가 failure 로 표시되는지
+
+### 사전 fix 3 — /api/sync step 추가 (본 백로그 본질)
+
+위 사전 fix 1~2 완료 후:
+- yaml 끝에 `pipeline/sync_to_render.py --dry-run` step 추가 (`ADMIN_KEY = ${{ secrets.ADMIN_KEY }}`)
+- dry-run 결과 합의 → `--dry-run` 제거 → 본 실행
+
+## 진단으로 갱신된 위험 평가
+
+| 항목 | Phase 1 진단 전 | Phase 1 진단 후 |
+|---|---|---|
+| Actions fetch 한국 사이트 차단 | ❓ 불명 (시나리오 B 우려) | ✅ 정상 (시나리오 A 확정) |
+| Actions DB schema 일관성 | ❓ 미점검 | ❌ raw_status 부재 — 사전 fix 1 필요 |
+| Actions CI status 신뢰성 | ❓ 미점검 | ❌ exit 1 이 success 로 마스킹 — 사전 fix 2 필요 |
+| sync step 추가 단순도 | "yaml 1 step 추가" | **3-fix sequence** (raw_status → status 정합성 → sync step) |
+
+## 5/12 새벽 종료
+
+진단만 완료. Phase 2 fix 는 W20 fresh 사이클. 본 진단 결과로 065 의 Phase 2A 범위가 "yaml 1 step 추가" 에서 "3-fix sequence (raw_status → status 정합성 → sync step)" 로 확대 — W20 추정 시간도 1~2시간 → 3~4시간으로 재산정.
+
+5/12 일자 작업 (점심 057 Phase 2.1e + 저녁 jbexport fix + 밤 jbtp fix + 한밤중 029/064 + 새벽 자동화 부재 진단 + Actions Phase 1 진단) **종합 종료**.
