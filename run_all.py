@@ -226,6 +226,32 @@ def run_kstartup() -> int:
     return _run([PY, str(ROOT / "connectors" / "connector_kstartup.py")])
 
 
+def run_aux_crawlers(args: argparse.Namespace) -> int:
+    # 보조 crawler 4종 (jbtp / jbbi / at_global / jbtp_related). non-fatal.
+    # 사이트 임시 다운/차단 등으로 1~2개 실패해도 master(jbexport/bizinfo/kstartup) + merge/메일 진행.
+    # 백로그 058 (v1 connector 정지 진단) 후속 + 064 (4 connector url 정규화 완료).
+    # kseafood 는 url 구조 (Base64 페이지 컨텍스트) 가 다른 본질이라 별도 백로그 (064 Phase 2-B) 후 추가.
+    crawlers = [
+        ("jbtp", "connector_jbtp.py"),
+        ("jbbi", "connector_jbbi.py"),
+        ("at_global", "connector_at_global.py"),
+        ("jbtp_related", "connector_jbtp_related.py"),
+    ]
+    failures: list[tuple[str, int]] = []
+    for name, fname in crawlers:
+        _section(f"2c) {name} crawler (non-fatal)")
+        rc = _run([PY, str(ROOT / "connectors" / fname)])
+        print(f"[run_all] {name} 종료 코드: {rc}", flush=True)
+        if rc != 0:
+            print(f"[run_all] non-fatal: {name} 실패 (계속 진행)", flush=True)
+            failures.append((name, rc))
+    if failures:
+        print("\n[run_all] aux crawlers 일부 실패:", flush=True)
+        for n, rc in failures:
+            print(f"  - {n} (exit {rc})", flush=True)
+    return 0
+
+
 def _post_merge_steps(args: argparse.Namespace) -> int:
     """merge / DB 반영 / 필터 (메일·카카오 제외)."""
     steps: list[tuple[str, list[str]]] = [
@@ -393,6 +419,7 @@ def run_all(args: argparse.Namespace) -> int:
         r = run_kstartup()
         if r != 0 and not args.test:
             return r
+        run_aux_crawlers(args)
     return run_post_update_and_notify(args)
 
 

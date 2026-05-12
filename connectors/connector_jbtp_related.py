@@ -79,9 +79,10 @@ def parse_list_page(html: str, page_no: int) -> list[dict]:
         if not m:
             continue
         data_sid = m.group(1)
+        # 백로그 064: 옛 DB row 와 url string 매칭 위해 boardId 먼저 순서로 빌드 (idx_url UNIQUE 호환).
         detail_url = (
             "https://www.jbtp.or.kr/board/view.jbtp?"
-            "menuCd=DOM_000000102002000000&boardId=BBS_0000007&dataSid=%s" % data_sid
+            "boardId=BBS_0000007&dataSid=%s&menuCd=DOM_000000102002000000" % data_sid
         )
         end_date = _parse_row_end_date(row)
         out.append(

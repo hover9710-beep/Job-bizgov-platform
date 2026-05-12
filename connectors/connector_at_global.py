@@ -93,7 +93,8 @@ def parse_list_page(html: str, page_no: int) -> list[dict]:
         raw_status = tds[4].get_text(" ", strip=True)
         status = _map_status(raw_status)
 
-        url = f"{DETAIL_BASE}?proj_id={proj_id}&proj_detail_id={proj_detail_id}"
+        # 백로그 064: 옛 DB row 와 url string 매칭 위해 proj_detail_id 먼저 순서로 빌드 (idx_url UNIQUE 호환).
+        url = f"{DETAIL_BASE}?proj_detail_id={proj_detail_id}&proj_id={proj_id}"
 
         out.append({
             "title": title,

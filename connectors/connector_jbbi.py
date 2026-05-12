@@ -88,11 +88,12 @@ def _split_period(period_raw: str) -> Tuple[str, str]:
 def build_view_url(board_article_uuid: str) -> str:
     from urllib.parse import urlencode
 
+    # 백로그 064: 옛 DB row 와 url string 매칭 위해 알파벳 순 빌드 (idx_url UNIQUE 호환).
     q = {
-        "boardUUID": BOARD_UUID,
-        "menuUUID": MENU_UUID,
         "boardArticleUUID": board_article_uuid,
+        "boardUUID": BOARD_UUID,
         "categoryGroup": "0",
+        "menuUUID": MENU_UUID,
         "page": "1",
         "rowCount": "10",
     }
