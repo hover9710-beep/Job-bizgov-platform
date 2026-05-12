@@ -225,6 +225,8 @@ def _normalize_item(
         "site": site,
         "collected_at": collected_at,
         "period_text": period_text,
+        "notice_order": item.get("notice_order"),
+        "notice_chk": item.get("notice_chk"),
     }
 
 
@@ -293,6 +295,7 @@ def merge_jb_json() -> Path:
 
     merged: List[Dict[str, Any]] = []
     seen_keys: set[str] = set()
+    seen_index: Dict[str, int] = {}
     duplicates_removed = 0
     candidates_seen = 0
     period_unparsed_log: List[str] = []
@@ -323,9 +326,16 @@ def merge_jb_json() -> Path:
             candidates_seen += 1
             key = _dedup_key_title_source(item)
             if key in seen_keys:
+                # 같은 key 의 기존 row 가 빈 jbexport 정렬키를 가졌고
+                # 이번 row 가 채워져 있으면 보강 (derivative 파일이 raw 보다 먼저 dedup 캐시에 들어가는 사고 방지).
+                existing = merged[seen_index[key]]
+                for fk in ("notice_order", "notice_chk"):
+                    if not existing.get(fk) and item.get(fk):
+                        existing[fk] = item[fk]
                 duplicates_removed += 1
                 continue
             seen_keys.add(key)
+            seen_index[key] = len(merged)
             merged.append(item)
 
     merged = [_ensure_canonical_fields(x) for x in merged]
@@ -425,6 +435,8 @@ def _normalize_jb_new_item(raw: Dict[str, Any]) -> Dict[str, Any]:
         "start_date": extra["start_date"],
         "end_date": extra["end_date"],
         "status": extra["status"],
+        "notice_order": raw.get("notice_order"),
+        "notice_chk": raw.get("notice_chk"),
     }
 
 
