@@ -4,6 +4,7 @@
 
 | 날짜 | 폴더 | 핵심 변경 | 배포 상태 |
 |---|---|---|---|
+| 2026-05-12 (새벽) | (docs only) | 5/12 새벽 daily 추가 — PC 스케줄러 실험용 정정 + 자동화 부재 진단 (v1 `d879ae9`). 백로그 065 신설 — Actions `/api/sync` 통합 (5/3 disable 의 진짜 대체) (v1 `9535417`). 다음 사이클 (W20) 작업 정의 — 코드 변경 0 | 🟢 v1 push 완료 / v2 cherry-pick 완료 (daily `666a5f7`, 065 `4a9fd16`) |
 | 2026-05-12 (한밤중 2차) | (commit only) | b064 Phase 2 (3 connector url 정규화) + #1 scheduler 활성화 (4 connector run_aux_crawlers 자동 호출) (v1 `9b9398a`). kseafood Phase 2-B 잔존 | 🟡 v1 push 진행 / v2 cherry-pick 보류 (Phase 2-B 와 함께) |
 | 2026-05-12 (한밤중 1차) | (commit only) | b029 jbtp connector 통째 sync (4단계 분리 + _common 도입 + url 정규화 통합) (v1 `fd79792`). #1 scheduler dry-test 에서 4 connector url 변경 결함 발견 → 백로그 064 신설, #1 보류 | 🟢 v1 push 완료 / v2 cherry-pick 보류 (064 완료 후) |
 | 2026-05-12 (밤) | [2026-05-12_b057_v2_cherrypick](./2026-05-12_b057_v2_cherrypick/) | b057 Phase 2.1f follow-up — jbtp 사이트 url 파라미터 순서 변경 대응 + v1 connector url 정규화 + 누적 137건 갱신 + Render sync (v1 `0032f32`+`06c02fe`, v2 patch export) | 🟢 v1 push 완료 / v2 cherry-pick docs (0002) `f7ff1fd` push 완료 / 코드 (0001) 보류 (064 와 함께) |
