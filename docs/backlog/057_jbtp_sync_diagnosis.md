@@ -593,6 +593,7 @@ ALTER TABLE biz_projects ADD COLUMN synced_at TIMESTAMP;
 - **백로그 029 통째 sync 보류**: `notice_order` 추출 backfill 의존 유지
 - **ADMIN_KEY 회전 권장**: 본 작업 대화에 평문 1회 노출
 - **사이트 url 변경 모니터링**: 다른 source 사이트도 동일 패턴 (파라미터 순서 변경) 가능성 — 백로그 061 (전체 파이프라인 명세) 에서 검토 항목 추가
+- **GitHub Actions 통합 미완** (5/12 새벽 정정): 057 Phase 2.1f 까지 PC 호출 구조만 완성, Actions 가 `/api/sync` 호출하지 않음 → 진짜 자동화는 **백로그 065** 에서 처리 (5/3 disable 의 진짜 대체)
 
 ## 정책 시사점 (백로그 061/062 와 연관)
 
