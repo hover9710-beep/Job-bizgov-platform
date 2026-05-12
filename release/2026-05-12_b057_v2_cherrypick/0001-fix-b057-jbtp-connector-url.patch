@@ -1,0 +1,59 @@
+From 0032f32f5efaa7d9180eea5815adc02b8fd8797e Mon Sep 17 00:00:00 2001
+From: hover9710 <hover9710@gmail.com>
+Date: Tue, 12 May 2026 22:32:09 +0900
+Subject: [PATCH 1/2] =?UTF-8?q?fix(b057):=20jbtp=20connector=20url=20?=
+ =?UTF-8?q?=EC=A0=95=EA=B7=9C=ED=99=94=20(=EC=82=AC=EC=9D=B4=ED=8A=B8=20?=
+ =?UTF-8?q?=ED=8C=8C=EB=9D=BC=EB=AF=B8=ED=84=B0=20=EC=88=9C=EC=84=9C=20?=
+ =?UTF-8?q?=EB=B3=80=EA=B2=BD=20=EB=8C=80=EC=9D=91)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+사이트가 2026-05 a[href] 파라미터 순서를 menuCd&boardId&dataSid 로 변경.
+옛 row (boardId&dataSid&menuCd) 와 url string 매칭 위해 정규화 함수 추가
+(idx_url UNIQUE 호환). 백로그 029 surgical 1줄 패치, 통째 sync 보류 유지.
+
+5/12 밤 사고 #1: 정규화 없이 1차 실행 시 117 dataSid 중복 INSERT (254=128+126)
+→ 백업 복원 → 본 fix 적용 후 재실행 → 137 (128+9 신규), 중복 0.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+---
+ connectors/connector_jbtp.py | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/connectors/connector_jbtp.py b/connectors/connector_jbtp.py
+index 465eff0..300140e 100644
+--- a/connectors/connector_jbtp.py
++++ b/connectors/connector_jbtp.py
+@@ -38,6 +38,19 @@ _SESSION.headers.update(HEADERS)
+ _SESSION.verify = False
+ 
+ _DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
++_DATASID_RE = re.compile(r"dataSid=(\d+)")
++
++
++def _normalize_detail_url(href: str) -> str:
++    # 사이트가 2026-05 a[href] 파라미터 순서를 menuCd&boardId&dataSid 로 변경.
++    # 옛 row(boardId&dataSid&menuCd) 와 url string 매칭 위해 옛 형식으로 통일 (idx_url UNIQUE 호환).
++    m = _DATASID_RE.search(href or "")
++    if not m:
++        return urljoin(BASE, href)
++    return (
++        f"{BASE}/board/view.jbtp?"
++        f"boardId=BBS_0000006&dataSid={m.group(1)}&menuCd=DOM_000000102001000000"
++    )
+ 
+ 
+ def _debug_save(name: str, html: str) -> None:
+@@ -83,7 +96,7 @@ def parse_list_page(html: str, page_no: int) -> list[dict]:
+         m = re.search(r"dataSid=(\d+)", href)
+         if not m:
+             continue
+-        detail_url = urljoin(BASE, href)
++        detail_url = _normalize_detail_url(href)
+         end_date = _parse_row_end_date(row)
+         status = _parse_row_status(row)
+         out.append(
+-- 
+2.53.0.windows.2
+
