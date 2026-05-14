@@ -1108,6 +1108,7 @@ def sync_status_to_db(all_items: List[Dict[str, Any]]) -> Dict[str, int]:
     import sqlite3 as _sqlite3
 
     from db_path import resolve_db_path as _resolve_db_path  # 백로그 044
+    from pipeline._ensure_schema import ensure_schema as _ensure_schema  # 백로그 065 Phase 2-Pre
     db_path = _resolve_db_path()
     if not db_path.exists():
         log(f"[status-sync] db not found: {db_path}")
@@ -1118,6 +1119,7 @@ def sync_status_to_db(all_items: List[Dict[str, Any]]) -> Dict[str, int]:
 
     conn = _sqlite3.connect(str(db_path))
     try:
+        _ensure_schema(conn)  # 백로그 065 Phase 2-Pre — Actions runner raw_status 부재 차단
         for item in all_items:
             url = str(item.get("상세URL") or "").strip()
             raw_status = str(item.get("상태") or "").strip()

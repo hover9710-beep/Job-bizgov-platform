@@ -35,6 +35,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from mirror_projects import mirror_biz_projects_to_projects
 from normalize_project import infer_status
+from pipeline._ensure_schema import ensure_schema as _ensure_schema  # 백로그 065 Phase 2-Pre
 from project_quality import (
     infer_source,
     normalize_description,
@@ -75,6 +76,7 @@ CREATE TABLE IF NOT EXISTS biz_projects (
 
 def _init_db(conn: sqlite3.Connection) -> None:
     conn.execute(BIZ_CREATE_SQL)
+    _ensure_schema(conn)  # 백로그 065 Phase 2-Pre — 28+ 컬럼 통합 ALTER
     _ensure_organization_column(conn, "biz_projects")
     _ensure_organization_column(conn, "projects")
     for col in (

@@ -11,7 +11,7 @@ permissions:
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75   # 백로그 065 Phase 2-B: 60 → 75 (schema ensure + sync step 추가 여유)
 
     steps:
       - name: Checkout repository
@@ -27,7 +27,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # 백로그 065 Phase 2-B (c-light): connector import 의 방어 깊이.
+      # connector 가 import 누락해도 yaml 단계에서 28+ 컬럼 ALTER 보장.
+      - name: Ensure DB file + schema (idempotent ALTER)
+        id: ensure-schema
+        timeout-minutes: 2
+        env:
+          DB_PATH: db/biz.db
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          mkdir -p db
+          python pipeline/_ensure_schema.py
+
       - name: Crawl bizinfo (mode bizinfo + merge + DB)
+        id: crawl-bizinfo
         continue-on-error: true
         timeout-minutes: 15
         env:
@@ -37,6 +50,7 @@ jobs:
           python run_all.py --mode bizinfo
 
       - name: Crawl kstartup (collect only)
+        id: crawl-kstartup
         continue-on-error: true
         timeout-minutes: 5
         env:
@@ -46,6 +60,7 @@ jobs:
           python connectors/connector_kstartup.py
 
       - name: Crawl AT global (collect only)
+        id: crawl-at-global
         continue-on-error: true
         timeout-minutes: 5
         env:
@@ -55,6 +70,7 @@ jobs:
           python connectors/connector_at_global.py
 
       - name: Crawl K-Seafood Trade (collect only)
+        id: crawl-kseafood
         continue-on-error: true
         timeout-minutes: 5
         env:
@@ -64,6 +80,7 @@ jobs:
           python connectors/connector_kseafood.py
 
       - name: Crawl JBBI (collect only)
+        id: crawl-jbbi
         continue-on-error: true
         timeout-minutes: 5
         env:
@@ -73,6 +90,7 @@ jobs:
           python connectors/connector_jbbi.py
 
       - name: Crawl JBTP (collect only)
+        id: crawl-jbtp
         continue-on-error: true
         timeout-minutes: 5
         env:
@@ -82,6 +100,7 @@ jobs:
           python connectors/connector_jbtp.py
 
       - name: Crawl JBTP related (collect only)
+        id: crawl-jbtp-related
         continue-on-error: true
         timeout-minutes: 5
         env:
@@ -91,6 +110,7 @@ jobs:
           python connectors/connector_jbtp_related.py
 
       - name: Crawl jbexport (proxy + mode jbexport + merge + DB)
+        id: crawl-jbexport
         continue-on-error: true
         timeout-minutes: 15
         env:
@@ -103,6 +123,22 @@ jobs:
           curl -sf http://127.0.0.1:5001 || echo "[warn] proxy not responding"
           python run_all.py --mode jbexport
           kill $PROXY_PID 2>/dev/null || true
+
+      # 백로그 065 Phase 2-B: /api/sync 호출 — 5/3 disable 의 진짜 대체 (정적 데이터만 운영 DB push).
+      # 첫 dispatch 는 --dry-run 으로 검증 (실제 운영 변경 0). ADMIN_KEY Secret 필수.
+      # continue-on-error: true → summary 가 outcome 검사 후 critical 판정. ADMIN_KEY 부재 시
+      # exit 1 으로 fail (summary 에서 CRITICAL 표시 → workflow UI failure).
+      - name: Sync to Render (dry-run)
+        id: sync-to-render
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          DB_PATH: db/biz.db
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python pipeline/sync_to_render.py --dry-run
 
       # DISABLED 2026-05-03: DB auto-push removed to prevent overwriting
       # dynamic tables (click_log, visit_log, companies, user_request_log,
@@ -119,10 +155,70 @@ jobs:
       #   1. Split dynamic tables into a separate events.db (not git-tracked)
       #   2. Add a merge step that fetches production dynamic data before push
       #   3. Use Render Cron Jobs instead (same DB, no overwrite)
-      - name: Crawl summary (no commit, no push)
+      # 백로그 065 Phase 2-A: continue-on-error 정합화 — master (bizinfo/jbexport) 실패 시
+      # 이 step 이 exit 1 → workflow UI 가 정확히 failure 표시. aux connector 실패는 경고만
+      # (외부 사이트 일시 장애 흡수). `if: always()` 로 crawler 결과와 무관하게 항상 실행.
+      - name: Crawl summary + status aggregation
+        if: always()
+        env:
+          O_ENSURE: ${{ steps.ensure-schema.outcome }}
+          O_BIZINFO: ${{ steps.crawl-bizinfo.outcome }}
+          O_KSTARTUP: ${{ steps.crawl-kstartup.outcome }}
+          O_ATGLOBAL: ${{ steps.crawl-at-global.outcome }}
+          O_KSEAFOOD: ${{ steps.crawl-kseafood.outcome }}
+          O_JBBI: ${{ steps.crawl-jbbi.outcome }}
+          O_JBTP: ${{ steps.crawl-jbtp.outcome }}
+          O_JBTPREL: ${{ steps.crawl-jbtp-related.outcome }}
+          O_JBEXPORT: ${{ steps.crawl-jbexport.outcome }}
+          O_SYNC: ${{ steps.sync-to-render.outcome }}
         run: |
+          echo "[ci] === Step outcomes ==="
+          echo "  ensure-schema : $O_ENSURE"
+          echo "  bizinfo       : $O_BIZINFO"
+          echo "  kstartup      : $O_KSTARTUP"
+          echo "  at_global     : $O_ATGLOBAL"
+          echo "  kseafood      : $O_KSEAFOOD"
+          echo "  jbbi          : $O_JBBI"
+          echo "  jbtp          : $O_JBTP"
+          echo "  jbtp_related  : $O_JBTPREL"
+          echo "  jbexport      : $O_JBEXPORT"
+          echo "  sync-to-render: $O_SYNC"
+          echo ""
           echo "[ci] DB auto-push is DISABLED for dynamic-data safety."
-          echo "[ci] Crawl ran in runner sandbox only. No commit, no push to main."
+          echo "[ci] Sync path: /api/sync (정적 데이터만 운영 DB push, 동적 테이블 미터치)."
           if [ -f db/biz.db ]; then
-            echo "[ci] runner db/biz.db size: $(stat -c%s db/biz.db) bytes (discarded)"
+            echo "[ci] runner db/biz.db size: $(stat -c%s db/biz.db) bytes (discarded after sync)"
           fi
+          FAIL=0
+          if [ "$O_ENSURE" = "failure" ]; then
+            echo "[ci] CRITICAL: ensure-schema failed — pipeline/_ensure_schema.py import/실행 오류"
+            FAIL=1
+          fi
+          if [ "$O_BIZINFO" = "failure" ]; then
+            echo "[ci] CRITICAL: bizinfo (master crawler) failed"
+            FAIL=1
+          fi
+          if [ "$O_JBEXPORT" = "failure" ]; then
+            echo "[ci] CRITICAL: jbexport (proxy + run_all jbexport) failed"
+            FAIL=1
+          fi
+          if [ "$O_SYNC" = "failure" ]; then
+            echo "[ci] CRITICAL: sync_to_render failed — ADMIN_KEY Secret 부재 또는 /api/sync 오류"
+            FAIL=1
+          fi
+          AUX_FAILED=""
+          for pair in "kstartup:$O_KSTARTUP" "at_global:$O_ATGLOBAL" "kseafood:$O_KSEAFOOD" "jbbi:$O_JBBI" "jbtp:$O_JBTP" "jbtp_related:$O_JBTPREL"; do
+            name="${pair%%:*}"
+            out="${pair#*:}"
+            if [ "$out" = "failure" ]; then
+              AUX_FAILED="$AUX_FAILED $name"
+            fi
+          done
+          if [ -n "$AUX_FAILED" ]; then
+            echo "[ci] WARN: aux connector(s) failed (non-fatal):$AUX_FAILED"
+          fi
+          if [ $FAIL -eq 1 ]; then
+            echo "[ci] EXIT 1 — workflow marked as failure"
+            exit 1
+          fi
+          echo "[ci] All required steps succeeded."

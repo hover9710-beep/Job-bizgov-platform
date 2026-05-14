@@ -19,6 +19,7 @@ import sys as _sys
 if _ROOT not in _sys.path:
     _sys.path.insert(0, _ROOT)
 from db_path import resolve_db_path as _resolve_db_path  # noqa: E402
+from pipeline._ensure_schema import ensure_schema  # noqa: E402 — 백로그 065 Phase 2-Pre
 
 BASE = "https://global.at.or.kr"
 LIST_URL = "https://global.at.or.kr/front/bizReq/brList.do"
@@ -172,6 +173,7 @@ def collect_all_pages() -> list[dict]:
 def save_to_db(results: list[dict]) -> None:
     """INSERT OR IGNORE — url UNIQUE 가정. 존재하는 컬럼만 INSERT."""
     conn = sqlite3.connect(DB_PATH)
+    ensure_schema(conn)  # 백로그 065 Phase 2-Pre
     cur = conn.cursor()
     existing = {str(r[1]) for r in cur.execute("PRAGMA table_info(biz_projects)").fetchall()}
 
