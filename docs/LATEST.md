@@ -6,7 +6,9 @@
 
 ## 즉시 처리할 작업 (우선순위 순)
 
-### 🔴 1. workflow_dispatch 본 실행 (commit b21518b 검증)
+### 🔴 1. cron 자동 실행 모니터링 (2026-05-15 새벽 KST 06:00)
+   - 사람 개입 없이 정상 도는지 확인 — 본 자동화 완성의 진짜 신호
+   - 매일 아침 Actions 페이지 5분 확인
 
 작업:
 - 🟨 본인: Actions → daily-crawl → Run workflow 수동 트리거 → 결과 확인 → 운영 DB sync 검증
