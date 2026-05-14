@@ -138,7 +138,7 @@ jobs:
           DB_PATH: db/biz.db
           PYTHONPATH: ${{ github.workspace }}
         run: |
-          python pipeline/sync_to_render.py --dry-run
+          python pipeline/sync_to_render.py
 
       # DISABLED 2026-05-03: DB auto-push removed to prevent overwriting
       # dynamic tables (click_log, visit_log, companies, user_request_log,
