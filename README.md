@@ -23,6 +23,9 @@ python pipeline/make_mail.py
 ## 데이터 스키마
 - [ROW Schema v1](pipeline/ROW_SCHEMA.md) — row 표준계약서 (필드 정의 / status 규칙 / 금지사항)
 
+## 개발 표준
+- [신규 기능 진입 시 영향 분석 템플릿](docs/templates/feature_impact_simulation.md) — 9 + 5 단계 영향 분석, 코드 진입 전 필수 통과
+
 ## 출력 파일
 
 | 경로 | 설명 |
