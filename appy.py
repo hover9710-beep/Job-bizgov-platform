@@ -947,6 +947,11 @@ def load_latest_by_source(source: str, limit: int = 5) -> list:
                     "ORDER BY COALESCE(notice_order, 0) DESC, "
                     "COALESCE(created_at, '') DESC, id DESC"
                 )
+            elif source == "at_global":
+                # 백로그 035 + 사이클 2 (2026-05-17): at_global 은 마감 비율 96% (197/206).
+                # end_date 가드 — 마감 공고 위젯 노출 차단. notice_order 분포 모두 0 이라
+                # 정렬 변경 효과 없음 (default created_at DESC, id DESC 유지).
+                extra_where = " AND (end_date IS NULL OR end_date >= date('now'))"
             params.append(limit)
             rows = conn.execute(
                 f"""
