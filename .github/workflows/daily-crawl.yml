@@ -11,7 +11,7 @@ permissions:
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 75   # 백로그 065 Phase 2-B: 60 → 75 (schema ensure + sync step 추가 여유)
+    timeout-minutes: 85   # 백로그 067 (5/18): 75 → 85 (ai_translate step 10분 여유)
 
     steps:
       - name: Checkout repository
@@ -124,6 +124,25 @@ jobs:
           python run_all.py --mode jbexport
           kill $PROXY_PID 2>/dev/null || true
 
+      # 백로그 067 (2026-05-18): AI 친화 통역 캐시 — sync 전에 신규 row 의 ai_friendly_* 채움.
+      # - ai_friendly_title IS NULL row 만 통역 (멱등). 위젯 노출 대상 (start_date >= 2026-01-01).
+      # - --limit 200: 일일 신규 안전 한도 (실측 ~50건/day). 50건 chunked commit.
+      # - OPENAI_API_KEY Secret 부재 시 graceful skip (return 0) — sync 진행 영향 X.
+      # - continue-on-error: true → 실패해도 sync 단계 진행 (non-fatal).
+      - name: AI friendly translate (non-fatal)
+        id: ai-translate
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DB_PATH: db/biz.db
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          echo "[ai-translate] start"
+          python -m pipeline.ai_translate_cache --limit 200
+          echo "[ai-translate] done"
+
       # 백로그 065 Phase 2-B: /api/sync 호출 — 5/3 disable 의 진짜 대체 (정적 데이터만 운영 DB push).
       # 첫 dispatch 는 --dry-run 으로 검증 (실제 운영 변경 0). ADMIN_KEY Secret 필수.
       # continue-on-error: true → summary 가 outcome 검사 후 critical 판정. ADMIN_KEY 부재 시
@@ -170,6 +189,7 @@ jobs:
           O_JBTP: ${{ steps.crawl-jbtp.outcome }}
           O_JBTPREL: ${{ steps.crawl-jbtp-related.outcome }}
           O_JBEXPORT: ${{ steps.crawl-jbexport.outcome }}
+          O_AITRANSLATE: ${{ steps.ai-translate.outcome }}
           O_SYNC: ${{ steps.sync-to-render.outcome }}
         run: |
           echo "[ci] === Step outcomes ==="
@@ -182,6 +202,7 @@ jobs:
           echo "  jbtp          : $O_JBTP"
           echo "  jbtp_related  : $O_JBTPREL"
           echo "  jbexport      : $O_JBEXPORT"
+          echo "  ai-translate  : $O_AITRANSLATE"
           echo "  sync-to-render: $O_SYNC"
           echo ""
           echo "[ci] DB auto-push is DISABLED for dynamic-data safety."
