@@ -29,6 +29,9 @@ def canonical_url(url: str) -> str:
     - scheme/host 를 소문자로 통일.
     - 쿼리는 `parse_qsl` 로 파싱 후 key 이름순 정렬 → `urlencode` 로 재조립.
     - fragment/path 는 건드리지 않는다 (대소문자 보존).
+    - 백로그 033 (2026-05-17): bizinfo 는 pblancId 만 핵심 식별자, 페이지 순회
+      파라미터 (cpage / cat / condition / hashCode / keyword / orderGb) 제거 →
+      같은 공고가 다른 cpage 에서 크롤될 때 동일 url 로 정규화 (멱등 INSERT).
     """
     s = str(url or "").strip()
     if not s:
@@ -39,6 +42,13 @@ def canonical_url(url: str) -> str:
         return s
 
     params = parse_qsl(p.query, keep_blank_values=True)
+
+    # bizinfo: pblancId 만 유지, 나머지 noise 제거 (b033 멱등성)
+    if "bizinfo.go.kr" in (p.netloc or "").lower():
+        pid_value = next((v for k, v in params if k == "pblancId" and v), "")
+        if pid_value:
+            params = [("pblancId", pid_value)]
+
     params.sort(key=lambda kv: kv[0])
     new_query = urlencode(params, doseq=True)
 
