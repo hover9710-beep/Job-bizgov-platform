@@ -15,9 +15,13 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-DEFAULT_LIMIT = int(os.environ.get("AI_SUMMARY_LIMIT", "20"))
+DEFAULT_LIMIT = int(os.environ.get("AI_SUMMARY_LIMIT", "200"))
 
-from pipeline.ai_summary import generate_project_summary, load_attachment_text
+from pipeline.ai_summary import (
+    batch_generate_summary,
+    generate_project_summary,
+    load_attachment_text,
+)
 from pipeline.mail_view import (
     DB_PATH,
     URGENT_MAIL_DAYS,
@@ -27,6 +31,9 @@ from pipeline.mail_view import (
     to_mail_item,
     _today_str,
 )
+
+BATCH_SIZE = 10  # 1회 GPT 호출당 요약 행 수 (백로그 069 Phase 2, b066 사이클 2 검증된 패턴)
+COMMIT_INTERVAL = 50  # N 행마다 conn.commit (중간 중단 시 손실 한도)
 
 
 def _norm_filter_arg(val: Optional[str]) -> Optional[str]:
@@ -115,6 +122,30 @@ def _collect_candidates(
     return _collect_mail_candidates(today)
 
 
+def _collect_widget_targets(
+    today: str,
+    *,
+    source: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """위젯 노출 대상 (start_date >= 2026-01-01) 만 — Phase 2 보강용 (백로그 069)."""
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    try:
+        query = (
+            "SELECT * FROM biz_projects "
+            "WHERE COALESCE(start_date, '') >= '2026-01-01'"
+        )
+        params: List[Any] = []
+        if source:
+            query += " AND source = ?"
+            params.append(source)
+        query += " ORDER BY COALESCE(notice_order, 0) DESC, id DESC"
+        rows = conn.execute(query, params).fetchall()
+        return [to_mail_item(dict(r), today=today) for r in rows]
+    finally:
+        conn.close()
+
+
 def run_ai_summary_cache(
     *,
     limit: int,
@@ -123,89 +154,111 @@ def run_ai_summary_cache(
     source: Optional[str] = None,
     status: Optional[str] = None,
     end_date_from: Optional[str] = None,
+    widget_targets: bool = False,
 ) -> int:
     if not dry_run and not os.environ.get("OPENAI_API_KEY", "").strip():
         print("[ai-summary] OPENAI_API_KEY 없음, skip", flush=True)
         return 0
 
     today = _today_str()
-    candidates = _collect_candidates(
-        today,
-        source=source,
-        status=status,
-        end_date_from=end_date_from,
-    )
-    need_list = [
-        c
-        for c in candidates
-        if overwrite or not str(c.get("ai_summary") or "").strip()
-    ]
-    missing_n = len(need_list)
+    if widget_targets:
+        candidates = _collect_widget_targets(today, source=source)
+    else:
+        candidates = _collect_candidates(
+            today,
+            source=source,
+            status=status,
+            end_date_from=end_date_from,
+        )
+
+    pending: List[Dict[str, Any]] = []
+    skipped = 0
+    for c in candidates:
+        iid = c.get("id")
+        if iid is None:
+            continue
+        has = bool(str(c.get("ai_summary") or "").strip())
+        if has and not overwrite:
+            skipped += 1
+            continue
+        pending.append(c)
+        if len(pending) >= limit:
+            break
 
     extra = ""
-    if source or status or end_date_from:
-        extra = (
-            f" source={source!r} status={status!r} end_date_from={end_date_from!r}"
-        )
+    if widget_targets:
+        extra = f" widget_targets=True source={source!r}"
+    elif source or status or end_date_from:
+        extra = f" source={source!r} status={status!r} end_date_from={end_date_from!r}"
     print(
-        f"[ai-summary] target={len(candidates)} missing={missing_n} limit={limit}{extra}",
+        f"[ai-summary] target={len(candidates)} pending={len(pending)} "
+        f"skipped={skipped} limit={limit}{extra}",
+        flush=True,
+    )
+    print(
+        f"[ai-summary] batch mode: BATCH_SIZE={BATCH_SIZE} COMMIT_INTERVAL={COMMIT_INTERVAL}",
         flush=True,
     )
 
-    generated = skipped = failed = 0
-    attempts = 0
-
     if dry_run:
-        for it in candidates:
-            iid = it.get("id")
-            has = bool(str(it.get("ai_summary") or "").strip())
-            if has and not overwrite:
-                print(f"[ai-summary] SKIP id={iid} reason=already_exists", flush=True)
-                skipped += 1
-        for it in need_list[:limit]:
-            print(f"[ai-summary] DRY would generate id={it.get('id')}", flush=True)
+        for c in pending[: min(limit, 10)]:
+            print(
+                f"[ai-summary] DRY would generate id={c.get('id')} title={str(c.get('title'))[:50]!r}",
+                flush=True,
+            )
         print(
-            f"[ai-summary] DONE generated=0 skipped={skipped} failed=0 (dry-run)",
+            f"[ai-summary] DONE generated=0 skipped={skipped} failed=0 (dry-run) "
+            f"would_generate={len(pending)}",
             flush=True,
         )
         return 0
 
+    generated = failed = 0
     conn = sqlite3.connect(str(DB_PATH))
+    since_last_commit = 0
     try:
-        for it in candidates:
-            iid = it.get("id")
-            if iid is None:
-                continue
-            has = bool(str(it.get("ai_summary") or "").strip())
-            if has and not overwrite:
-                print(f"[ai-summary] SKIP id={iid} reason=already_exists", flush=True)
-                skipped += 1
-                continue
-            if attempts >= limit:
-                break
-            attempts += 1
-
-            text = _source_text_for_item(it)
-            summary = generate_project_summary(it, text=text)
-            if not summary:
-                print(f"[ai-summary] FAIL id={iid} (empty or error)", flush=True)
-                failed += 1
+        for batch_start in range(0, len(pending), BATCH_SIZE):
+            batch = pending[batch_start : batch_start + BATCH_SIZE]
+            texts = [_source_text_for_item(b) for b in batch]
+            results = batch_generate_summary(batch, texts)
+            if not results:
+                print(
+                    f"[ai-summary] BATCH_FAIL start={batch_start} n={len(batch)} (전체 skip)",
+                    flush=True,
+                )
+                failed += len(batch)
                 continue
 
             now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-            conn.execute(
-                """
-                UPDATE biz_projects
-                SET ai_summary = ?, ai_summary_at = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-                """,
-                (summary, now, int(iid)),
-            )
+            batch_ok = 0
+            for idx, item in enumerate(batch):
+                summary = results.get(idx)
+                if not summary:
+                    failed += 1
+                    continue
+                conn.execute(
+                    """
+                    UPDATE biz_projects
+                    SET ai_summary = ?, ai_summary_at = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (summary, now, int(item["id"])),
+                )
+                generated += 1
+                batch_ok += 1
+                since_last_commit += 1
+
             print(
-                f"[ai-summary] OK id={iid} chars={len(summary)}",
+                f"[ai-summary] BATCH ok={batch_ok}/{len(batch)} "
+                f"progress={generated}/{len(pending)} "
+                f"({100*generated/max(1,len(pending)):.1f}%)",
                 flush=True,
             )
-            generated += 1
+
+            if since_last_commit >= COMMIT_INTERVAL:
+                conn.commit()
+                since_last_commit = 0
         conn.commit()
     finally:
         conn.close()
@@ -243,6 +296,11 @@ def main() -> int:
         metavar="DATE",
         help="end_date >= DATE (YYYY-MM-DD). 'today' 는 오늘 날짜. --source 등과 조합.",
     )
+    parser.add_argument(
+        "--widget-targets",
+        action="store_true",
+        help="위젯 노출 대상 (start_date >= 2026-01-01) 만 처리 — Phase 2 보강용 (백로그 069).",
+    )
     args = parser.parse_args()
     lim = args.limit if args.limit is not None else DEFAULT_LIMIT
     if lim < 0:
@@ -260,6 +318,7 @@ def main() -> int:
         source=src,
         status=st,
         end_date_from=edf,
+        widget_targets=args.widget_targets,
     )
 
 

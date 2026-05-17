@@ -11,7 +11,7 @@ permissions:
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 85   # 백로그 067 (5/18): 75 → 85 (ai_translate step 10분 여유)
+    timeout-minutes: 95   # 백로그 069 (5/17 EOD): 85 → 95 (ai_summary step 10분 여유)
 
     steps:
       - name: Checkout repository
@@ -143,6 +143,24 @@ jobs:
           python -m pipeline.ai_translate_cache --limit 200
           echo "[ai-translate] done"
 
+      # 백로그 069 (2026-05-17 EOD): AI 한줄요약 캐시 — 위젯 노출 신규 row 의 ai_summary 자동.
+      # - ai_summary IS NULL row 만 처리 (멱등). batch mode (BATCH_SIZE=10).
+      # - --widget-targets: start_date >= 2026-01-01 필터 (메일 후보가 아닌 위젯 노출도 포함).
+      # - --limit 200: 일일 신규 안전 한도. OPENAI_API_KEY 부재 시 graceful skip.
+      - name: AI summary (non-fatal)
+        id: ai-summary
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DB_PATH: db/biz.db
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          echo "[ai-summary] start"
+          python -m pipeline.ai_summary_cache --widget-targets --limit 200
+          echo "[ai-summary] done"
+
       # 백로그 065 Phase 2-B: /api/sync 호출 — 5/3 disable 의 진짜 대체 (정적 데이터만 운영 DB push).
       # 첫 dispatch 는 --dry-run 으로 검증 (실제 운영 변경 0). ADMIN_KEY Secret 필수.
       # continue-on-error: true → summary 가 outcome 검사 후 critical 판정. ADMIN_KEY 부재 시
@@ -190,6 +208,7 @@ jobs:
           O_JBTPREL: ${{ steps.crawl-jbtp-related.outcome }}
           O_JBEXPORT: ${{ steps.crawl-jbexport.outcome }}
           O_AITRANSLATE: ${{ steps.ai-translate.outcome }}
+          O_AISUMMARY: ${{ steps.ai-summary.outcome }}
           O_SYNC: ${{ steps.sync-to-render.outcome }}
         run: |
           echo "[ci] === Step outcomes ==="
@@ -203,6 +222,7 @@ jobs:
           echo "  jbtp_related  : $O_JBTPREL"
           echo "  jbexport      : $O_JBEXPORT"
           echo "  ai-translate  : $O_AITRANSLATE"
+          echo "  ai-summary    : $O_AISUMMARY"
           echo "  sync-to-render: $O_SYNC"
           echo ""
           echo "[ci] DB auto-push is DISABLED for dynamic-data safety."

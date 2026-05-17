@@ -2819,10 +2819,10 @@ def new_announcements():
 
 # 백로그 057 Phase 2.1b — /api/sync UPSERT whitelist
 # v1 master → Render 운영 DB 동기 시 갱신 허용 컬럼.
-# 정책 (백로그 066 Phase 2-Alpha, 2026-05-17 갱신):
-#  - 사이트 master 데이터 + v1 결정 표시 데이터 (ai_friendly_*) 양쪽 갱신.
-#  - 운영 enrich 보호 (제외): ai_summary, ai_summary_at, view_count, recommend_*,
-#    attachment_text, score, reason — Render 측이 직접 채움.
+# 정책 (백로그 069 Phase 2, 2026-05-17 EOD 갱신):
+#  - 사이트 master 데이터 + v1 결정 표시 데이터 (ai_friendly_*, ai_summary) 양쪽 갱신.
+#  - 운영 enrich 보호 (제외): view_count, recommend_*, attachment_text, score, reason
+#    — Render 측이 직접 채움.
 SYNC_UPDATE_WHITELIST = (
     "title",
     "organization",
@@ -2850,6 +2850,9 @@ SYNC_UPDATE_WHITELIST = (
     # AI 언어 통역 (v1 master, 백로그 066 Phase 2-Alpha):
     "ai_friendly_title",
     "ai_friendly_summary",
+    # AI 한줄요약 (v1 master, 백로그 069 Phase 2):
+    "ai_summary",
+    "ai_summary_at",
 )
 
 
