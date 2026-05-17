@@ -956,6 +956,7 @@ def load_latest_by_source(source: str, limit: int = 5) -> list:
                 FROM biz_projects
                 WHERE source = ?{extra_where}
                   AND COALESCE(start_date, '') >= '2026-01-01'
+                  AND COALESCE(end_date, '9999-12-31') >= date('now')
                 {order_by}
                 LIMIT ?
                 """,
