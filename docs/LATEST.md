@@ -1,16 +1,17 @@
 # LATEST — 다음 세션 진입 시 첫 read
 
-**최종 갱신**: 2026-05-17 EOD (b069 Phase 2 ai_summary 완비 + 시뮬 누적 시스템 정착)
+**최종 갱신**: 2026-05-17 EOD (b069 Phase 2 + Phase 3 사전 시뮬 + 시뮬 시스템 자본화)
 
 ---
 
 ## 즉시 처리할 작업 (우선순위 순)
 
-🔴 1. 5월 20일 공모 응모서 작성 (D-3, 풀타임, 본인 직접)
+🔴 1. 5월 20일 공모 응모서 작성 (D-2, 풀타임, 본인 직접)
 🟡 2. **Phase 2.1 patch** — `pipeline/ai_summary_cache.py` + `pipeline/ai_translate_cache.py` 의 UPDATE 에 `synced_to_render = 0` 추가 (수동 reset 불필요화, 30분)
 🟢 3. cron 자동 실행 모니터링 (매일 5분, KST 06:00 daily-crawl)
-🟢 4. Phase 3 (첨부 분석) 시뮬 작성 — 시연 후, W21 후반
-🟢 5. 7월 3일 공모 응모서 (6월 본격 시작)
+🟢 4. **Phase 3 본 진입** — 시뮬 완료 (`docs/simulations/2026-05-17_phase3_attachment.md`). W22~W23 권장
+🟢 5. **회고 entry backfill** — b066, b033 (시간 여유 시, 1주 내)
+🟢 6. 7월 3일 공모 응모서 (6월 본격 시작) — 차별점: "단순 시스템 구축 ≠ 누적 학습 워크플로우"
 
 ---
 
@@ -23,11 +24,19 @@
 - 운영 sync 완료 (inserted=1, updated=2,120, errors=0)
 - 백업: `db/biz.backup.20260517_224529_pre_phase2.db` (SHA256 매칭 PASS)
 
-### 시뮬 누적 시스템 정착
+### 시뮬 누적 시스템 자본화 완료
 
-- `docs/simulations/INDEX.md` 신설
-- 첫 정식 entry: `2026-05-17_phase2_ai_summary.md`
-- 회고 미작성 entry 2건 (b066, b033) — 시간 여유 시 backfill 권장
+- `docs/simulations/INDEX.md` — 5/17 마라톤 학습 (공통 패턴 4건) + 사이클 1 차단 체크리스트 + 정확도 추세 표
+- 시뮬 entry 4건 누적:
+  - `2026-05-17_phase2_ai_summary.md` (정식)
+  - `2026-05-17_phase3_attachment.md` (Phase 3 사전, 사용자 가설 정정)
+  - b066 / b033 회고 entry — 시간 여유 시 backfill 권장
+- `docs/templates/feature_impact_simulation.md` 강화 — 보완 단계 15~17 추가:
+  - 15. 사용자 가설 vs DB 실측 검증 (필수)
+  - 16. 인프라 재사용 비율 측정 (≥70% 안전)
+  - 17. 단계 분할 임계점 (>2일 시 분할 필수)
+
+→ **미래 작업 사고 사전 차단 보장 — 시뮬 시스템이 영구 자산화**
 
 ### 운영
 
