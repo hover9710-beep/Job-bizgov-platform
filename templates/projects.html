@@ -308,6 +308,7 @@
 
     <p>총 <strong>{{ rows|length }}</strong>건</p>
 
+    {% include '_ai_toggle.html' %}
     <div class="table-wrap" id="projects-table-wrap">
     <table class="project-table">
         <thead>
@@ -328,15 +329,16 @@
                     <div class="title-row-fav">
                     <button type="button" class="btn-star-fav" title="즐겨찾기"
                             data-pid="{{ row.id }}"
-                            data-title="{{ (row.display_title or row.title)|e }}"
+                            data-title="{{ row.title|e }}"
                             data-source="{{ (row.source or '')|e }}"
                             aria-label="즐겨찾기"
                             aria-pressed="false">☆</button>
                     <div class="title-main">
                     <a href="/project/{{ row.id }}"
-                       onclick="logClick('{{ row.id }}','detail','{{ row.source|e }}','{{ (row.display_title or row.title)|e }}')"
+                       onclick="logClick('{{ row.id }}','detail','{{ row.source|e }}','{{ row.title|e }}')"
                        class="title-link">
-                        {{ row.display_title or row.title }}
+                        <span class="title-original">{{ row.title }}</span>
+                        <span class="title-ai">{{ row.ai_friendly_title or row.title }}</span>
                     </a>
                     </div>
                     </div>

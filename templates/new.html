@@ -367,6 +367,7 @@
      🔄 공고 불러오는 중입니다...
    </div>
     <div id="project-list">
+    {% include '_ai_toggle.html' %}
     <div class="desktop-table-wrap">
     <table class="project-table">
         <colgroup>
@@ -408,18 +409,26 @@
               <div class="title-row-fav">
               <button type="button" class="btn-star-fav" title="즐겨찾기"
                 data-pid="{{ item.id }}"
-                data-title="{{ (item.display_title or item.title)|e }}"
+                data-title="{{ item.title|e }}"
                 data-source="{{ (item.source or '')|e }}"
                 aria-label="즐겨찾기"
                 aria-pressed="false">☆</button>
               <div class="title-main">
-                <a href="{{ url_for('project_detail', pid=item.id) }}" class="title-link">{{ item.display_title or item.title }}</a>
+                <a href="{{ url_for('project_detail', pid=item.id) }}" class="title-link">
+                  <span class="title-original">{{ item.title }}</span>
+                  <span class="title-ai">{{ item.ai_friendly_title or item.title }}</span>
+                </a>
               </div>
               </div>
 
               {% if item.ai_summary %}
                 <div class="ai-summary-line">
                   {{ item.ai_summary }}
+                </div>
+              {% endif %}
+              {% if item.ai_friendly_summary %}
+                <div class="ai-summary-line summary-ai block">
+                  ✨ {{ item.ai_friendly_summary }}
                 </div>
               {% endif %}
               {% if item.recommend_label %}
@@ -451,9 +460,9 @@
             <td class="source-col"><span class="source-tag">{{ src_label }}</span></td>
             <td class="action-col">
                 <div class="card-actions">
-                <a class="btn-detail" href="{{ url_for('project_detail', pid=item.id) }}" onclick="logClick('{{ item.id }}', 'detail', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">공고 자세히 보기</a>
+                <a class="btn-detail" href="{{ url_for('project_detail', pid=item.id) }}" onclick="logClick('{{ item.id }}', 'detail', '{{ item.source|e }}', '{{ item.title|e }}')">공고 자세히 보기</a>
                 {% if item.url %}
-                <a class="btn-apply" href="{{ item.url }}" target="_blank" rel="noopener noreferrer" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">👉 지금 신청하기</a>
+                <a class="btn-apply" href="{{ item.url }}" target="_blank" rel="noopener noreferrer" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ item.title|e }}')">👉 지금 신청하기</a>
                 {% endif %}
                 </div>
             </td>

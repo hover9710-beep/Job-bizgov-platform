@@ -967,7 +967,7 @@ def load_latest_by_source(source: str, limit: int = 5) -> list:
                 """,
                 params,
             ).fetchall()
-            return _apply_friendly_title([dict(r) for r in rows])
+            return [dict(r) for r in rows]
     except Exception as e:
         print(f"[latest_by_source:{source}] error:", repr(e), flush=True)
         return []
@@ -991,7 +991,7 @@ def load_latest_misc(limit: int = 5) -> list:
                 """,
                 (limit,),
             ).fetchall()
-            return _apply_friendly_title([dict(r) for r in rows])
+            return [dict(r) for r in rows]
     except Exception as e:
         print(f"[latest_misc] error:", repr(e), flush=True)
         return []

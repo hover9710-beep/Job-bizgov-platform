@@ -499,16 +499,25 @@
         or (source_labels|default({})).get(src_key)
         or src_key or '-' %}
 
+    {% include '_ai_toggle.html' %}
     <div class="detail-title-row">
         <button type="button" class="btn-star-fav" id="detail-star-btn"
                 title="즐겨찾기"
                 data-pid="{{ item.id }}"
-                data-title="{{ (item.display_title or item.title)|e }}"
+                data-title="{{ item.title|e }}"
                 data-source="{{ (item.source or '')|e }}"
                 aria-label="즐겨찾기"
                 aria-pressed="false">☆</button>
-        <h2 class="detail-title-text">{{ item.get('title') or '(제목 없음)' }}</h2>
+        <h2 class="detail-title-text">
+            <span class="title-original">{{ item.get('title') or '(제목 없음)' }}</span>
+            <span class="title-ai">{{ item.get('ai_friendly_title') or item.get('title') or '(제목 없음)' }}</span>
+        </h2>
     </div>
+    {% if item.get('ai_friendly_summary') %}
+      <div class="ai-summary-line summary-ai block" style="margin: 8px 0 12px; font-size: 15px; color: #4f46e5;">
+        ✨ {{ item.ai_friendly_summary }}
+      </div>
+    {% endif %}
 
     <div class="meta-row"><strong>기관</strong> {{ item.get('organization') or '-' }}</div>
     <div class="meta-row"><strong>상태</strong> {{ st }}</div>
@@ -559,7 +568,7 @@
             {% endif %}
         </div>
         {% if item.get('url') %}
-        <a href="{{ item.url }}" target="_blank" rel="noopener" class="btn-apply primary-cta" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">
+        <a href="{{ item.url }}" target="_blank" rel="noopener" class="btn-apply primary-cta" onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ item.title|e }}')">
             {% if _src == 'at_global' %}
             📋 공고 원문 보기 (aT 공식 사이트)
             {% else %}

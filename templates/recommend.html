@@ -719,6 +719,7 @@
         </div>
     </div>
 
+    {% include '_ai_toggle.html' %}
     <div id="recommend-list">
     {% for item in items %}
     <div class="recommend-card">
@@ -727,11 +728,19 @@
         <div class="rec-title rec-title-with-fav">
             <button type="button" class="btn-star-fav" title="즐겨찾기"
                     data-pid="{{ item.id }}"
-                    data-title="{{ (item.display_title or item.title)|e }}"
+                    data-title="{{ item.title|e }}"
                     data-source="{{ (item.source or '')|e }}"
                     aria-label="즐겨찾기" aria-pressed="false">☆</button>
             <div class="rec-title-text">
-            <a href="{{ url_for('project_detail', pid=item.id) }}">{{ item.display_title or item.title }}</a>
+            <a href="{{ url_for('project_detail', pid=item.id) }}">
+                <span class="title-original">{{ item.title }}</span>
+                <span class="title-ai">{{ item.ai_friendly_title or item.title }}</span>
+            </a>
+            {% if item.ai_friendly_summary %}
+              <div class="ai-summary-line summary-ai block">
+                ✨ {{ item.ai_friendly_summary }}
+              </div>
+            {% endif %}
             </div>
         </div>
         <div class="reason-simple">
@@ -780,10 +789,10 @@
         </div>
         <div class="rec-actions">
             <a class="btn-detail" href="{{ url_for('project_detail', pid=item.id) }}"
-               onclick="logClick('{{ item.id }}', 'detail', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">상세보기</a>
+               onclick="logClick('{{ item.id }}', 'detail', '{{ item.source|e }}', '{{ item.title|e }}')">상세보기</a>
             {% if item.url %}
             <a class="btn-apply" href="{{ item.url }}" target="_blank" rel="noopener"
-               onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ (item.display_title or item.title)|e }}')">신청 바로가기</a>
+               onclick="logClick('{{ item.id }}', 'apply', '{{ item.source|e }}', '{{ item.title|e }}')">신청 바로가기</a>
             {% endif %}
         </div>
     </div>

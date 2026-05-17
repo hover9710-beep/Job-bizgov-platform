@@ -1,0 +1,45 @@
+{# AI 친화 통역 토글 (백로그 066 사이클 3, UI 옵션 A — 원본 default + AI 친화 강조).
+   사용: {% include '_ai_toggle.html' %} 을 위젯 상단에 1줄.
+   본문은 .title-original / .title-ai / .summary-ai 클래스 양측 렌더 후 JS 가 display 전환. #}
+<div class="ai-translate-toggle" role="group" aria-label="AI 통역 모드">
+  <button type="button" class="btn-ai-mode btn-original active"
+          onclick="setTranslateMode('original')" aria-pressed="true">원본 보기</button>
+  <button type="button" class="btn-ai-mode btn-ai"
+          onclick="setTranslateMode('ai')" aria-pressed="false">✨ AI 친화 보기</button>
+</div>
+<style>
+.ai-translate-toggle {
+  display: inline-flex;
+  gap: 8px;
+  margin: 8px 0 12px;
+  align-items: center;
+}
+.btn-ai-mode {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 0;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+  opacity: .65;
+}
+.btn-ai-mode:hover { transform: translateY(-1px); }
+.btn-ai-mode.active { opacity: 1; box-shadow: 0 4px 12px rgba(0,0,0,.15); }
+.btn-original {
+  background: #e5e7eb; color: #111827;
+}
+.btn-original.active { background: #111827; color: #fff; }
+.btn-ai {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+}
+.btn-ai.active { box-shadow: 0 4px 14px rgba(118,75,162,.45); }
+
+.title-ai, .summary-ai { display: none; }
+.translate-mode-ai .title-original { display: none; }
+.translate-mode-ai .title-ai,
+.translate-mode-ai .summary-ai { display: inline; }
+.translate-mode-ai .summary-ai.block { display: block; }
+</style>
+<script src="{{ url_for('static', filename='js/ai_translate_toggle.js') }}"></script>
