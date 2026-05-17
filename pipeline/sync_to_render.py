@@ -64,6 +64,14 @@ if sys.platform == "win32":
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = ROOT / "db" / "biz.db"
+
+# PC 로컬 실행 시 .env 의 ADMIN_KEY / RENDER_URL 자동 로드 (백로그 066 사이클 2, 2026-05-17).
+# Actions / Render 는 환경변수 직접 설정 — load_dotenv 는 .env 없으면 no-op.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(ROOT / ".env")
+except ImportError:
+    pass
 DEFAULT_RENDER_URL = "https://job-bizgov-platform.onrender.com"
 DEFAULT_BATCH_SIZE = 500
 DEFAULT_TIMEOUT = 60  # seconds — Render cold start 고려
