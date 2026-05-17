@@ -1475,7 +1475,8 @@ def index():
         SELECT id, title, organization, start_date, end_date, status, url, description, ai_result, pdf_path,
                ministry, executing_agency, source,
                receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json,
-               ai_summary, ai_summary_at, recommend_label, recommend_label_at
+               ai_summary, ai_summary_at, recommend_label, recommend_label_at,
+               ai_friendly_title, ai_friendly_summary
         FROM biz_projects
         WHERE 1=1
     """
@@ -1579,7 +1580,8 @@ def favorites_list():
         SELECT b.id, b.title, b.organization, b.start_date, b.end_date, b.status, b.url, b.description, b.ai_result, b.pdf_path,
                b.ministry, b.executing_agency, b.source,
                b.receipt_start, b.receipt_end, b.biz_start, b.biz_end, b.raw_status, b.attachments_json,
-               b.ai_summary, b.ai_summary_at, b.recommend_label, b.recommend_label_at
+               b.ai_summary, b.ai_summary_at, b.recommend_label, b.recommend_label_at,
+               b.ai_friendly_title, b.ai_friendly_summary
         FROM favorite_projects f
         INNER JOIN biz_projects b ON CAST(b.id AS TEXT) = TRIM(f.project_id)
         WHERE f.visitor_id = ?
@@ -1744,7 +1746,8 @@ def projects_list():
         SELECT id, title, organization, start_date, end_date, status, url, description,
                ministry, executing_agency, source,
                receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json,
-               ai_summary, ai_summary_at, recommend_label, recommend_label_at
+               ai_summary, ai_summary_at, recommend_label, recommend_label_at,
+               ai_friendly_title, ai_friendly_summary
         FROM biz_projects
         ORDER BY COALESCE(end_date, '9999-12-31') DESC
         """
@@ -1762,7 +1765,8 @@ def project_detail(pid):
         SELECT id, title, organization, ministry, executing_agency, source, start_date, end_date,
                status, url, description, ai_result, pdf_path,
                receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json,
-               ai_summary, ai_summary_at, recommend_label, recommend_label_at
+               ai_summary, ai_summary_at, recommend_label, recommend_label_at,
+               ai_friendly_title, ai_friendly_summary
         FROM biz_projects
         WHERE id = ?
         """,
@@ -1798,7 +1802,8 @@ def detail(pid):
         SELECT id, title, organization, ministry, executing_agency, source, start_date, end_date,
                status, url, description, ai_result, pdf_path,
                receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json,
-               ai_summary, ai_summary_at, recommend_label, recommend_label_at
+               ai_summary, ai_summary_at, recommend_label, recommend_label_at,
+               ai_friendly_title, ai_friendly_summary
         FROM biz_projects
         WHERE id = ?
         """,
@@ -2235,7 +2240,8 @@ def _enrich_recommend_items_for_ui(db: Any, raw_items: List[dict]) -> List[dict]
         SELECT id, title, organization, ministry, executing_agency, source, start_date, end_date,
                status, url, description, ai_result, pdf_path,
                receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json,
-               ai_summary, ai_summary_at, recommend_label, recommend_label_at
+               ai_summary, ai_summary_at, recommend_label, recommend_label_at,
+               ai_friendly_title, ai_friendly_summary
         FROM biz_projects
         WHERE id IN ({placeholders})
         """,
@@ -2679,7 +2685,8 @@ def _render_new_announcements_page(is_admin: bool):
         SELECT id, title, organization, start_date, end_date, status, url, description, ai_result, pdf_path,
                ministry, executing_agency, source,
                receipt_start, receipt_end, biz_start, biz_end, raw_status, attachments_json,
-               ai_summary, ai_summary_at, recommend_label, recommend_label_at
+               ai_summary, ai_summary_at, recommend_label, recommend_label_at,
+               ai_friendly_title, ai_friendly_summary
         FROM biz_projects
         WHERE 1=1
     """
