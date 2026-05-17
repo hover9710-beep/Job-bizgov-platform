@@ -311,4 +311,38 @@ W21 진입 가능한 단일 PoC:
 | HWP 정확도 70% 가정 | TBD | TBD | TBD |
 | "확인 필요" 해소 75% 가정 | TBD | TBD | TBD |
 | 비용 추정 ($1.50) | TBD | TBD | TBD |
-| 7 source connector 사이트별 selector 작업 | TBD | TBD | TBD |
+| 7 source connector 사이트별 selector 작업 | 7 site × 4~6h | **bizinfo 1개로 99.87% 커버** | **예상 뒤집힘 — 작업량 50%+ 감소** |
+
+---
+
+## 🔴 사후 결정적 발견 (5/17 EOD 추가 — 사용자 사이트 캡처)
+
+> **트리거**: 사용자가 위젯 "확인 필요" 카드의 실 분포를 사이트에서 직접 확인.
+
+### 발견
+
+| 측면 | 시뮬 본문 가정 (5/17 14:00) | 사이트 캡처 실측 (5/17 EOD) |
+|---|---|---|
+| "확인 필요" 의 source 분포 | 7 source 분산 가정 → connector 7개 확장 필요 | **99.87% (≈2,123/2,126) = bizinfo(기업마당) 단일** |
+| Phase 3.0 작업 단위 | 7 site selector 분석 (2-3일) | **bizinfo 1개 selector 분석 (4~6h)** |
+| Phase 3 합계 작업량 | 6-8일 | **3-4일 (50%+ 감소)** |
+| Phase 4 의존 (attachment_text) | 7 source 의 첨부 텍스트 | **bizinfo 단일 텍스트로 거의 동일 효과** |
+
+### 함의 재계산
+
+- Phase 3.0 PoC = bizinfo 단일 selector 분석. **다른 6 source 는 후순위 또는 영구 보류 가능**.
+- "확인 필요" 해소 추정 75% → **bizinfo 첨부 보유율 80% × AI end_date 정확도 70% = 약 56% 해소** (절대 비율은 시뮬 본문 추정과 비슷, 단 작업량은 절반 이하).
+- 응모서 (7/3) 메시지 단순화: **"기업마당 첨부 PDF/HWP 자동 분석으로 마감일 추출 — 확인 필요 99.87% (bizinfo) 해소 56% 달성"**.
+
+### W21~W23 권고 (재정의)
+
+| 변경 전 (시뮬 본문) | 변경 후 (본 발견 반영) |
+|---|---|
+| W22~W23 Phase 3.0~3.5 (6-8일) | **W21 bizinfo PoC (4~6h) → W22 Phase 3.1~3.5 (3-4일)** |
+| 7 source connector 확장 | bizinfo 단일 우선, 나머지 6 source 는 별도 backlog |
+| Phase 4 = 7 source 의존 | **Phase 4 = bizinfo 단일 attachment_text 로 충분** |
+
+### 5/17 마라톤 학습 추가
+
+- 사용자 가설 정정 4건 (b066/b033/Phase 2/Phase 3) **+ 사후 결정적 발견 1건** = 5건째 정정.
+- 패턴: **시뮬 본문 작성 시 source 분포 미실측 → 사이트 캡처 / 위젯 실측으로 검증** (사이클 1 차단 체크리스트에 추가 검토).
