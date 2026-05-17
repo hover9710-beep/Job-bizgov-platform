@@ -17,8 +17,15 @@ if str(_ROOT) not in sys.path:
 
 DEFAULT_LIMIT = int(os.environ.get("AI_TRANSLATE_LIMIT", "100"))
 
-from pipeline.ai_translate import generate_project_friendly, load_attachment_text
+from pipeline.ai_translate import (
+    batch_generate_friendly,
+    generate_project_friendly,
+    load_attachment_text,
+)
 from pipeline.mail_view import DB_PATH
+
+BATCH_SIZE = 10  # 1회 GPT 호출당 통역 행 수 (10x 가속, 사이클 2)
+COMMIT_INTERVAL = 50  # N 행마다 conn.commit (중간 중단 시 손실 한도)
 
 
 def _norm_filter_arg(val: Optional[str]) -> Optional[str]:
@@ -132,44 +139,72 @@ def run_ai_translate_cache(
         )
         return 0
 
-    conn = sqlite3.connect(str(DB_PATH))
-    try:
-        for c in candidates:
-            iid = c.get("id")
-            if iid is None:
-                continue
-            has = bool(str(c.get("ai_friendly_title") or "").strip())
-            if has and not overwrite:
-                skipped += 1
-                continue
-            if attempts >= limit:
-                break
-            attempts += 1
+    # 통역 대상만 추리고 (skip 정책 적용), BATCH_SIZE 단위로 묶어 GPT 1회 호출.
+    pending: List[Dict[str, Any]] = []
+    for c in candidates:
+        iid = c.get("id")
+        if iid is None:
+            continue
+        has = bool(str(c.get("ai_friendly_title") or "").strip())
+        if has and not overwrite:
+            skipped += 1
+            continue
+        pending.append(c)
+        if len(pending) >= limit:
+            break
 
-            text = _source_text_for_item(c)
-            result = generate_project_friendly(c, text=text)
-            if not result:
-                print(f"[ai-translate] FAIL id={iid} (empty or error)", flush=True)
-                failed += 1
+    print(
+        f"[ai-translate] batch mode: BATCH_SIZE={BATCH_SIZE}, "
+        f"COMMIT_INTERVAL={COMMIT_INTERVAL}, pending={len(pending)}",
+        flush=True,
+    )
+
+    conn = sqlite3.connect(str(DB_PATH))
+    since_last_commit = 0
+    try:
+        for batch_start in range(0, len(pending), BATCH_SIZE):
+            batch = pending[batch_start : batch_start + BATCH_SIZE]
+            texts = [_source_text_for_item(b) for b in batch]
+            results = batch_generate_friendly(batch, texts)
+            if not results:
+                print(
+                    f"[ai-translate] BATCH_FAIL start={batch_start} n={len(batch)} (전체 skip)",
+                    flush=True,
+                )
+                failed += len(batch)
                 continue
 
             now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-            ft = result.get("friendly_title") or ""
-            fs = result.get("friendly_summary") or ""
-            conn.execute(
-                """
-                UPDATE biz_projects
-                SET ai_friendly_title = ?, ai_friendly_summary = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-                """,
-                (ft, fs, int(iid)),
-            )
+            batch_ok = 0
+            for idx, item in enumerate(batch):
+                r = results.get(idx)
+                if not r:
+                    failed += 1
+                    continue
+                ft = r.get("friendly_title") or ""
+                fs = r.get("friendly_summary") or ""
+                conn.execute(
+                    """
+                    UPDATE biz_projects
+                    SET ai_friendly_title = ?, ai_friendly_summary = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (ft, fs, int(item["id"])),
+                )
+                generated += 1
+                batch_ok += 1
+                since_last_commit += 1
+
             print(
-                f"[ai-translate] OK id={iid} title={ft!r} summary={fs!r}",
+                f"[ai-translate] BATCH ok={batch_ok}/{len(batch)} "
+                f"progress={generated}/{len(pending)} ({100*generated/max(1,len(pending)):.1f}%)",
                 flush=True,
             )
-            generated += 1
+
+            if since_last_commit >= COMMIT_INTERVAL:
+                conn.commit()
+                since_last_commit = 0
         conn.commit()
     finally:
         conn.close()
