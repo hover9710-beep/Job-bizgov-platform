@@ -69,8 +69,14 @@ DEFAULT_BATCH_SIZE = 500
 DEFAULT_TIMEOUT = 60  # seconds — Render cold start 고려
 
 # /api/sync 가 받아주는 컬럼 (server-side SYNC_UPDATE_WHITELIST 동기화 — appy.py 와 함께 갱신)
-# url 은 매칭 키로 항상 포함. id / created_at / updated_at / view_count / ai_* /
-# recommend_* / attachment_text / score / reason / synced_* 는 서버가 무시 (운영 enrich 보호).
+# url 은 매칭 키로 항상 포함.
+#
+# 정책 (백로그 066 Phase 2-Alpha, 2026-05-17 갱신):
+#  - 사이트 master 데이터 + v1 결정 표시 데이터 양쪽 sync.
+#  - 운영 enrich (서버가 무시): id, created_at, updated_at, view_count, ai_summary,
+#    ai_summary_at, recommend_*, attachment_text, score, reason, synced_*.
+#  - v1 master 결정 표시 데이터 (sync 포함): ai_friendly_title, ai_friendly_summary.
+#    → v1 PC 에서 1회 일괄 GPT-4o-mini 통역 후 운영 반영, 운영은 통역 미실행.
 SYNC_FIELDS = (
     "url",
     "title",
@@ -96,6 +102,9 @@ SYNC_FIELDS = (
     "notice_create_dt",
     "notice_chk",
     "notice_order",
+    # AI 언어 통역 (v1 master, 백로그 066 Phase 2-Alpha):
+    "ai_friendly_title",
+    "ai_friendly_summary",
 )
 
 

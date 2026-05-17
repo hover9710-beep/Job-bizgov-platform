@@ -339,6 +339,9 @@ with sqlite3.connect(DB_PATH) as _conn:
     _safe_add("biz_projects", "reason", "TEXT")
     _safe_add("biz_projects", "apply_url", "TEXT")
     _safe_add("biz_projects", "view_count", "INTEGER DEFAULT 0")
+    # AI 언어 통역 Phase 2-Alpha (백로그 066, 2026-05-17) — 운영 Render 부팅 시 ALTER 자동 적용.
+    _safe_add("biz_projects", "ai_friendly_title", "TEXT")
+    _safe_add("biz_projects", "ai_friendly_summary", "TEXT")
     _safe_add("companies", "social_enterprise", "INTEGER DEFAULT 0")
     _safe_add("companies", "female_ceo", "INTEGER DEFAULT 0")
     _safe_add("companies", "export_tower", "INTEGER DEFAULT 0")
@@ -772,6 +775,24 @@ def clean_display_title(title: Any, fallback: str = "공고 상세보기") -> st
     return s
 
 
+def _apply_friendly_title(rows: list) -> list:
+    """위젯 결과 dict 에 display_title 키 추가 (백로그 066 Phase 2-Alpha).
+
+    우선순위: ai_friendly_title (있으면) → clean_display_title(title) → fallback.
+    템플릿은 `{{ item.display_title or item.title }}` 패턴 사용 중이라 추가 변경 불필요.
+    원본 title 은 dict 에 그대로 남아 있어 hover tooltip / 상세 페이지에서 노출.
+    """
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        ft = str(r.get("ai_friendly_title") or "").strip()
+        if ft:
+            r["display_title"] = ft
+        else:
+            r["display_title"] = clean_display_title(r.get("title"))
+    return rows
+
+
 def clean_admin_title(title: Any, fallback: str = "공고 상세보기") -> str:
     s = str(title or "").strip()
     if not s:
@@ -930,7 +951,8 @@ def load_latest_by_source(source: str, limit: int = 5) -> list:
             rows = conn.execute(
                 f"""
                 SELECT id, title, organization, source,
-                       start_date, end_date, status, url, created_at
+                       start_date, end_date, status, url, created_at,
+                       ai_friendly_title, ai_friendly_summary
                 FROM biz_projects
                 WHERE source = ?{extra_where}
                   AND COALESCE(start_date, '') >= '2026-01-01'
@@ -939,7 +961,7 @@ def load_latest_by_source(source: str, limit: int = 5) -> list:
                 """,
                 params,
             ).fetchall()
-            return [dict(r) for r in rows]
+            return _apply_friendly_title([dict(r) for r in rows])
     except Exception as e:
         print(f"[latest_by_source:{source}] error:", repr(e), flush=True)
         return []
@@ -953,7 +975,8 @@ def load_latest_misc(limit: int = 5) -> list:
             rows = conn.execute(
                 """
                 SELECT id, title, organization, source,
-                       start_date, end_date, status, url, created_at
+                       start_date, end_date, status, url, created_at,
+                       ai_friendly_title, ai_friendly_summary
                 FROM biz_projects
                 WHERE source IN ('bizinfo', 'kstartup', 'jbtp_related', 'kseafood')
                   AND COALESCE(start_date, '') >= '2026-01-01'
@@ -962,7 +985,7 @@ def load_latest_misc(limit: int = 5) -> list:
                 """,
                 (limit,),
             ).fetchall()
-            return [dict(r) for r in rows]
+            return _apply_friendly_title([dict(r) for r in rows])
     except Exception as e:
         print(f"[latest_misc] error:", repr(e), flush=True)
         return []
@@ -2777,8 +2800,11 @@ def new_announcements():
 
 
 # 백로그 057 Phase 2.1b — /api/sync UPSERT whitelist
-# v1 master → Render 운영 DB 동기 시 갱신 허용 컬럼 (사이트 master 데이터).
-# 동적/enrich 컬럼 (ai_summary, view_count 등) 은 의도적으로 제외 → 운영 enrich 보호.
+# v1 master → Render 운영 DB 동기 시 갱신 허용 컬럼.
+# 정책 (백로그 066 Phase 2-Alpha, 2026-05-17 갱신):
+#  - 사이트 master 데이터 + v1 결정 표시 데이터 (ai_friendly_*) 양쪽 갱신.
+#  - 운영 enrich 보호 (제외): ai_summary, ai_summary_at, view_count, recommend_*,
+#    attachment_text, score, reason — Render 측이 직접 채움.
 SYNC_UPDATE_WHITELIST = (
     "title",
     "organization",
@@ -2803,6 +2829,9 @@ SYNC_UPDATE_WHITELIST = (
     "notice_create_dt",
     "notice_chk",
     "notice_order",
+    # AI 언어 통역 (v1 master, 백로그 066 Phase 2-Alpha):
+    "ai_friendly_title",
+    "ai_friendly_summary",
 )
 
 

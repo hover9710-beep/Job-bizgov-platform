@@ -396,6 +396,15 @@ def run_post_update_and_notify(args: argparse.Namespace) -> int:
             "메일·알림 단계 계속",
             flush=True,
         )
+    # 백로그 066 Phase 2-Alpha (2026-05-17): AI 친화 통역 캐시 (non-fatal).
+    _section("4f-translate) AI friendly translate (non-fatal)")
+    tr_rc = _run([PY, "-m", "pipeline.ai_translate_cache"])
+    if tr_rc != 0:
+        print(
+            f"[run_all] non-fatal: ai_translate_cache exit {tr_rc}, "
+            "메일·알림 단계 계속",
+            flush=True,
+        )
     _section("4g) Recommend label (non-fatal)")
     rel_rc = _run([PY, "-m", "pipeline.recommend_label", "--limit", "50"])
     if rel_rc != 0:

@@ -64,6 +64,10 @@ COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("biz_projects", "reason", "TEXT"),
     ("biz_projects", "apply_url", "TEXT"),
     ("biz_projects", "view_count", "INTEGER DEFAULT 0"),
+    # AI 언어 통역 Phase 2-Alpha (백로그 066, 2026-05-17) — 사용자 친화 제목/요약.
+    # v1 master 정책: PC 1회 일괄 통역 후 운영 sync (sync_to_render.SYNC_FIELDS 포함).
+    ("biz_projects", "ai_friendly_title", "TEXT"),
+    ("biz_projects", "ai_friendly_summary", "TEXT"),
     # companies (appy.py:342-346)
     ("companies", "social_enterprise", "INTEGER DEFAULT 0"),
     ("companies", "female_ceo", "INTEGER DEFAULT 0"),
