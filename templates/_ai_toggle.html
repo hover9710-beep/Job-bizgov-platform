@@ -41,5 +41,41 @@
 .translate-mode-ai .title-ai,
 .translate-mode-ai .summary-ai { display: inline; }
 .translate-mode-ai .summary-ai.block { display: block; }
+
+/* AI section 토글 + 카드 시각 효과 (백로그 070, 5/17 EOD) */
+.ai-section { display: none; }
+.translate-mode-ai .ai-section {
+  display: block;
+  padding: 10px 12px;
+  margin-top: 8px;
+  background: rgba(102, 126, 234, 0.06);
+  border-left: 3px solid #764ba2;
+  border-radius: 6px;
+  animation: aiFadeIn .3s ease;
+}
+@keyframes aiFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.title-cell-with-fav { transition: background .3s ease; }
+.translate-mode-ai .title-cell-with-fav {
+  background: linear-gradient(135deg, #f8f5ff 0%, #fff5f9 100%);
+}
+.ai-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  margin-top: 6px;
+  letter-spacing: .2px;
+}
+.ai-section .recommend-reason-line a {
+  color: #764ba2;
+  font-weight: 600;
+  text-decoration: underline;
+}
 </style>
 <script src="{{ url_for('static', filename='js/ai_translate_toggle.js') }}"></script>

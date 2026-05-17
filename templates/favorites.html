@@ -88,30 +88,25 @@
               </div>
               </div>
 
-              {% if item.ai_summary %}
-                <div class="ai-summary-line">
-                  {{ item.ai_summary }}
-                </div>
-              {% endif %}
-              {% if item.ai_friendly_summary %}
-                <div class="ai-summary-line summary-ai block">
-                  ✨ {{ item.ai_friendly_summary }}
-                </div>
-              {% endif %}
-              {% if item.recommend_label %}
-                <div class="recommend-label-line">
-                  🏷️ {{ item.recommend_label|replace(',', ' /') }}
-                </div>
-              {% endif %}
-              {% if item.recommend_reason %}
-                <div class="recommend-reason-line" title="{{ item.recommend_reason }}">
-                  {{ item.recommend_reason }}
-                </div>
-              {% else %}
-                <div class="recommend-reason-line ai-recommend-note" style="color:#6b7280; font-size:13px;">
-                  AI 요약 기준으로 검토할 만한 공고입니다. <a href="{{ url_for('company') }}">회사정보를 입력</a>하시면 맞춤 추천을 받으실 수 있습니다.
-                </div>
-              {% endif %}
+              <div class="ai-section">
+                {% if item.ai_summary %}
+                  <div class="ai-summary-line">{{ item.ai_summary }}</div>
+                {% endif %}
+                {% if item.ai_friendly_summary %}
+                  <div class="ai-summary-line summary-ai block">✨ {{ item.ai_friendly_summary }}</div>
+                {% endif %}
+                {% if item.recommend_label %}
+                  <div class="recommend-label-line">🏷️ {{ item.recommend_label|replace(',', ' /') }}</div>
+                {% endif %}
+                {% if item.recommend_reason %}
+                  <div class="recommend-reason-line" title="{{ item.recommend_reason }}">{{ item.recommend_reason }}</div>
+                {% else %}
+                  <div class="recommend-reason-line ai-recommend-note" style="color:#6b7280; font-size:13px;">
+                    AI 요약 기준으로 검토할 만한 공고입니다. <a href="{{ url_for('company') }}">회사정보를 입력</a>하시면 맞춤 추천을 받으실 수 있습니다.
+                  </div>
+                {% endif %}
+                <div class="ai-badge">✨ AI 분석</div>
+              </div>
             </td>
             <td class="org-col center-cell" title="{{ item.organization or '-' }}">
                 {{ item.organization or '-' }}
