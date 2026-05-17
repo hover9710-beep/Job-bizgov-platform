@@ -949,9 +949,14 @@ def load_latest_by_source(source: str, limit: int = 5) -> list:
                 )
             elif source == "at_global":
                 # 백로그 035 + 사이클 2 (2026-05-17): at_global 은 마감 비율 96% (197/206).
-                # end_date 가드 — 마감 공고 위젯 노출 차단. notice_order 분포 모두 0 이라
-                # 정렬 변경 효과 없음 (default created_at DESC, id DESC 유지).
+                # end_date 가드 — 마감 공고 위젯 노출 차단. notice_order 분포 모두 0.
+                # 백로그 068 (2026-05-17 EOD): 사이트 번호 DESC (최신 공고 순) 매핑.
+                # 같은 batch 내 id ASC = AT 사이트 번호 DESC 실측 (5/7 batch + 5/12 batch).
+                # 다른 batch 는 created_at DESC. 조합: created_at DESC + id ASC.
                 extra_where = " AND (end_date IS NULL OR end_date >= date('now'))"
+                order_by = (
+                    "ORDER BY COALESCE(created_at, '') DESC, id ASC"
+                )
             params.append(limit)
             rows = conn.execute(
                 f"""
