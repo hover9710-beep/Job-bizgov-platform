@@ -612,12 +612,20 @@
     </div>
     {% endif %}
 
-    {% if item.get('recommend_reason') %}
     <div class="block">
         <div class="block-label">추천 이유</div>
-        <div class="recommend-reason">{{ item.recommend_reason }}</div>
+        {% if item.get('recommend_reason') %}
+        <div class="recommend-reason">
+            {{ item.recommend_reason }}
+            <a href="{{ url_for('company') }}">회사 정보 입력</a> 시 더 정확한 추천을 받으실 수 있습니다.
+        </div>
+        {% else %}
+        <div class="recommend-reason" style="color:#6b7280;">
+            AI 요약 기준으로 검토할 만한 공고입니다.
+            <a href="{{ url_for('company') }}">회사 정보 입력</a> 시 더 정확한 추천을 받으실 수 있습니다.
+        </div>
+        {% endif %}
     </div>
-    {% endif %}
 
     {% if item.get('attachment_summary') or item.get('has_attachments') %}
     <div class="block">
