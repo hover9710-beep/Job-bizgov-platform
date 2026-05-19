@@ -1,6 +1,146 @@
 # LATEST — BizGovPlanner 진입점
 
-**마지막 갱신**: 2026-05-19 (Phase 3 통합 사전 시뮬 + 차별점 9가지)
+**마지막 갱신**: 2026-05-19 EOD (가설 정정 11건 + PoC 사전 시뮬 7번째 entry + 5/20 시연 진입 준비)
+
+---
+
+## 🟢 5/19 EOD 최종 상태 (5/17~5/19 누적 3일)
+
+### 누적 통계
+
+| 항목 | 값 |
+|---|---|
+| 마라톤 | 20시간+ × 2일 (5/17 + 5/19) |
+| push | 25건+ (마지막 `2e4337a`) |
+| 시뮬 entry | **7건** (b066 / b033 / Phase 2 / Phase 3 1차 / Phase 3 통합 / 5/19 9·10 정정 / 5/19 PoC 사전) |
+| 가설 정정 | **11건** |
+| 응모서 차별점 | **9가지** |
+| 비용 | 약 $2.94 (Phase 3 PoC 시 누적 ~$7) |
+
+### 5/19 핵심 발견 3건
+
+| # | 발견 | 핵심 |
+|---|---|---|
+| 9 | bizinfo 본문이 첨부서류 역할 | 첨부 다운로드 불필요, 본문 파싱 |
+| 10 | 기관별 본문 상이, "신청기간" 만 (KIAT, KICET) | 정규식 4종 + AI fallback |
+| 11 | `description`=날짜 문자열 / `--enrich-detail` 이미 존재 | **Phase 3.0 코드 변경 0** |
+
+### 응모서 차별점 #2 (누적 학습) — 정량적 증거
+
+> "30분 사전 시뮬 = 1~2일 사고 차단"
+>
+> 5/19 11번째 정정 사례:
+> - 가설: 정규식 4종 신규 작성 (1~2h)
+> - 실측: description 컬럼이 본문 X (날짜 문자열) → 정규식 직진 시 매칭 0%, 사고 1~2일
+> - 시뮬 30분 = 사고 회피 + 기존 `--enrich-detail` 발견
+
+→ **"선 분석, 후 진행" 본능의 정량적 증거**.
+
+---
+
+## 🏆 5/20 시연 D-day 작업 순서
+
+### 🌅 아침 (5/20)
+
+1. 🟨 **cron 06:00 자동 작동 확인** (5분)
+2. 🟨 사업자 등록 (5/18 미완 시, 10~30분)
+
+### 🏆 시연 시간
+
+핵심 메시지:
+- 응모서 차별점 9가지 통합
+- 누적 가설 정정 **11건** = 누적 학습 워크플로우
+- "선 분석, 후 진행" 본능의 정량적 증거 (30분 → 1~2일)
+
+### 🌙 저녁
+
+- 시연 회고 신규 entry: `docs/daily/2026-05-20_demo_retrospective.md`
+- 5/22 Phase 3.0 PoC 진입 결정 (회복도에 따라)
+
+---
+
+## 🚀 5/22 Phase 3.0 PoC 진입 명세 (5/19 결정)
+
+### 진입 조건
+
+- [x] 5/19 PoC 사전 시뮬 완료 (entry 7번째, commit `2e4337a`)
+- [ ] 5/20 시연 종료
+- [ ] 5/21 휴식
+- [ ] 5/22 진입
+
+### 작업 순서 (1.5~3h)
+
+**1. 코드 read (10분)** — PoC 진입 직전 강제:
+- `connectors/connector_bizinfo.py:188-205` `fetch_detail()`
+- `_parse_detail_soup()` + `_extract_period_status_from_detail_table()`
+- UPDATE 로직 확인 (위험 E)
+
+**2. DRY-RUN 10건 (20분):**
+```bash
+py connectors/connector_bizinfo.py --enrich-detail --limit 10
+```
+- 매칭률 측정 (목표 ≥80%)
+
+**3. 본 실행 (50~70분):**
+```bash
+py connectors/connector_bizinfo.py --enrich-detail
+```
+- 2,125 row HTTP fetch
+- 멱등성 `WHERE end_date IS NULL`
+- Session 재사용 + sleep
+
+**4. AI fallback (필요 시 1~2h):**
+- 20% fallback 가정 시 ~$4
+- 누적 ~$7
+
+**5. 검증 (10분):**
+- "확인필요" 99.95% → ?% 측정
+- `infer_status` 재실행
+
+### 위험 5건 (PoC 직전 정밀화)
+
+| # | 위험 | 확률 | 대응 |
+|---|---|---|---|
+| A | table 추출이 기관별 본문 못 잡음 (10번째 정정 영향) | 중 | DRY-RUN ≥80% 검증 |
+| B | bizinfo rate limit | 낮음 | Session 재사용 + sleep |
+| C | 네트워크 끊김 | 중 | 멱등성 WHERE end_date IS NULL |
+| D | URL NULL row 처리 | 낮음 | 필터링 |
+| E | UPDATE 로직 미확인 | 중 | 코드 read 10분 선행 |
+
+---
+
+## 🔁 다음 세션 진입 명령
+
+**방법 1 (간결):**
+```
+@docs/LATEST.md 읽고 5/20 시연 모드
+```
+
+**방법 2 (정확):**
+```
+GitHub raw fetch:
+https://raw.githubusercontent.com/hover9710-beep/Job-bizgov-platform/main/docs/LATEST.md
+
+5/20 시연 D-day 작업 시작
+```
+
+**방법 3 (Phase 3.0 PoC 직접):**
+```
+5/22 Phase 3.0 PoC 본 실행
+- 코드 read 10분
+- DRY-RUN 10건
+- 본 실행 2,125 row
+```
+
+---
+
+## 🎯 7/3 응모서 핵심 메시지 (최종)
+
+> **한국 최초 솔로 + AI + 사용자 검증 누적 학습 시스템**
+>
+> - 5/17 ~ 5/19 (3일) = 가설 정정 **11건**
+> - 30분 사전 시뮬 = 1~2일 사고 차단 (정량적 증거)
+> - Phase 3+4 = 본문 → 매칭 → 추천 4단계 비전
 
 ---
 
