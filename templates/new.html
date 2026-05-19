@@ -13,6 +13,33 @@
         margin: 6px 4px 10px 4px;
         text-align: center;
     }
+    .operation-system-banner {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #ffffff;
+        padding: 16px 20px;
+        border-radius: 12px;
+        margin: 16px 0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        font-family: 'Pretendard', -apple-system, system-ui, sans-serif;
+    }
+    .operation-system-banner .osb-title {
+        font-weight: 700;
+        font-size: 15px;
+        margin-bottom: 6px;
+        letter-spacing: -0.2px;
+    }
+    .operation-system-banner .osb-body {
+        font-size: 13px;
+        line-height: 1.6;
+    }
+    @media (max-width: 480px) {
+        .operation-system-banner {
+            padding: 12px 14px;
+            margin: 12px 0;
+        }
+        .operation-system-banner .osb-title { font-size: 14px; }
+        .operation-system-banner .osb-body { font-size: 12px; }
+    }
     </style>
 
 </head>
@@ -155,6 +182,17 @@
         </div>
     </div>
     {% endif %}
+
+    {# 운영 시스템 신뢰성 배너 — 5/17 EOD 다층 노출 1차.
+       공식 API 1 + 자체 크롤러 7 실시간 운영 어필. #}
+    <div class="operation-system-banner" role="complementary" aria-label="운영 시스템 정보">
+        <div class="osb-title">🤖 운영 시스템</div>
+        <div class="osb-body">
+            ✓ 1개 공식 API: 정부24 기업마당<br>
+            ✓ 7개 자체 크롤러 실시간 운영<br>
+            ✓ 매일 06:00 KST 자동 갱신
+        </div>
+    </div>
 
     {# 요약 대시보드 — appy.index()._compute_ui_summary() 결과.
        필터가 적용된 후의 결과 집합 기준 카운트. urgent = 접수중 & 오늘~D+3. #}

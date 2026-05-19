@@ -37,6 +37,19 @@
         .topnav a:hover { text-decoration: underline; }
         .meta-row { font-size: 14px; color: #374151; margin: 8px 0; }
         .meta-row strong { color: #64748b; font-weight: 600; margin-right: 6px; }
+        .data-source-meta {
+            background: #f0f4ff;
+            color: #2d3748;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.55;
+            margin: 12px 0;
+            border-left: 3px solid #667eea;
+        }
+        @media (max-width: 480px) {
+            .data-source-meta { font-size: 12px; padding: 9px 12px; }
+        }
         .block { margin-top: 18px; padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; line-height: 1.55; }
         .block-label { font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.02em; }
         .ai-summary { color: #475569; font-style: italic; }
@@ -527,6 +540,26 @@
         {% else %}—{% endif %}
     </div>
     <div class="meta-row"><strong>소스</strong> {{ src_label }}</div>
+
+    {# 데이터 출처 신뢰성 — 5/17 EOD 다층 노출 2차.
+       자체 크롤러 운영 어필. src_key 는 line 497 에서 정의됨. #}
+    <div class="data-source-meta" role="complementary" aria-label="데이터 출처 정보">
+        📊 데이터:
+        {% if src_key == 'bizinfo' %}
+            정부24 기업마당 (공식 API 연동)
+        {% else %}
+            {% if src_key == 'kstartup' %}K-Startup
+            {% elif src_key == 'jbtp' %}전북테크노파크 (JBTP)
+            {% elif src_key == 'jbbi' %}전북바이오융합산업진흥원 (JBBI)
+            {% elif src_key == 'jbexport' %}전북경제통상진흥원
+            {% elif src_key == 'at_global' %}한국농수산식품유통공사 (aT)
+            {% elif src_key == 'kseafood' %}한국수산회
+            {% elif src_key == 'jbtp_related' %}전북외테크노파크
+            {% else %}{{ src_label }}
+            {% endif %}
+            공식 사이트 (자체 크롤러 운영, 매일 06:00 자동 수집)
+        {% endif %}
+    </div>
 
     <div class="share-tools">
         <div class="share-btn-row">
