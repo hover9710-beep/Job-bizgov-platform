@@ -19,10 +19,12 @@
 | 기존 → DB 통합 자동 | `attachment_text_pipeline.py` 는 `.txt` 저장만 / DB write 없음 | **신규 작업 = DB UPDATE 통합 (간단)** |
 | AI 본문 분석 미구현 | `ai_analyzer.py` 존재하나 hardcoded 스텁 (실 호출 X) | **신규 AI 모듈 신설 필수** |
 | **9 (5/19 22시)** — bizinfo 첨부 다운로드 신설 (4~6h) 필요 | **사이트 캡처 발견**: bizinfo 는 첨부 파일 X (또는 거의 없음), "첨부서류" 자체가 본문으로 구성. 신청기간 본문에 명확 표시 (예: "신청기간: 2026.01.26 ~ 2026.12.31"). `parse_bizinfo_dates` 이미 신청/사업/공고기간 라벨 지원, `period_text` 컬럼 활용 중 | **Phase 3.0 재정의 = bizinfo 본문 파싱 강화 (1~2h, 첨부 다운로드 불필요)** |
+| **10 (5/19 22시+)** — bizinfo 본문 통일 (단순 라벨 매칭으로 충분) | **사이트 캡처 2건 추가 발견**: 기업마당도 BizGovPlanner 와 같은 고충 보유. 기관별로 본문 구조 상이. "신청기간" 만 있고 "마감일" 별도 표기 X. 증거: ① 한국산업기술진흥원 KIAT "산업부 혁신제품 지정기간 연장(1차) 공고" → 신청기간 2026.05.06 ~ 2026.06.05 / 별도 마감일 X / end_date = 2026-06-05 ② 한국세라믹기술원 KICET → 신청기간 2026.04.06 ~ 2026.04.19 / 별도 마감일 X / end_date = 2026-04-19. 공통: "신청기간" + ~ + 두 날짜 → 두 번째 날짜 = 실질 마감일 | **Phase 3.0 정밀 재정의 = 정규식 4종 + AI fallback + confidence 컬럼 (시간 1~2h 유지)** |
 
-→ **Phase 3 작업량 = 3.5~5일 (이전 5~7일 대비 1.5~2일 감소)**.
-→ 인프라 재사용 비율 50%+ (5/19 정정으로 ↑, 단계 분할 유지).
-→ 사용자 가설 정정 누계: **9건** (5/17 마라톤 6 + 통합 시뮬 1 + 본 발견 2).
+→ **Phase 3 작업량 = 3.5~5일** (시간 유지 / 단순화 X, 정밀화 ↑).
+→ 인프라 재사용 비율 50%+ (`parse_bizinfo_dates` + `period_text` + `infer_status` 단일 진입점 재사용).
+→ 사용자 가설 정정 누계: **10건** (5/17 마라톤 6 + 통합 시뮬 1 + 9번째 + 10번째 = 본 사이클 누적).
+→ **시뮬 시스템의 진짜 가치 = 사용자 본능화** (사이트 캡처 직접 발견 8건 모두 정확).
 
 ---
 
@@ -92,7 +94,7 @@ source 별 채워짐 (4,691 total):
 
 | Phase | 목표 | 작업량 | 의존 |
 |---|---|---|---|
-| **3.0** | **bizinfo 본문 파싱 강화** (5/19 9번째 정정) — `parse_bizinfo_dates` 정규식 확장, 신청/사업/공고기간 라벨 우선순위, `period_text` 활용, `infer_status` 재실행 | **1~2h** ⬇ (이전 4~6h) | — |
+| **3.0** | **bizinfo 본문 파싱 정밀화** (5/19 9 + 10 정정) — `parse_bizinfo_dates` 정규식 4종 확장 + AI fallback + confidence 컬럼. 상세는 아래 **2-C** | **1~2h** ⬇ (이전 4~6h) | — |
 | 3.1 | `attachment_text_pipeline.py` 에 DB UPDATE 통합 (UPSERT `attachment_text`, `attachment_text_method`) — jbexport 60 file 처리 | 0.5일 | 3.0 |
 | 3.2 | AI 본문 기본 분석 (end_date_inferred, eligibility, amount, period, procedure) — GPT-4o-mini batch | 1~1.5일 | 3.1 |
 | 3.3 | AI 본문 심층 (deep_summary 300~500자, procedure_steps JSON, required_documents JSON, bonus_criteria) | 2일 | 3.2 |
@@ -106,9 +108,54 @@ source 별 채워짐 (4,691 total):
 
 ### 2-B. 의도된 결과
 
-- 확인필요 2,126 → **300~500** (bizinfo 첨부 80% 보유 가정 + AI end_date 추출 정확도 70% 가정)
+- 확인필요 2,126 → **300~500** (bizinfo 본문 파싱 + AI end_date 추출 정확도 70% 가정)
 - "한국 최초 솔로 + AI" 차별점 = 본문 분석 + 회사 매칭 (Phase 4) 가능
 - 응모서 차별점 #8 / #9 의 실 기반 확보
+
+### 2-C. Phase 3.0 정밀 명세 (5/19 10번째 정정 반영)
+
+**우선순위 1 — "신청/접수/모집/공고기간" 라벨 + 두 날짜:**
+
+```regex
+(신청|접수|모집|공고)기간\s*[:：\|│]\s*(\d{4}\.\d{1,2}\.\d{1,2})\s*~\s*(\d{4}\.\d{1,2}\.\d{1,2})
+```
+
+→ 두 번째 날짜 = `end_date_inferred`
+→ 5/19 캡처 2건 (KIAT, KICET) 모두 본 패턴
+
+**우선순위 2 — "사업기간" 월/년 표기 보조:**
+
+```
+사업기간: 2026. 1. ~ 12.
+```
+
+→ 마지막 월 = 12 → end_date = 2026-12-31 (해당 연도 마지막 일)
+
+**우선순위 3 — 단일 날짜 fallback ("마감일" / "신청마감"):**
+
+```regex
+(마감일|신청마감|접수마감)\s*[:：]\s*(\d{4}\.\d{1,2}\.\d{1,2})
+```
+
+**우선순위 4 — AI fallback (정규식 모두 실패 시):**
+
+- GPT-4o-mini 본문 chunk 전달
+- prompt: "공고 본문에서 신청 마감일 1개 추출. YYYY-MM-DD 형식."
+- 결과 + `end_date_confidence` 컬럼 (regex_strong / regex_weak / ai_high / ai_low / null)
+
+**기존 코드 활용 (재사용 확인):**
+
+- `pipeline/bizinfo_dates.py` `parse_bizinfo_dates(merged_for_dates: dict)` ⚠️ 인수가 dict (string 직접 X) — 구현자 노트
+- `connectors/connector_bizinfo.py:58-61` 신청/사업/공고기간 라벨 튜플 이미 존재
+- `connectors/connector_bizinfo.py:281` 정규식 `(?:접수기간|신청기간|모집기간)` 이미 작동
+- `period_text` 컬럼 활용 중 (`connector_bizinfo.py:476, 490, 747`)
+- `infer_status()` 단일 진입점 → 재실행만으로 status 재분류
+
+**검증 단계:**
+
+1. DRY-RUN — bizinfo 30 row 샘플로 4 패턴 매칭률 측정 (목표 ≥80%)
+2. AI fallback 호출 빈도 모니터링 (목표 ≤20%)
+3. PoC 후 본 적용 (멱등성 WHERE end_date_inferred IS NULL)
 
 ---
 
@@ -158,8 +205,9 @@ source 별 채워짐 (4,691 total):
 
 | # | 사고 | 확률 | 영향 | 대응 |
 |---|---|---|---|---|
-| A | bizinfo selector 사이트 변경 시 깨짐 | 중 | Phase 3.0 실패 | PoC 1일 + 정규식 fallback + fail 로그 |
-| B | HWP binary 미지원 → 추출 실패 | 높음 | 일부 row text 부재 | `attachment_text_method = "hwp_unsupported"` 명시, AI 가 fallback 처리 |
+| A | bizinfo 기관별 본문 구조 상이 (5/19 10번째 정정) → 정규식 4종 미커버 | 중 | end_date_inferred 누락 | PoC 30 row DRY-RUN, 매칭률 ≥80% 검증, AI fallback (우선순위 4) |
+| A' | bizinfo selector 사이트 변경 시 깨짐 | 낮음 | Phase 3.0 실패 | 본 사이클은 본문 텍스트만 사용 (selector 의존 ↓) |
+| B | HWP binary 미지원 → 추출 실패 | 높음 | 일부 row text 부재 (jbexport 만 영향) | `attachment_text_method = "hwp_unsupported"` 명시, AI 가 fallback 처리 |
 | C | AI hallucination (end_date 부정확) | 중 | status 재분류 오류 | prompt 가드 + 정규식 후검증 + `end_date_confidence` 컬럼 |
 | D | Render 디스크 1GB 부족 (첨부 누적 시) | 낮음 | sync 실패 | 첨부 파일 미동기 (PC 만 보관), text 컬럼만 sync |
 | E | 기존 jbexport 첨부 시스템 회귀 | 낮음 | 기존 60 파일 손실 | 읽기 전용 통합 + 신규 파일은 별도 경로 (`data/bizinfo/files/`) |
@@ -268,8 +316,11 @@ source 별 채워짐 (4,691 total):
 | 매일 다운로드 + 메일 발송 | jbexport 첨부만 부분 / 메일 발송 자체는 작동 | 부분 사실 |
 | 활용 가능 (신규 구축 X) | 인프라 30~40% 재사용 / 핵심 (bizinfo connector + AI) 신규 | **추가 신설 필요** |
 | 가장 큰 활용 = mailer | 영향 X / mailer 별도 흐름 | 무관 |
+| **9번째 (5/19)** — bizinfo 첨부 다운로드 필요 | bizinfo 본문이 첨부서류 역할, 신청기간 본문 명시 | **첨부 다운 X, 본문 파싱 강화** |
+| **10번째 (5/19 22시+)** — bizinfo 본문 통일, 단순 라벨 매칭 충분 | 사이트 캡처 2건 (KIAT, KICET): 기관별 본문 상이, "신청기간" 만 + "마감일" 별도 X | **정규식 4종 + AI fallback + confidence 컬럼** |
 
-→ 6번째 사용자 가설 정정 (이전 5건 + 본 1건 = **6건**).
+→ 사용자 가설 정정 누계 **10건**.
+→ 9, 10번째 모두 사용자 직접 사이트 캡처 발견 — 시뮬 시스템의 본능화 가치.
 
 ---
 

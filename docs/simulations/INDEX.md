@@ -148,3 +148,5 @@
 | 2026-05-17 | 신설 — Phase 2 ai_summary entry 첫 누적, 시스템 정착 | CC |
 | 2026-05-17 | Phase 3 entry 추가 — 사용자 가설 (47% 해소) 정정 (실측 0%), 7 source connector 확장 선행 명시 | CC |
 | 2026-05-17 | Phase 3 통합 갱신 entry — 기존 첨부 인프라 정밀 조사 (jbexport 60 .bin / pypdf+HWPX 추출 모듈 / DB 컬럼 4개 존재), 인프라 35% 재사용, 5~7일 단계 6분할, 차별점 8/9 (Phase 3 본문 AI + Phase 4 회사 매칭) | CC |
+| 2026-05-19 | 9번째 가설 정정 (bizinfo 본문이 첨부서류 역할) — Phase 3.0 작업량 4~6h → 1~2h (66% 단축), 합계 3.5~5일 | CC |
+| 2026-05-19 | 10번째 가설 정정 (기관별 본문 상이, "신청기간" 만 / "마감일" 별도 X, 사이트 캡처 2건) — Phase 3.0 정규식 4종 + AI fallback + `end_date_confidence` 컬럼 정밀화, 시간 1~2h 유지 | CC |
