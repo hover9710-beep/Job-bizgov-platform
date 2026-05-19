@@ -132,7 +132,7 @@
             <a href="{{ index_url(source='jbtp_related') }}"
                class="{% if src|lower == 'jbtp_related' %}active{% endif %}">JBTP유관</a>
             <a href="{{ index_url(source='at_global') }}"
-               class="{% if src|lower == 'at_global' %}active{% endif %}">한국농수산식품유통공사(AT)</a>
+               class="{% if src|lower == 'at_global' %}active{% endif %}">한국농수산식품유통공사(aT)</a>
             <a href="{{ index_url(source='kseafood') }}"
                class="{% if src|lower == 'kseafood' %}active{% endif %}">한국수산회</a>
         </div>
@@ -286,7 +286,7 @@
 
     {% if latest_jbexport %}
     <section class="latest-source-box">
-        <div class="latest-source-title">📦 전북수출통합지원센터 최신 5개</div>
+        <div class="latest-source-title">📦 전북수출통합지원센터 최신공고 5개</div>
         <div class="latest-source-list">
             {% for p in latest_jbexport %}
             <a class="latest-source-item"
@@ -310,7 +310,7 @@
 
     {% if latest_jbtp %}
     <section class="latest-source-box">
-        <div class="latest-source-title">🏢 전북테크노파크 최신 5개</div>
+        <div class="latest-source-title">🏢 전북테크노파크 최신공고 5개</div>
         <div class="latest-source-list">
             {% for p in latest_jbtp %}
             <a class="latest-source-item"
@@ -334,7 +334,7 @@
 
     {% if latest_jbbi %}
     <section class="latest-source-box">
-        <div class="latest-source-title">🧬 전북바이오융합원 최신 5개</div>
+        <div class="latest-source-title">🧬 전북바이오융합원 최신공고 5개</div>
         <div class="latest-source-list">
             {% for p in latest_jbbi %}
             <a class="latest-source-item"
@@ -358,7 +358,7 @@
 
     {% if latest_at_global %}
     <section class="latest-source-box">
-        <div class="latest-source-title">🌏 한국농수산식품유통공사(AT) 최신 5개</div>
+        <div class="latest-source-title">🌏 한국농수산식품유통공사(aT) 최신공고 5개</div>
         <div class="latest-source-list">
             {% for p in latest_at_global %}
             <a class="latest-source-item"
@@ -382,7 +382,7 @@
 
     {% if latest_misc %}
     <section class="latest-source-box">
-        <div class="latest-source-title">📋 기타 기관 최신 5개</div>
+        <div class="latest-source-title">📋 기타 기관 최신공고 5개</div>
         <div class="latest-source-list">
             {% for p in latest_misc %}
             <a class="latest-source-item"
