@@ -121,11 +121,29 @@
   - `parse_bizinfo_dates` 호출 규약 = dict (string 직접 X) — 구현자 노트
 - **메시지**: 기업마당도 BizGovPlanner 와 같은 고충 보유 → 한국 정부 지원사업의 본질적 문제 → BizGovPlanner 가 시스템적으로 해결
 
+### 🟢 5/19 PoC 사전 정밀 시뮬 (11번째 가설 정정)
+
+DB 실측 결과 9/10번째 가설 부분 정정:
+
+- bizinfo `description` 컬럼 = **날짜 문자열 '2026-04-03' (평균 8자, max 10자)** — 본문 X
+- 확인 필요 2,242 row: `period_text` 0% / `end_date` 0% / `attachments_json` 0% / `ai_summary` 94.8% / `description` 96.6% (날짜)
+- **본문 자체가 DB 부재** — 정규식 4종 적용 대상 자체가 없음
+- 진짜 발견: `connectors/connector_bizinfo.py` 에 **`fetch_detail()` + `--enrich-detail` 플래그 + `_extract_period_status_from_detail_table()` 이미 존재**
+
+**Phase 3.0 재정의 (3번째)**:
+- 본 작업: `py connectors/connector_bizinfo.py --enrich-detail` (코드 변경 0)
+- 시간: 1.5~3h (HTTP fetch 50~70분 + DRY-RUN + 검증)
+- 비용: AI fallback ~$4 (~20% 가정)
+- 사이클1 체크리스트 8/8 통과
+
+**시뮬 가치**: 30분 사전 시뮬 = 잘못된 가설 (정규식 신규 작성) 직진 시 1~2일 사고 위험 차단.
+
 ### 진행 시점
 
 - **5/20 (D-day): 공모전 시연**
-- **5/21 또는 5/22: Phase 3.0 PoC 진입** (시연 후 회복도에 따라)
-- 사용자 가설 정정 누계: **10건**
+- **5/21 또는 5/22: Phase 3.0 PoC 진입** — `--enrich-detail` 실행
+- 사용자 가설 정정 누계: **11건**
+- 시뮬 entry: 7건 (NEW: `2026-05-19_phase3_poc_pre_simulation.md`)
 
 ---
 
