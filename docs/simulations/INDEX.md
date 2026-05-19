@@ -10,7 +10,8 @@
 | 일자 | 백로그 | 대상 | 분류 | 결과 |
 |---|---|---|---|---|
 | 2026-05-17 | b069 (Phase 2) | [AI 한줄요약 `ai_summary` 완비](2026-05-17_phase2_ai_summary.md) | backfill + 자동화 | 결정 대기 |
-| 2026-05-17 | Phase 3 (사전) | [첨부 추출 + end_date 자동](2026-05-17_phase3_attachment.md) | 영향 분석 | 가설 정정 — 7 source connector 확장 선행 필수, W22~W23 권장 |
+| 2026-05-17 | Phase 3 (사전 1차) | [첨부 추출 + end_date 자동](2026-05-17_phase3_attachment.md) | 영향 분석 | 가설 정정 — 7 source connector 확장 선행 필수, W22~W23 권장 |
+| 2026-05-17 | Phase 3 (통합 갱신) | [기존 첨부 인프라 재사용 + AI 본문 분석](2026-05-17_phase3_ai_integration.md) | 영향 분석 2차 | 가설 6번째 정정 — 인프라 35% 재사용 / bizinfo connector + AI 신규 / 5~7일 단계 6분할 / 사이클1 체크리스트 8/8 |
 
 ### 회고 미작성 (시뮬 사후 entry — 시간 여유 시 backfill)
 
@@ -146,3 +147,4 @@
 |---|---|---|
 | 2026-05-17 | 신설 — Phase 2 ai_summary entry 첫 누적, 시스템 정착 | CC |
 | 2026-05-17 | Phase 3 entry 추가 — 사용자 가설 (47% 해소) 정정 (실측 0%), 7 source connector 확장 선행 명시 | CC |
+| 2026-05-17 | Phase 3 통합 갱신 entry — 기존 첨부 인프라 정밀 조사 (jbexport 60 .bin / pypdf+HWPX 추출 모듈 / DB 컬럼 4개 존재), 인프라 35% 재사용, 5~7일 단계 6분할, 차별점 8/9 (Phase 3 본문 AI + Phase 4 회사 매칭) | CC |
