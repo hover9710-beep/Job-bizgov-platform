@@ -69,6 +69,24 @@
 
 - 백로그: `docs/backlog/source_org_name_mapping.md`
 
+### 🟢 5/17 EOD 정정 (마지막) — 메일 시스템 흐름 + 6번째 차별점
+
+- 메일 시스템 흐름 정정:
+  - 수신: `hover1234@nate.com` (본인 nate, 웹 회사정보 등록 테스트 — 일반 사용자 검증)
+  - 모니터링: `hover9710@gmail.com` (크롤러 fail 알림, 5/18 코드 확인 필요)
+  - 발송: Google Apps Script `sendDailyBizGovEmails`, 09:13 KST 매일 자동
+- 응모서 6번째 차별점 추가: "개발자 본인이 첫 사용자 + 운영 모니터링" — scratched my own itch 정확 표현
+- 백로그: `docs/backlog/email_system_verification.md`
+
+#### 5/18 확인 필요 사항 (추가)
+
+- Google Apps Script `sendDailyBizGovEmails` 코드 검증
+- `hover9710@gmail.com` 의 정확한 역할 (크롤러 fail 알림 송신 위치)
+- Actions yaml 알림 설정 (notify-on-failure)
+- 메일 발송 로직 위치 (crawler except 절 / Apps Script ADMIN_EMAIL)
+
+→ 5/18 작업 묶음에 30분 추가 (합계 약 3~3.5h)
+
 ### 시뮬 누적 시스템 (자본화 완료)
 
 - 위치: `docs/simulations/`
