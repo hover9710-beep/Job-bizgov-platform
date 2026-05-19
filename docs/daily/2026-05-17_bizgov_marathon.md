@@ -276,3 +276,90 @@ PC DB 실측 (`db/biz.db`):
 - 정확한 운영 % 산출은 **5/19 이후 또는 W21+ Render Shell 직접 조회** 보류
 
 → 본 검증 완료. 응모서 카피 정확 / 시연 메시지 본질 유지.
+
+---
+
+## 🟢 사후 발견 7 — 필터 라벨 정정 (5/17 EOD)
+
+배너 vs 필터 불일치 발견:
+
+- 운영 시스템 배너는 5/17 정정 완료 (공식 기관명)
+- 필터 줄 (`templates/new.html:118-138`) 은 옛 명칭 유지 → 불일치
+
+정정 (commit `bfe4b52`):
+
+| source key | 기존 | 정정 |
+|---|---|---|
+| jbexport | 전북수출 | 전북경제통상진흥원 |
+| jbbi | 전북바이오 | 전북바이오융합원 |
+| jbtp_related | JBTP유관 | 전북외테크노파크 |
+| at_global | 한국농수산식품유통공사(aT) | aT수출통합지원시스템 |
+| kseafood | 한국수산회 | 수산식품수출지원시스템 |
+
+유지: 기업마당 / K-Startup / 전북테크노파크
+
+→ source key 변경 X (DB 8종 모두 매칭 확인) — 표시 텍스트만
+→ 일관성 확보, 평가위원 신뢰도 ↑
+
+---
+
+## 🟢 사후 발견 8 — 모바일 가로 swipe 버그 수정 (5/17 EOD 진짜 최후)
+
+문제 (사용자 직접 발견):
+
+- 모바일에서 가로 swipe 시 화면 밀림 (콘텐츠 왼쪽 / 오른쪽 빈 공간)
+- html/body 에 `overflow-x: hidden` 부재
+- `recommend.html` 만 보호되어 있었음 (line 622, @media 안)
+
+수정 (commit `b19b144`):
+
+4 파일 / 각 4줄 / 16줄 총:
+
+| 파일 | 적용 페이지 |
+|---|---|
+| `_new_list_page_styles.html` | `/new`, `/favorites` |
+| `project_detail.html` | `/project/<id>` |
+| `company.html` | `/company` |
+| `projects.html` | `/projects` |
+
+적용 규칙:
+
+```css
+html, body {
+    overflow-x: hidden;
+    max-width: 100%;
+}
+```
+
+보수적 선택 (회귀 위험 회피):
+
+- universal `* { max-width: 100% }` 미적용 — dropdown / popup / position: absolute 회귀 위험
+- position: sticky 충돌 점검 — 위 4 파일과 무관한 별도 페이지에만 sticky 존재, 충돌 0
+
+검증:
+
+- 사용자 모바일 swipe 테스트 ✅ 안 밀림
+- 5 페이지 모두 정상 (4 파일 + recommend.html 기존)
+
+→ 모바일 UX 안정성 = 응모서 차별점 강화
+
+---
+
+## 마라톤 최종 통계 (5/17 진짜 진짜 진짜 EOD)
+
+| 항목 | 값 |
+|---|---|
+| 시간 | 20시간 30분+ |
+| push | 19건+ |
+| 처리 row | 19,000+ |
+| 사고 | 2건 (모두 fail-safe) |
+| 시뮬 entry | 5건 신규 |
+| 사용자 가설 정정 | 6건 |
+| 사후 발견 | 8건 (모두 해결) |
+| 응모서 차별점 | 6가지 통합 + 99.95% 정확화 + 모바일 안정 |
+| 비용 | 약 $2.94 |
+
+5/18 결정:
+
+- 본인 사업자 신규 등록 (10분, 홈택스)
+- 응모서 모드 진입 = 5/18 오후
