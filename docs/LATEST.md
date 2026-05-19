@@ -91,15 +91,22 @@
 | 7 | 필터 라벨 정정 (배너와 일치) | bfe4b52 |
 | 8 | 모바일 가로 swipe 차단 | b19b144 |
 
-## 5/19 통합 사전 시뮬 — Phase 3 AI 본문 분석 (사용자 가설 6번째 정정)
+## 5/19 통합 사전 시뮬 — Phase 3 AI 본문 분석 (사용자 가설 정정 누계 9건)
 
 - `pipeline/file_text_extract.py` + `pipeline/attachment_text_pipeline.py` 이미 존재 (PDF + HWPX 추출 작동)
 - DB 컬럼 4개 (`pdf_path`, `attachments_json`, `attachment_text`, `period_text`) 이미 schema 존재
 - 그러나 **bizinfo 첨부 다운로드 0건** (99.95% 확인필요 단일 source)
-- **인프라 재사용 35%** (5/17 임계 70% 미만 → 단계 분할 강제)
-- Phase 3 작업량: 5~7일 (6단계 분할 3.0~3.5)
+- **인프라 재사용 35% → 50%+** (5/19 9번째 정정으로 ↑)
+- Phase 3 작업량: 5~7일 → **3.5~5일** (5/19 9번째 정정)
 - 5/17 사이클1 체크리스트 8/8 통과
 - 시뮬 entry: `docs/simulations/2026-05-17_phase3_ai_integration.md`
+
+### 🟢 5/19 22시 9번째 가설 정정 (사용자 사이트 캡처)
+
+- 사용자 발견: bizinfo (기업마당) 는 첨부 파일 X (또는 거의 없음). "첨부서류" 자체가 본문으로 구성. 신청기간 본문에 명확 표시 (예: "신청기간: 2026.01.26 ~ 2026.12.31")
+- CC 검증: `parse_bizinfo_dates` 이미 신청/사업/공고기간 라벨 지원, `period_text` 컬럼 활용 중 ✓
+- **Phase 3.0 재정의**: bizinfo 첨부 다운로드 (4~6h) → bizinfo 본문 파싱 강화 (1~2h, **66% 감소**)
+- **5/20 시연 후 5/21 PoC 진입 결정**
 
 ---
 

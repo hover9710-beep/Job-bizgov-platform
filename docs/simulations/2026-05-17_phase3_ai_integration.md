@@ -9,7 +9,7 @@
 
 ---
 
-## 🚨 사전 가정 정정 (재정정)
+## 🚨 사전 가정 정정 (재정정 + 5/19 22시 9번째)
 
 | 사용자 가설 | 실측 | 정정 |
 |---|---|---|
@@ -18,9 +18,11 @@
 | DB 스키마 신설 | `pdf_path` / `attachments_json` / `attachment_text` / `period_text` 4개 컬럼 이미 존재 | **메타 컬럼 4개 재사용, AI 결과 컬럼 (12~15개) 만 신규** |
 | 기존 → DB 통합 자동 | `attachment_text_pipeline.py` 는 `.txt` 저장만 / DB write 없음 | **신규 작업 = DB UPDATE 통합 (간단)** |
 | AI 본문 분석 미구현 | `ai_analyzer.py` 존재하나 hardcoded 스텁 (실 호출 X) | **신규 AI 모듈 신설 필수** |
+| **9 (5/19 22시)** — bizinfo 첨부 다운로드 신설 (4~6h) 필요 | **사이트 캡처 발견**: bizinfo 는 첨부 파일 X (또는 거의 없음), "첨부서류" 자체가 본문으로 구성. 신청기간 본문에 명확 표시 (예: "신청기간: 2026.01.26 ~ 2026.12.31"). `parse_bizinfo_dates` 이미 신청/사업/공고기간 라벨 지원, `period_text` 컬럼 활용 중 | **Phase 3.0 재정의 = bizinfo 본문 파싱 강화 (1~2h, 첨부 다운로드 불필요)** |
 
-→ **Phase 3 작업량 = 5~7일 (이전 1차 추정 6~8일 대비 1일 감소)**.
-→ 인프라 재사용 비율 30~40% (5/17 학습 임계 70% 미만 → 단계 분할 필수).
+→ **Phase 3 작업량 = 3.5~5일 (이전 5~7일 대비 1.5~2일 감소)**.
+→ 인프라 재사용 비율 50%+ (5/19 정정으로 ↑, 단계 분할 유지).
+→ 사용자 가설 정정 누계: **9건** (5/17 마라톤 6 + 통합 시뮬 1 + 본 발견 2).
 
 ---
 
@@ -90,13 +92,13 @@ source 별 채워짐 (4,691 total):
 
 | Phase | 목표 | 작업량 | 의존 |
 |---|---|---|---|
-| **3.0** | **bizinfo connector 에 첨부 다운로드 추가** | 4~6h | — |
-| 3.1 | `attachment_text_pipeline.py` 에 DB UPDATE 통합 (UPSERT `attachment_text`, `attachment_text_method`) | 0.5일 | 3.0 |
+| **3.0** | **bizinfo 본문 파싱 강화** (5/19 9번째 정정) — `parse_bizinfo_dates` 정규식 확장, 신청/사업/공고기간 라벨 우선순위, `period_text` 활용, `infer_status` 재실행 | **1~2h** ⬇ (이전 4~6h) | — |
+| 3.1 | `attachment_text_pipeline.py` 에 DB UPDATE 통합 (UPSERT `attachment_text`, `attachment_text_method`) — jbexport 60 file 처리 | 0.5일 | 3.0 |
 | 3.2 | AI 본문 기본 분석 (end_date_inferred, eligibility, amount, period, procedure) — GPT-4o-mini batch | 1~1.5일 | 3.1 |
 | 3.3 | AI 본문 심층 (deep_summary 300~500자, procedure_steps JSON, required_documents JSON, bonus_criteria) | 2일 | 3.2 |
 | 3.4 | 위젯 노출 (첨부 파일명 + deep_summary expand + procedure_steps 시각화) | 0.5~1일 | 3.3 |
 | 3.5 | `infer_status(end_date_inferred)` 재분류 | 0.5일 | 3.2 |
-| **합계** | | **5~7일** | |
+| **합계** | | **3.5~5일** ⬇ (이전 5~7일) | |
 
 (선택) 후속 단계:
 - 3.6: 나머지 6 source (at_global / jbbi / jbtp / jbtp_related / kseafood / kstartup) 첨부 다운로드 — W22+ (확인필요 0건이라 우선순위 후순위)
