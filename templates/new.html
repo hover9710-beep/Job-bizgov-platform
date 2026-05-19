@@ -22,23 +22,48 @@
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         font-family: 'Pretendard', -apple-system, system-ui, sans-serif;
     }
-    .operation-system-banner .osb-title {
+    .operation-system-banner .banner-title {
         font-weight: 700;
         font-size: 15px;
-        margin-bottom: 6px;
+        margin-bottom: 10px;
         letter-spacing: -0.2px;
     }
-    .operation-system-banner .osb-body {
+    .operation-system-banner .banner-row {
         font-size: 13px;
         line-height: 1.6;
+        margin-bottom: 6px;
+    }
+    .operation-system-banner .banner-row strong {
+        font-weight: 700;
+        color: #ffffff;
+    }
+    .operation-system-banner .banner-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 6px;
+    }
+    .operation-system-banner .chip {
+        background: rgba(255, 255, 255, 0.18);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        color: #ffffff;
+        padding: 3px 9px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 500;
+        line-height: 1.4;
+        white-space: nowrap;
+        -webkit-backdrop-filter: blur(4px);
+        backdrop-filter: blur(4px);
     }
     @media (max-width: 480px) {
         .operation-system-banner {
             padding: 12px 14px;
             margin: 12px 0;
         }
-        .operation-system-banner .osb-title { font-size: 14px; }
-        .operation-system-banner .osb-body { font-size: 12px; }
+        .operation-system-banner .banner-title { font-size: 13px; margin-bottom: 8px; }
+        .operation-system-banner .banner-row { font-size: 11px; }
+        .operation-system-banner .chip { font-size: 10px; padding: 2px 7px; }
     }
     </style>
 
@@ -183,13 +208,26 @@
     </div>
     {% endif %}
 
-    {# 운영 시스템 신뢰성 배너 — 5/17 EOD 다층 노출 1차.
-       공식 API 1 + 자체 크롤러 7 실시간 운영 어필. #}
-    <div class="operation-system-banner" role="complementary" aria-label="운영 시스템 정보">
-        <div class="osb-title">🤖 운영 시스템</div>
-        <div class="osb-body">
-            ✓ 1개 공식 API: 정부24 기업마당<br>
-            ✓ 7개 자체 크롤러 실시간 운영<br>
+    {# 운영 시스템 신뢰성 배너 — 5/17 EOD 다층 노출 1차 (chip 스타일).
+       공식 API 1 + 자체 크롤러 7 기관명 명시 → 응모서 정당성 + 시연 임팩트. #}
+    <div class="operation-system-banner" role="complementary" aria-label="운영 시스템">
+        <div class="banner-title">🤖 운영 시스템</div>
+        <div class="banner-row">
+            ✓ 공식 API: <strong>정부24 기업마당</strong>
+        </div>
+        <div class="banner-row">
+            ✓ 자체 크롤러 7개 실시간 운영:
+            <div class="banner-chips">
+                <span class="chip">K-Startup</span>
+                <span class="chip">JBTP</span>
+                <span class="chip">전북바이오</span>
+                <span class="chip">전북경제통상진흥원</span>
+                <span class="chip">aT</span>
+                <span class="chip">한국수산회</span>
+                <span class="chip">전북외테크노파크</span>
+            </div>
+        </div>
+        <div class="banner-row">
             ✓ 매일 06:00 KST 자동 갱신
         </div>
     </div>
