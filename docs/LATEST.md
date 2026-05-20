@@ -1,7 +1,7 @@
 # LATEST — BizGovPlanner 진입점
 
 **사이클**: 5/3 deploy-002 → Phase 3.0 PoC 완료 (5/20 Step 1~4, 검증 성공)
-**마지막 갱신**: 2026-05-21 (Phase 3 본 구현 ①② 완료 — enrich 영구화 `run_all.py` 통합)
+**마지막 갱신**: 2026-05-21 (Phase 3 본 구현 ①② 완료 + 메인 위젯 2개)
 
 ---
 
@@ -90,6 +90,13 @@
 - GHA: `daily-crawl.yml` `crawl-bizinfo` timeout 15→45분, job 95→120분 (enrich 추가분)
 - DB 롤백 지점: `db/biz.backup.20260521_010553_pre_enrich_in_runall.db`
 
+### 🆕 5/21 추가 — 메인 위젯 2개 (commit `7de6512` + `bd42b6b`)
+
+- **위젯 A** 무마감 카운트 — summary-grid 카드 "🔥 무마감 (상시)" = 631 (접수중 + 무마감 period_text)
+- **위젯 B** 분야 TOP — "🏢 공고 많은 분야 TOP 3" (경영 378 / 기술 255 / 금융 210). `organization`이 bizinfo 분야 카테고리라 '기관'→'분야' 재정의
+- `appy.py` `get_no_deadline_count()`/`get_field_top()` — `/`·`/new`·`/admin/pipeline` 반영. 표시 전용 (클릭 필터는 follow-up)
+- 무마감 키워드 수시/연중 확장 — 효과 ~0 (확인필요 905의 92%가 period_text 빈값) → `docs/backlog/unknown_empty_period_text.md` 신설
+
 ---
 
 ## 🔒 절대 원칙
@@ -118,6 +125,7 @@
 |---|---|---|
 | 5/20~5/21 | Phase 3.0 PoC (Step 1~4) | ✅ 완료 |
 | 5/21 | Phase 3 본 구현 ①② — status 재분류 + wipe 가드 + enrich 자동화 (운영 반영) | ✅ 완료 |
+| 5/21 | 메인 위젯 2개 — 무마감 카운트 + 분야 TOP | ✅ 완료 |
 | 5/21~ | 야간 파이프라인 자동 가동 (`run_all.py` — enrich 통합) | 🟢 가동 |
 | 5/24 (일) | 광주 공모전 마감 (보류 검토) | ⏳ |
 | 7/3 (목) | 전북 공모전 (JBTP) 마감 | ⏳ |
