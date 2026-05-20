@@ -1,7 +1,7 @@
 # LATEST — BizGovPlanner 진입점
 
 **사이클**: 5/3 deploy-002 → Phase 3.0 PoC 완료 (5/20 Step 1~4, 검증 성공)
-**마지막 갱신**: 2026-05-21 (Phase 3 본 구현 ①② 완료 + 통합 파이프라인 검증 성공)
+**마지막 갱신**: 2026-05-21 (Phase 3 ②·①B 운영 반영 / ①A 재작업 필요 — 14번째 가설 정정)
 
 ---
 
@@ -13,7 +13,7 @@
 | 메일 발송 | 🟢 정상 | Apps Script 09:13 |
 | 자동 크롤링 | 🟢 정상 | PC daily 20:37 |
 | DB | 🟢 4,781 row | bizinfo 3,040 / kstartup 608 / jbbi 373 / kseafood 244 / at_global 207 / jbtp 157 / jbtp_related 79 / jbexport 73 |
-| Phase 3 | 🟢 본 구현 ①② 완료 | PoC(Step 1~4) + enrich 영구화 + status 재분류 — bizinfo 확인필요 2,302→905 (−61%) |
+| Phase 3 | 🟡 ②·①B 완료 / ①A 재작업 | status 재분류 + wipe 가드 운영 반영 — bizinfo 확인필요 2,302→905 (−61%, 로컬 DB). enrich 자동화(①A)는 run_all.py 이전 필요 |
 
 ---
 
@@ -75,19 +75,19 @@
 - 파싱 정확성 100%, 무마감 공고 48.1% (정당 추출)
 - **13번째 가설 정정**: enrich 결과 비영구 (야간 wipe) → Phase 3 본 구현 = "영구화"
 
-### ✅ Phase 3 본 구현 — ①② 완료 (5/21, commit `44c20b0`)
+### 🟡 Phase 3 본 구현 — ②·①B 완료, ①A 재작업 필요 (5/21, commit `44c20b0`)
 
-| 백로그 | 변경 파일 | 결과 |
-|---|---|---|
-| ② status 재분류 | `normalize_project.py` | `infer_status` 무마감 키워드 정정 (공백 버그 + "선착순") → bizinfo 확인필요 1,446 → 905 (−541) |
-| ①B wipe 차단 | `update_db.py` | `_upsert_one` UPDATE에 end_date 보존 가드 — 가드 테스트 통과 |
-| ①A enrich 자동화 | `run_pipeline.py` | 야간 파이프라인에 `--enrich-detail` 통합 (crawl→enrich→merge→update_db) |
+| 백로그 | 변경 파일 | 운영 반영 | 결과 |
+|---|---|---|---|
+| ② status 재분류 | `normalize_project.py` | ✅ | `infer_status` 무마감 키워드 정정 (공백 버그 + "선착순") → bizinfo 확인필요 1,446 → 905 (−541) |
+| ①B wipe 차단 | `update_db.py` | ✅ | `_upsert_one` UPDATE에 end_date 보존 가드 — 가드 테스트 통과 |
+| ①A enrich 자동화 | `run_pipeline.py` | ❌ | ⚠️ **오배치** — `run_pipeline.py`는 수동 웹 버튼 전용. 야간 경로 `run_all.py`엔 enrich 없음 |
 
-- **옵션 C(야간 wipe 허용) 해소** — ①A+①B로 야간 run이 wipe 대신 enrich+보존, PoC 결과 매일 자동 유지
-- 누적: bizinfo 확인 필요 **2,302 → 905 (−61%)**
-- 야간 run +25~30분 (enrich HTTP)
-- **✅ 통합 파이프라인 검증 (5/21)** — `run_pipeline.py` 수동 실행: crawl→enrich→merge→update_db 자동 연결, enrich 네트워크 실패 0, **DB end_date 1,500 유지 (wipe 차단 확인)**, 전 단계 오류 0
-- 검증 누적: infer_status 단위테스트 + end_date 가드 테스트 + 통합 run (실패 0)
+- 누적: bizinfo 확인 필요 **2,302 → 905 (−61%)** — 로컬 `db/biz.db` 기준
+- ②·①B는 운영 야간 경로(`run_all.py` → `update_db.py`)에 반영 → 기존 end_date wipe 차단·status 재분류 작동
+- ⚠️ **①A 미반영 (14번째 가설 정정)** — enrich를 `run_pipeline.py`(수동 웹 버튼)에 넣었으나 야간 스케줄러·GitHub Actions는 `run_all.py` 사용. 야간 자동 enrich 안 됨 → 신규 공고 end_date 미보강
+- 검증 한계: `run_pipeline.py` 수동 실행으로 ①B 가드·② 키워드·enrich 커넥터 작동은 확인. 단 야간 `run_all.py` 경로는 미검증
+- 후속: `docs/backlog/enrich_in_run_all.md` — enrich를 `run_all.py`로 이전 (+ GHA timeout 조정)
 - DB 롤백 지점: `db/biz.backup.20260521_003320_pre_pipeline_test.db`
 
 ---
@@ -109,16 +109,16 @@
 ## 🚀 다음 세션 시작 명령
 
 ```
-@docs/LATEST.md 읽고 진행
-— Phase 3 본 구현 ①② 완료·검증 종료
-— 다음 후보: Phase 3.1+ 본문 AI 분석 / 응모서 본문 작성 / 휴식
+@docs/LATEST.md 읽고 ①A 재작업 — enrich를 run_all.py로 이전
+— docs/backlog/enrich_in_run_all.md (enrich 단계 run_all.py 통합 + GHA timeout 조정)
 ```
 
 | 일자 | 작업 | 상태 |
 |---|---|---|
 | 5/20~5/21 | Phase 3.0 PoC (Step 1~4) | ✅ 완료 |
-| 5/21 | Phase 3 본 구현 ①② + 통합 파이프라인 검증 (end_date 유지 확인) | ✅ 완료 |
-| 5/21 20:37~ | 야간 파이프라인 자동 가동 (검증된 통합 코드) | 🟢 가동 |
+| 5/21 | Phase 3 본 구현 — ② status 재분류 + ①B wipe 가드 (운영 반영) | ✅ 완료 |
+| 5/21 | ①A enrich 자동화 — `run_pipeline.py` 오배치 발견 (14번째 정정) | ⚠️ 재작업 |
+| 5/22+ | ①A 재작업 — enrich를 `run_all.py`로 이전 (백로그) | ⏳ |
 | 5/24 (일) | 광주 공모전 마감 (보류 검토) | ⏳ |
 | 7/3 (목) | 전북 공모전 (JBTP) 마감 | ⏳ |
 
