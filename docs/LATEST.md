@@ -1,7 +1,7 @@
 # LATEST — BizGovPlanner 진입점
 
 **사이클**: 5/3 deploy-002 → Phase 3.0 PoC 완료 (5/20 Step 1~4, 검증 성공)
-**마지막 갱신**: 2026-05-21 EOD (PoC 마무리 + 옵션 C 결정 + docs 정리)
+**마지막 갱신**: 2026-05-21 (Phase 3 본 구현 ①② 완료 — enrich 영구화 + status 재분류)
 
 ---
 
@@ -13,7 +13,7 @@
 | 메일 발송 | 🟢 정상 | Apps Script 09:13 |
 | 자동 크롤링 | 🟢 정상 | PC daily 20:37 |
 | DB | 🟢 4,781 row | bizinfo 3,040 / kstartup 608 / jbbi 373 / kseafood 244 / at_global 207 / jbtp 157 / jbtp_related 79 / jbexport 73 |
-| Phase 3.0 PoC | 🟡 진행 중 | Step 1+2 완료, Step 3 부분 성공 (35.8%), 5/22 재실행 예정 |
+| Phase 3 | 🟢 본 구현 ①② 완료 | PoC(Step 1~4) + enrich 영구화 + status 재분류 — bizinfo 확인필요 2,302→905 (−61%) |
 
 ---
 
@@ -75,30 +75,19 @@
 - 파싱 정확성 100%, 무마감 공고 48.1% (정당 추출)
 - **13번째 가설 정정**: enrich 결과 비영구 (야간 wipe) → Phase 3 본 구현 = "영구화"
 
-### ⚠️ 5/21 20:37 결정 시점 (다음 야간 파이프라인)
+### ✅ Phase 3 본 구현 — ①② 완료 (5/21, commit `44c20b0`)
 
-> **✅ 결정 (5/21): 옵션 C 채택 — 야간 wipe 허용.** DB end_date 소멸은 예정된 거동(버그 아님), PoC 정량 결과는 docs에 영구 저장됨. Phase 3 본 구현(영구화)은 별도 사이클.
+| 백로그 | 변경 파일 | 결과 |
+|---|---|---|
+| ② status 재분류 | `normalize_project.py` | `infer_status` 무마감 키워드 정정 (공백 버그 + "선착순") → bizinfo 확인필요 1,446 → 905 (−541) |
+| ①B wipe 차단 | `update_db.py` | `_upsert_one` UPDATE에 end_date 보존 가드 — 가드 테스트 통과 |
+| ①A enrich 자동화 | `run_pipeline.py` | 야간 파이프라인에 `--enrich-detail` 통합 (crawl→enrich→merge→update_db) |
 
-야간 파이프라인이 Step 4 DB 반영분(end_date)을 wipe함. 3개 옵션:
-
-**옵션 A — 야간 crawl 1일 skip** (PoC 결과 1일 유지)
-- 사용자 행동: 5/21 20:00~20:30 사이
-- Windows Task Scheduler 열기 → 야간 크롤 작업(`bizplnner`) 일시 정지 (1일)
-- 5/22 작업 재개
-
-**옵션 B — 영구화 즉시** = Phase 3 본 구현 진입 (2~4h, 백로그 ①)
-
-**옵션 C — wipe 허용 ⭐ 권장**
-- 사용자 행동: 없음
-- 5/21 20:37 야간 크롤 자동 실행 → DB end_date wipe
-- 정량 데이터는 docs(daily/simulations)에 영구 저장 = 응모서 핵심 메시지로 활용
-- Phase 3 본 구현(영구화)은 별도 사이클로 진행
-
-→ **권장: C** (시간 여유 시 A). 정량 결과 자체는 이미 영구 자산화됨 — DB 반영분 소멸돼도 손실 없음.
-
-- DB 롤백 지점: `db/biz.backup.20260520_234520_pre_step4_merge.db`
-- 백업: `bizinfo_all.backup_20260520_092537_pre_enrich.json` 외
-- 백로그: `docs/backlog/enrich_persistence.md` (①), `docs/backlog/no_deadline_classification.md` (②)
+- **옵션 C(야간 wipe 허용) 해소** — ①A+①B로 야간 run이 wipe 대신 enrich+보존, PoC 결과 매일 자동 유지
+- 누적: bizinfo 확인 필요 **2,302 → 905 (−61%)**
+- 야간 run +25~30분 (enrich HTTP) — 5/21 20:37 = 첫 라이브 통합 실행
+- DB 롤백 지점: `db/biz.backup.20260521_001650_pre_phase3_impl.db`
+- 검증: infer_status 단위테스트 + end_date 가드 테스트 + update_db 재실행 (실패 0)
 
 ---
 
@@ -119,16 +108,17 @@
 ## 🚀 다음 세션 시작 명령
 
 ```
-@docs/LATEST.md 읽고 Phase 3 본 구현 진입
-— 백로그 ① docs/backlog/enrich_persistence.md (영구화, 우선)
-— 백로그 ② docs/backlog/no_deadline_classification.md (status 재분류)
+@docs/LATEST.md 읽고 5/22 야간 파이프라인 통합 run 결과 검증
+— 5/21 20:37 crawl→enrich→merge→update_db 정상 작동 확인
+— DB bizinfo end_date·확인필요 유지 검증 (wipe 없이 enrich 반영)
 ```
 
 | 일자 | 작업 | 상태 |
 |---|---|---|
-| 5/20~5/21 | Phase 3.0 PoC (Step 1~4) + 옵션 C 결정 + docs 정리 | ✅ 완료 |
-| 5/21 20:37 | 야간 파이프라인 — PoC DB 반영분 wipe (옵션 C) | ⏳ 예정 |
-| 5/22~5/23 | Phase 3 본 구현 (백로그 ① 영구화 → ② status 재분류) 또는 휴식 | ⏳ |
+| 5/20~5/21 | Phase 3.0 PoC (Step 1~4) | ✅ 완료 |
+| 5/21 | Phase 3 본 구현 ①② (enrich 영구화 + status 재분류) | ✅ 완료 |
+| 5/21 20:37 | 야간 파이프라인 첫 통합 run (enrich 자동화) | ⏳ |
+| 5/22 | 야간 run 결과 검증 (end_date 유지 확인) | ⏳ |
 | 5/24 (일) | 광주 공모전 마감 (보류 검토) | ⏳ |
 | 7/3 (목) | 전북 공모전 (JBTP) 마감 | ⏳ |
 

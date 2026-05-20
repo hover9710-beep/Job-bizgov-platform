@@ -4,6 +4,16 @@
 > **우선순위**: 높음
 > **예상 시간**: 2~4h
 > **분류**: Phase 3 본 구현 핵심
+> **상태**: ✅ **완료 (2026-05-21, commit `44c20b0`)** — 방법 A + B 모두 적용
+
+---
+
+## ✅ 완료 (2026-05-21)
+
+- **방법 B** — `update_db.py` `_upsert_one` UPDATE에 end_date 보존 가드 추가 (새 값 빈값 + 기존값 있으면 보존). 가드 테스트 통과: 빈 end_date 재upsert 시 기존값 `2026-12-10` 보존 확인.
+- **방법 A** — `run_pipeline.py`에 `run_bizinfo_enrich()` 추가. 야간 파이프라인이 crawl→**enrich**→merge→update_db 순으로 실행. `--skip-enrich` 플래그 제공.
+- 야간 run 소요 +25~30분 (enrich HTTP fetch).
+- → 야간 wipe 사고 해소, enrich 결과(end_date)가 매일 자동 유지됨.
 
 ---
 
