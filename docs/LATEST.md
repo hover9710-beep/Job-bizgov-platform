@@ -77,13 +77,22 @@
 
 ### ⚠️ 5/21 20:37 결정 시점 (다음 야간 파이프라인)
 
-| 옵션 | 내용 |
-|---|---|
-| A | 5/21 야간 bizinfo 크롤 1일 skip (PoC 결과 1일 유지) |
-| B | 영구화 즉시 = Phase 3 본 구현 진입 (2~4h, 백로그 ①) |
-| C | wipe 허용 + Phase 3 본 구현 별도 진행 |
+야간 파이프라인이 Step 4 DB 반영분(end_date)을 wipe함. 3개 옵션:
 
-**권장: A 또는 C** — 정량 데이터는 daily/simulations에 영구 저장됨, DB 반영분 소멸돼도 손실 없음.
+**옵션 A — 야간 crawl 1일 skip** (PoC 결과 1일 유지)
+- 사용자 행동: 5/21 20:00~20:30 사이
+- Windows Task Scheduler 열기 → 야간 크롤 작업(`bizplnner`) 일시 정지 (1일)
+- 5/22 작업 재개
+
+**옵션 B — 영구화 즉시** = Phase 3 본 구현 진입 (2~4h, 백로그 ①)
+
+**옵션 C — wipe 허용 ⭐ 권장**
+- 사용자 행동: 없음
+- 5/21 20:37 야간 크롤 자동 실행 → DB end_date wipe
+- 정량 데이터는 docs(daily/simulations)에 영구 저장 = 응모서 핵심 메시지로 활용
+- Phase 3 본 구현(영구화)은 별도 사이클로 진행
+
+→ **권장: C** (시간 여유 시 A). 정량 결과 자체는 이미 영구 자산화됨 — DB 반영분 소멸돼도 손실 없음.
 
 - DB 롤백 지점: `db/biz.backup.20260520_234520_pre_step4_merge.db`
 - 백업: `bizinfo_all.backup_20260520_092537_pre_enrich.json` 외

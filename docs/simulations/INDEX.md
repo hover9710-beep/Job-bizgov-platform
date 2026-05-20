@@ -13,6 +13,7 @@
 | 2026-05-17 | Phase 3 (사전 1차) | [첨부 추출 + end_date 자동](2026-05-17_phase3_attachment.md) | 영향 분석 | 가설 정정 — 7 source connector 확장 선행 필수, W22~W23 권장 |
 | 2026-05-17 | Phase 3 (통합 갱신) | [기존 첨부 인프라 재사용 + AI 본문 분석](2026-05-17_phase3_ai_integration.md) | 영향 분석 2차 | 가설 6번째 정정 — 인프라 35% 재사용 / bizinfo connector + AI 신규 / 5~7일 단계 6분할 / 사이클1 체크리스트 8/8 |
 | 2026-05-19 | Phase 3.0 (PoC 사전) | [PoC 사전 정밀 시뮬 — 11번째 가설 정정](2026-05-19_phase3_poc_pre_simulation.md) | 영향 분석 3차 | description 컬럼 본문 X (날짜) / `--enrich-detail` 이미 존재 → Phase 3.0 코드 변경 0, 1.5~3h |
+| 2026-05-20 | Phase 3.0 (PoC 완료) | [PoC 완료 회고 — 13번째 가설 정정](2026-05-20_phase3_poc_completed.md) | 실행 회고 (8번째 entry) | 확인필요 2,302→1,446 (−37%) / 파싱 정확성 100% / enrich 비영구 (야간 wipe) → Phase 3 본 구현 = "영구화" |
 
 ### 회고 미작성 (시뮬 사후 entry — 시간 여유 시 backfill)
 
@@ -152,3 +153,4 @@
 | 2026-05-19 | 9번째 가설 정정 (bizinfo 본문이 첨부서류 역할) — Phase 3.0 작업량 4~6h → 1~2h (66% 단축), 합계 3.5~5일 | CC |
 | 2026-05-19 | 10번째 가설 정정 (기관별 본문 상이, "신청기간" 만 / "마감일" 별도 X, 사이트 캡처 2건) — Phase 3.0 정규식 4종 + AI fallback + `end_date_confidence` 컬럼 정밀화, 시간 1~2h 유지 | CC |
 | 2026-05-19 | 11번째 가설 정정 (PoC 사전 시뮬) — `description` 컬럼 = 날짜 문자열 (본문 X) / 본문 DB 부재 / `connector_bizinfo.py` 에 `fetch_detail()` + `--enrich-detail` + `_extract_period_status_from_detail_table()` 이미 존재 → Phase 3.0 = 기존 스크립트 실행 (코드 0), 7번째 entry 신설 | CC |
+| 2026-05-20 | 13번째 가설 정정 (enrich 비영구성) + PoC 검증 — 확인필요 2,302→1,446 (−37%), 파싱 정확성 100%, 야간 wipe 발견 → Phase 3 본 구현 = 영구화, 백로그 ①② 신설, 8번째 entry 신설 | CC |
