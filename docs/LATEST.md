@@ -1,7 +1,7 @@
 # LATEST — BizGovPlanner 진입점
 
 **사이클**: 5/3 deploy-002 → Phase 3.0 PoC 완료 (5/20 Step 1~4, 검증 성공)
-**마지막 갱신**: 2026-05-21 (Phase 3 본 구현 ①② 완료 + 메인 위젯 2개)
+**마지막 갱신**: 2026-05-21 (Phase 3 ①② + 위젯 2개 + DB re-enrich — 확인필요 906→89)
 
 ---
 
@@ -97,6 +97,14 @@
 - `appy.py` `get_no_deadline_count()`/`get_field_top()` — `/`·`/new`·`/admin/pipeline` 반영. 표시 전용 (클릭 필터는 follow-up)
 - 무마감 키워드 수시/연중 확장 — 효과 ~0 (확인필요 905의 92%가 period_text 빈값) → `docs/backlog/unknown_empty_period_text.md` 신설
 
+### 🆕 5/21 추가 — DB 기반 re-enrich (commit `f860fcb` + `826a98c`)
+
+- 진단: 확인필요 833건(period_text 빈값)의 99.5%가 **크롤본 밖 과거 누적 bizinfo 행** — `--enrich-detail`(JSON 기반)이 영영 못 닿음. 상세 페이지엔 신청기간 존재 → 오분류
+- fix: 신규 `pipeline/enrich_db_bizinfo.py` — DB 행을 url로 직접 `fetch_detail` → DB UPDATE (멱등, `--dry-run`/`--limit`)
+- 결과: **확인 필요 906 → 89 (−817, −90%)** — 831건 처리: 마감 792 / 접수중 25 / 확인필요 14, fetch 실패 0
+- durable (과거 누적 행이라 야간 `update_db` 미재처리). DB 백업 `db/biz.backup.20260521_072002_pre_enrich_db.db`
+- ⚠️ 운영 Render DB 반영은 별도 (로컬 `db/biz.db`만 적용)
+
 ---
 
 ## 🔒 절대 원칙
@@ -118,7 +126,7 @@
 ```
 @docs/LATEST.md 읽고 진행
 — Phase 3 본 구현 ①② 완료 (enrich 영구화 + status 재분류, run_all.py 운영 반영)
-— 다음 후보: GHA workflow_dispatch 야간 enrich 1회 검증 / Phase 3.1+ 본문 AI / 응모서 본문 / 휴식
+— 다음 후보: 운영 Render DB re-enrich 반영 / GHA workflow_dispatch 야간 enrich 검증 / Phase 3.1+ 본문 AI / 응모서 본문 / 휴식
 ```
 
 | 일자 | 작업 | 상태 |
@@ -126,6 +134,7 @@
 | 5/20~5/21 | Phase 3.0 PoC (Step 1~4) | ✅ 완료 |
 | 5/21 | Phase 3 본 구현 ①② — status 재분류 + wipe 가드 + enrich 자동화 (운영 반영) | ✅ 완료 |
 | 5/21 | 메인 위젯 2개 — 무마감 카운트 + 분야 TOP | ✅ 완료 |
+| 5/21 | DB 기반 re-enrich — 확인필요 906→89 (−90%) | ✅ 완료 |
 | 5/21~ | 야간 파이프라인 자동 가동 (`run_all.py` — enrich 통합) | 🟢 가동 |
 | 5/24 (일) | 광주 공모전 마감 (보류 검토) | ⏳ |
 | 7/3 (목) | 전북 공모전 (JBTP) 마감 | ⏳ |
