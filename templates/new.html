@@ -7,6 +7,26 @@
     <title>지원사업 공고 목록</title>
     {% include '_new_list_page_styles.html' %}
     <style>
+    /* 신규 위젯 (2026-05-21): 무마감 카운트 + 분야 TOP */
+    .summary-card-nodeadline { background: #fff7ed; }
+    .field-top-box {
+        margin: 14px 4px;
+        padding: 12px 14px;
+        background: #f0f9ff;
+        border: 1px solid #bae6fd;
+        border-radius: 10px;
+        max-width: 100%;
+    }
+    .field-top-title { font-size: 14px; font-weight: 700; color: #0369a1; margin-bottom: 8px; }
+    .field-top-list { list-style: none; margin: 0; padding: 0; }
+    .field-top-list li {
+        display: flex; align-items: center; gap: 8px;
+        padding: 6px 2px; border-bottom: 1px solid #e0f2fe; font-size: 14px;
+    }
+    .field-top-list li:last-child { border-bottom: none; }
+    .field-top-rank { color: #0ea5e9; font-weight: 700; }
+    .field-top-name { flex: 1; color: #1f2937; word-break: break-all; }
+    .field-top-cnt { font-weight: 700; color: #0369a1; }
     .filter-guide {
         font-size: 13px;
         color: #6b7280;
@@ -260,7 +280,22 @@
             <span class="summary-label">오늘 방문</span>
             <span class="summary-value">{{ today_visits | default(0) }}</span>
         </div>
+        <div class="summary-card summary-card-nodeadline">
+            <span class="summary-label">🔥 무마감 (상시)</span>
+            <span class="summary-value">{{ no_deadline_count | default(0) }}</span>
+        </div>
     </div>
+
+    {% if field_top %}
+    <section class="field-top-box">
+        <div class="field-top-title">🏢 공고 많은 분야 TOP {{ field_top|length }}</div>
+        <ol class="field-top-list">
+        {% for name, cnt in field_top %}
+            <li><span class="field-top-rank">{{ loop.index }}</span><span class="field-top-name">{{ name }}</span><span class="field-top-cnt">{{ cnt }}건</span></li>
+        {% endfor %}
+        </ol>
+    </section>
+    {% endif %}
 
     {% if top_clicked %}
     <section class="top-clicked-box">

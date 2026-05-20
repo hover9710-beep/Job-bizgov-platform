@@ -1448,6 +1448,49 @@ def api_jbexport_list():
         )
 
 
+def get_no_deadline_count() -> int:
+    """무마감 공고 카운트 — 접수중 + period_text 가 무마감 키워드(예산소진/선착순/상시/수시/연중)."""
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) FROM biz_projects
+            WHERE status = '접수중'
+              AND (period_text LIKE '%예산 소진%' OR period_text LIKE '%예산소진%'
+                OR period_text LIKE '%선착순%' OR period_text LIKE '%상시%'
+                OR period_text LIKE '%수시%' OR period_text LIKE '%연중%')
+            """
+        ).fetchone()
+        return int(row[0]) if row and row[0] else 0
+    except sqlite3.Error:
+        return 0
+    finally:
+        conn.close()
+
+
+def get_field_top(limit: int = 3) -> list:
+    """접수중 bizinfo 공고의 분야(organization) TOP N — [(분야, 건수), ...].
+
+    bizinfo 의 organization 은 분야 카테고리(경영/기술/금융 등)라 '분야 TOP' 으로 노출.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        rows = conn.execute(
+            """
+            SELECT organization, COUNT(*) AS cnt FROM biz_projects
+            WHERE status = '접수중' AND source = 'bizinfo'
+              AND organization IS NOT NULL AND TRIM(organization) != ''
+            GROUP BY organization ORDER BY cnt DESC LIMIT ?
+            """,
+            (int(limit),),
+        ).fetchall()
+        return [(str(r[0]), int(r[1])) for r in rows]
+    except sqlite3.Error:
+        return []
+    finally:
+        conn.close()
+
+
 @app.route("/")
 def index():
     # 필터는 UI 레이어(ui_view.filter_items)에서만 처리.
@@ -1536,6 +1579,8 @@ def index():
         usage = get_usage_status(conn, visitor_id, user_ip)
     finally:
         conn.close()
+    no_deadline_count = get_no_deadline_count()
+    field_top = get_field_top(3)
     resp = make_response(
         render_template(
             "new.html",
@@ -1565,6 +1610,8 @@ def index():
             latest_jbbi=latest_jbbi,
             latest_at_global=latest_at_global,
             latest_misc=latest_misc,
+            no_deadline_count=no_deadline_count,
+            field_top=field_top,
         )
     )
     resp.set_cookie(
@@ -2767,6 +2814,8 @@ def _render_new_announcements_page(is_admin: bool):
     except Exception as e:
         print(f"[new/admin pipeline] usage 조회 실패: {e}", flush=True)
         usage = None
+    no_deadline_count = get_no_deadline_count()
+    field_top = get_field_top(3)
     resp = make_response(
         render_template(
             "new.html",
@@ -2796,6 +2845,8 @@ def _render_new_announcements_page(is_admin: bool):
             latest_jbbi=latest_jbbi,
             latest_at_global=latest_at_global,
             latest_misc=latest_misc,
+            no_deadline_count=no_deadline_count,
+            field_top=field_top,
         )
     )
     resp.set_cookie(
