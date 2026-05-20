@@ -1,7 +1,7 @@
 # LATEST — BizGovPlanner 진입점
 
-**사이클**: 5/3 deploy-002 → Phase 3.0 PoC (5/20 Step 3 부분 성공)
-**마지막 갱신**: 2026-05-20 (박람회 마지막 날)
+**사이클**: 5/3 deploy-002 → Phase 3.0 PoC 완료 (5/20 Step 1~4, 검증 성공)
+**마지막 갱신**: 2026-05-20 (Phase 3.0 PoC 완료 + 13번째 가설 정정)
 
 ---
 
@@ -60,18 +60,34 @@
 
 ---
 
-## ⚙️ Phase 3.0 PoC 현황
+## ⚙️ Phase 3.0 PoC 현황 — ✅ 완료 (5/20)
 
 | Step | 상태 | 결과 |
 |---|---|---|
 | Step 1 코드 read | ✅ | `--enrich-detail` 명세 4건 정정 (위험 E: JSON-only, DB 미접근) |
 | Step 2 DRY-RUN 10건 | ✅ | fetch 10/10, end_date 9/10 = 90% |
-| Step 3 본 실행 | 🟡 부분 성공 | 513/1,433 = 35.8% (fetch 성공 기준 84.1%), 네트워크 실패 823건 |
-| Step 3 재실행 | ⏳ 5/22 | 안정 네트워크, 멱등 → 823건만 재시도 |
-| Step 4 JSON→DB merge | ⏳ 5/22 | 재실행 후 진입 |
+| Step 3 본 실행 | ✅ (부분) | 5/20 오전 박람회장 — 네트워크 823건 실패, 513건 성공 |
+| Step 3 재실행 | ✅ | 5/20 밤 안정 네트워크 — fetch 1,474/1,474, 실패 0 |
+| Step 4 JSON→DB merge | ✅ | merge_jb → update_db, 입력 4,600 실패 0 |
 
-- 백업: `data/bizinfo/json/bizinfo_all.backup_20260520_092537_pre_enrich.json`, `db/biz.backup.20260520_092537_pre_phase3_enrich.db`
-- 상세: `docs/daily/2026-05-20.md`, `docs/daily/2026-05-20_phase3_poc_step1_2.md`
+### PoC 정량 결과
+- DB bizinfo **확인 필요 2,302 → 1,446 (−856, −37%)**, end_date 738 → 1,500 (+762)
+- 파싱 정확성 100%, 무마감 공고 48.1% (정당 추출)
+- **13번째 가설 정정**: enrich 결과 비영구 (야간 wipe) → Phase 3 본 구현 = "영구화"
+
+### ⚠️ 5/21 20:37 결정 시점 (다음 야간 파이프라인)
+
+| 옵션 | 내용 |
+|---|---|
+| A | 5/21 야간 bizinfo 크롤 1일 skip (PoC 결과 1일 유지) |
+| B | 영구화 즉시 = Phase 3 본 구현 진입 (2~4h, 백로그 ①) |
+| C | wipe 허용 + Phase 3 본 구현 별도 진행 |
+
+**권장: A 또는 C** — 정량 데이터는 daily/simulations에 영구 저장됨, DB 반영분 소멸돼도 손실 없음.
+
+- DB 롤백 지점: `db/biz.backup.20260520_234520_pre_step4_merge.db`
+- 백업: `bizinfo_all.backup_20260520_092537_pre_enrich.json` 외
+- 백로그: `docs/backlog/enrich_persistence.md` (①), `docs/backlog/no_deadline_classification.md` (②)
 
 ---
 
@@ -92,13 +108,13 @@
 ## 🚀 다음 세션 시작 명령
 
 ```
-@docs/LATEST.md 읽고 5/22 Phase 3.0 PoC Step 3 재실행 + Step 4 merge
+@docs/LATEST.md 읽고 Phase 3 본 구현 (영구화 + status 재분류) 진입
 ```
 
 | 일자 | 작업 |
 |---|---|
-| 5/21 (목) | 회복 + 17일 누적 정리 |
-| 5/22 (금) | Phase 3.0 Step 3 재실행 (안정 네트워크) → Step 4 JSON→DB merge |
+| 5/21 (목) | 회복 / 17일 누적 정리 / 5/21 20:37 결정 (옵션 A·B·C) |
+| 5/22~5/23 | Phase 3 본 구현 (영구화 백로그 ① + status 재분류 백로그 ②) 또는 휴식 |
 | 5/24 (일) | 광주 공모전 마감 (보류 검토) |
 | 7/3 (목) | 전북 공모전 (JBTP) 마감 |
 
@@ -106,9 +122,12 @@
 
 ## 관련 파일
 
+- PoC 완료 데일리: `docs/daily/2026-05-22_phase3_poc_completed.md`
+- PoC 완료 회고: `docs/simulations/2026-05-20_phase3_poc_completed.md`
 - 5/20 데일리: `docs/daily/2026-05-20.md`
 - Phase 3.0 Step 1+2: `docs/daily/2026-05-20_phase3_poc_step1_2.md`
 - PoC 사전 시뮬: `docs/simulations/2026-05-19_phase3_poc_pre_simulation.md`
+- 백로그: `docs/backlog/enrich_persistence.md`, `docs/backlog/no_deadline_classification.md`
 - 5/17 마라톤 종합: `docs/daily/2026-05-17_bizgov_marathon.md`
 - 시뮬 INDEX: `docs/simulations/INDEX.md`
 - release INDEX: `release/INDEX.md`
