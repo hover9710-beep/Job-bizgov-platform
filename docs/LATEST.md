@@ -1,7 +1,7 @@
 # LATEST — BizGovPlanner 진입점
 
 **사이클**: 5/3 deploy-002 → Phase 3.0 PoC 완료 (5/20 Step 1~4, 검증 성공)
-**마지막 갱신**: 2026-05-21 (Phase 3 본 구현 ①② 완료 — enrich 영구화 + status 재분류)
+**마지막 갱신**: 2026-05-21 (Phase 3 본 구현 ①② 완료 + 통합 파이프라인 검증 성공)
 
 ---
 
@@ -85,9 +85,10 @@
 
 - **옵션 C(야간 wipe 허용) 해소** — ①A+①B로 야간 run이 wipe 대신 enrich+보존, PoC 결과 매일 자동 유지
 - 누적: bizinfo 확인 필요 **2,302 → 905 (−61%)**
-- 야간 run +25~30분 (enrich HTTP) — 5/21 20:37 = 첫 라이브 통합 실행
-- DB 롤백 지점: `db/biz.backup.20260521_001650_pre_phase3_impl.db`
-- 검증: infer_status 단위테스트 + end_date 가드 테스트 + update_db 재실행 (실패 0)
+- 야간 run +25~30분 (enrich HTTP)
+- **✅ 통합 파이프라인 검증 (5/21)** — `run_pipeline.py` 수동 실행: crawl→enrich→merge→update_db 자동 연결, enrich 네트워크 실패 0, **DB end_date 1,500 유지 (wipe 차단 확인)**, 전 단계 오류 0
+- 검증 누적: infer_status 단위테스트 + end_date 가드 테스트 + 통합 run (실패 0)
+- DB 롤백 지점: `db/biz.backup.20260521_003320_pre_pipeline_test.db`
 
 ---
 
@@ -108,17 +109,16 @@
 ## 🚀 다음 세션 시작 명령
 
 ```
-@docs/LATEST.md 읽고 5/22 야간 파이프라인 통합 run 결과 검증
-— 5/21 20:37 crawl→enrich→merge→update_db 정상 작동 확인
-— DB bizinfo end_date·확인필요 유지 검증 (wipe 없이 enrich 반영)
+@docs/LATEST.md 읽고 진행
+— Phase 3 본 구현 ①② 완료·검증 종료
+— 다음 후보: Phase 3.1+ 본문 AI 분석 / 응모서 본문 작성 / 휴식
 ```
 
 | 일자 | 작업 | 상태 |
 |---|---|---|
 | 5/20~5/21 | Phase 3.0 PoC (Step 1~4) | ✅ 완료 |
-| 5/21 | Phase 3 본 구현 ①② (enrich 영구화 + status 재분류) | ✅ 완료 |
-| 5/21 20:37 | 야간 파이프라인 첫 통합 run (enrich 자동화) | ⏳ |
-| 5/22 | 야간 run 결과 검증 (end_date 유지 확인) | ⏳ |
+| 5/21 | Phase 3 본 구현 ①② + 통합 파이프라인 검증 (end_date 유지 확인) | ✅ 완료 |
+| 5/21 20:37~ | 야간 파이프라인 자동 가동 (검증된 통합 코드) | 🟢 가동 |
 | 5/24 (일) | 광주 공모전 마감 (보류 검토) | ⏳ |
 | 7/3 (목) | 전북 공모전 (JBTP) 마감 | ⏳ |
 
