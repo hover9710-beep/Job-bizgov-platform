@@ -439,7 +439,7 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
 
     cur = conn.execute(
         "SELECT ai_result, pdf_path, attachments_json, ai_summary, recommend_label, "
-        "notice_chk, notice_order, organization "
+        "notice_chk, notice_order, organization, end_date "
         "FROM biz_projects WHERE id = ?",
         (eid,),
     ).fetchone()
@@ -452,7 +452,8 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
         old_nchk,
         old_nord,
         old_org,
-    ) = (cur or (None, None, None, None, None, None, None, None))
+        old_ed,
+    ) = (cur or (None, None, None, None, None, None, None, None, None))
 
     new_ai = old_ai if ai_result is None else ai_result
     new_pdf = old_pdf if pdf_path is None else pdf_path
@@ -496,6 +497,13 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
         except (TypeError, ValueError):
             pass
 
+    # 백로그 ① (enrich 영구화): end_date 머지 — 새 값이 비었고 기존 값이 있으면
+    # 기존 값 보존. 야간 크롤(상세 없는 목록, end_date 빈값)이 --enrich-detail
+    # 결과를 wipe 하는 사고 방지. attachments_json·organization 가드와 동일 패턴.
+    merged_ed = row["end_date"]
+    if not str(merged_ed or "").strip() and str(old_ed or "").strip():
+        merged_ed = str(old_ed).strip()
+
     conn.execute(
         """
         UPDATE biz_projects
@@ -515,7 +523,7 @@ def _upsert_one(conn: sqlite3.Connection, item: Dict[str, Any]) -> None:
             row["executing_agency"],
             row["source"],
             row["start_date"],
-            row["end_date"],
+            merged_ed,
             row["status"],
             row["url"],
             row["description"],

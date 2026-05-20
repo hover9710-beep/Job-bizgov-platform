@@ -28,7 +28,9 @@ def infer_status(
         return "마감"
 
     text = (period_text or "").strip()
-    open_keywords = ["상시", "접수중", "예산 소진 시까지"]
+    # 무마감 공고 키워드 (Phase 3 백로그 ②). "예산 소진" 은 부분일치라
+    # "예산 소진시까지"/"예산 소진 시까지" 띄어쓰기 변형을 모두 잡는다. "선착순" 신규.
+    open_keywords = ["상시", "접수중", "예산 소진", "선착순"]
     closed_keywords = ["마감", "종료", "접수마감", "신청마감", "모집완료"]
 
     if any(k in text for k in open_keywords):

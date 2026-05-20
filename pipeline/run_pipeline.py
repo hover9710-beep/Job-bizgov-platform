@@ -2,6 +2,7 @@
 통합 파이프라인 (프로젝트 루트 기준)
 
 0a) connectors/connector_bizinfo.py  — 기업마당 전체 수집 → data/bizinfo/json/bizinfo_all.json
+0a-2) connectors/connector_bizinfo.py --enrich-detail — 상세 보강(end_date 등), 같은 사이클 내 (백로그 ①)
 0b) connectors/connector_kstartup.py — K-Startup 전체 수집 → data/kstartup/kstartup_all.json
 1)  pipeline/merge_jb.py  — data/*.json 병합 → data/all_jb/all_jb.json, today/yesterday
 2)  pipeline/update_db.py — all_jb.json → db/biz.db (biz_projects upsert 후 projects 미러링)
@@ -41,6 +42,25 @@ def run_bizinfo() -> None:
     subprocess.run(cmd, cwd=str(ROOT_DIR), check=True)
 
 
+def run_bizinfo_enrich() -> None:
+    """기업마당 상세 보강(end_date 등) → bizinfo_all.json 갱신.
+
+    백로그 ① (enrich 영구화): 야간 크롤 직후 같은 사이클에서 enrich 를 돌려
+    enrich 결과가 다음 야간 크롤에 wipe 되지 않도록 한다. 실패해도 파이프라인은
+    중단하지 않는다(기존 bizinfo_all.json 으로 계속).
+    """
+    script_path = ROOT_DIR / "connectors" / "connector_bizinfo.py"
+    cmd = [sys.executable, str(script_path), "--enrich-detail"]
+    print(f"[run_pipeline] {' '.join(cmd)}", flush=True)
+    result = subprocess.run(cmd, cwd=str(ROOT_DIR))
+    if result.returncode != 0:
+        print(
+            f"[run_pipeline] connector_bizinfo.py --enrich-detail exit {result.returncode} — "
+            "기존 bizinfo_all.json 으로 계속 진행합니다.",
+            flush=True,
+        )
+
+
 def run_kstartup() -> None:
     """K-Startup 전체 수집 → data/kstartup/kstartup_all.json.
 
@@ -67,6 +87,11 @@ def main() -> None:
         help="connectors/connector_bizinfo.py 생략",
     )
     parser.add_argument(
+        "--skip-enrich",
+        action="store_true",
+        help="connector_bizinfo.py --enrich-detail (상세 보강) 생략",
+    )
+    parser.add_argument(
         "--skip-kstartup",
         action="store_true",
         help="connectors/connector_kstartup.py 생략",
@@ -88,6 +113,10 @@ def main() -> None:
     try:
         if not args.skip_bizinfo:
             run_bizinfo()
+            if not args.skip_enrich:
+                run_bizinfo_enrich()
+            else:
+                print("[run_pipeline] --skip-enrich: --enrich-detail 건너뜀", flush=True)
         else:
             print("[run_pipeline] --skip-bizinfo: connector_bizinfo.py 건너뜀", flush=True)
         if not args.skip_kstartup:
