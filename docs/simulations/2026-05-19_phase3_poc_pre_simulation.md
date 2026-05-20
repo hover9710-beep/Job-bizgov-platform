@@ -162,10 +162,34 @@ py connectors/connector_bizinfo.py --enrich-detail
 ## 6. 다음 진입 조건
 
 - [x] DB 실측 본 entry 완료
-- [ ] `connector_bizinfo.py:188-205` `_detail_url_from_seq` + `fetch_detail` 코드 read (10분, 본 작업 직전)
-- [ ] DRY-RUN 10건 매칭률 측정 (목표 ≥80%)
+- [x] `connector_bizinfo.py` `fetch_detail` 코드 read (5/20 Step 1 완료)
+- [x] DRY-RUN 10건 매칭률 측정 (5/20 Step 2 — **90% ≥ 80% 통과**)
 - [ ] **5/20 시연 종료 + 회복**
-- [ ] Phase 3.0 PoC 진입 (5/21 또는 5/22)
+- [ ] Phase 3.0 PoC 본 실행 (5/22 권장)
+
+---
+
+## 7. 🟢 5/20 PoC Step 1+2 실측 검증 (12번째 가설 정정)
+
+코드 read + DRY-RUN 10건으로 본 시뮬(11번째 정정)의 PoC 명세를 추가 검증한 결과,
+**11번째 정정도 부분적으로 틀림** — 4건 추가 정정.
+
+| 11번째 정정 가설 | 5/20 코드 실측 | 정정 |
+|---|---|---|
+| `--enrich-detail` = 2,125 row HTTP fetch → DB 반영 | `db/biz.db` 미접근. `bizinfo_all.json` JSON-only read/write | 위험 E 정정: connector 에 DB UPDATE 없음. merge 파이프라인 별도 |
+| DRY-RUN = `--enrich-detail --limit 10` | `--dry-run` / `--limit` 플래그 부재 (argparse 오류) | 실제 = `--enrich-max` + `--out`, 또는 함수 import 스크립트 |
+| 대상 2,125 row | `bizinfo_all.json` 1,433 row (end_date 없음) | DB 2,242 는 누적, JSON 은 단일 크롤 스냅샷 |
+| `_extract_period_status_from_detail_table()` = 매칭 핵심 | DRY-RUN 10건 전부 `period_th` 빈 값. 실제 매칭 = `_extract_period_from_s_title_list()` | th/td 테이블 X → s_title 리스트 레이아웃 |
+
+### DRY-RUN 10건 매칭률
+
+- fetch 10/10 성공 (네트워크 실패 0)
+- end_date 추출 **9/10 = 매칭률 90%**
+- 1건 실패 = "예산 소진시까지" (공고 자체 마감일 부재, 파싱 버그 X)
+- 표본 편향: 선두 10건 = 최근 지자체 공고 위주, KIAT/KICET 국가기관 미포함 → 본 실행 시 전체 재측정 필요
+
+→ 1번째 시뮬이 "코드 변경 0" 발견, 2번째 검증(코드 read)이 "실행 명세 자체가 틀림" 발견.
+→ 상세: `docs/daily/2026-05-20_phase3_poc_step1_2.md`
 
 ---
 

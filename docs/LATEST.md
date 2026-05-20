@@ -1,6 +1,30 @@
 # LATEST — BizGovPlanner 진입점
 
-**마지막 갱신**: 2026-05-19 EOD (가설 정정 11건 + PoC 사전 시뮬 7번째 entry + 5/20 시연 진입 준비)
+**마지막 갱신**: 2026-05-20 오전 (Phase 3.0 PoC Step 1+2 완료 — 코드 read + DRY-RUN 90% + 가설 정정 12건)
+
+---
+
+## 🟢 5/20 오전 — Phase 3.0 PoC Step 1+2 완료 (시연 D-day)
+
+| 항목 | 결과 |
+|---|---|
+| Step 1 코드 read | ✅ `connector_bizinfo.py` — `--enrich-detail` 명세 4건 정정 |
+| Step 2 DRY-RUN 10건 | ✅ fetch 10/10, end_date 9/10 = **매칭률 90%** |
+| DB 변경 | ❌ 없음 (JSON-only read + HTTP fetch, 안전) |
+| 가설 정정 | **12건** (코드 read 가 PoC 명세 4건 정정) |
+
+### 🚨 12번째 정정 — PoC 명세 자체가 틀림
+
+| 가설 | 실측 | 정정 |
+|---|---|---|
+| `--enrich-detail` = DB 2,125 row UPDATE | `db/biz.db` 미접근, `bizinfo_all.json` JSON-only | 위험 E: connector 에 DB UPDATE 없음 |
+| `--dry-run --limit 10` 명령 | 두 플래그 모두 부재 (argparse 오류) | `--enrich-max` + `--out` 또는 함수 import |
+| 대상 2,125 row | JSON 1,433 row (end_date 없음) | DB 2,242 는 누적, JSON 은 단일 크롤 |
+| 매칭 = `_extract_period_status_from_detail_table` | th/td 전부 빈 값, 실제는 `_extract_period_from_s_title_list` | s_title 리스트 레이아웃 |
+
+→ **본 실행 = 2단계**: ① `--enrich-detail` (JSON enrich) → ② merge 파이프라인 재실행 (DB 반영)
+→ 본 실행 권장: **5/22** (시연 + 박람회 회피, JSON→DB 경로 추가 확인)
+→ 상세: `docs/daily/2026-05-20_phase3_poc_step1_2.md`
 
 ---
 
@@ -64,30 +88,29 @@
 ### 진입 조건
 
 - [x] 5/19 PoC 사전 시뮬 완료 (entry 7번째, commit `2e4337a`)
+- [x] Step 1 코드 read 완료 (5/20 오전)
+- [x] Step 2 DRY-RUN 10건 완료 (5/20 오전, 매칭률 90%)
 - [ ] 5/20 시연 종료
 - [ ] 5/21 휴식
-- [ ] 5/22 진입
+- [ ] 5/22 본 실행 (Step 3)
 
-### 작업 순서 (1.5~3h)
+### 작업 순서 (5/20 Step 1+2 결과로 갱신)
 
-**1. 코드 read (10분)** — PoC 진입 직전 강제:
-- `connectors/connector_bizinfo.py:188-205` `fetch_detail()`
-- `_parse_detail_soup()` + `_extract_period_status_from_detail_table()`
-- UPDATE 로직 확인 (위험 E)
+**1. 코드 read (10분)** — ✅ 완료. 위험 E 정정: `--enrich-detail` 는 JSON-only, DB 미접근.
 
-**2. DRY-RUN 10건 (20분):**
+**2. DRY-RUN 10건 (20분)** — ✅ 완료. fetch 10/10, end_date 9/10 = **90%**. `--dry-run`/`--limit` 부재 → 함수 import 스크립트로 수행.
+
+**3. 본 실행 — 2단계 (5/22):**
 ```bash
-py connectors/connector_bizinfo.py --enrich-detail --limit 10
-```
-- 매칭률 측정 (목표 ≥80%)
-
-**3. 본 실행 (50~70분):**
-```bash
+# ① JSON enrich (1,433 row, ~26분, bizinfo_all.json 갱신)
 py connectors/connector_bizinfo.py --enrich-detail
+# ② DB 반영 — merge 파이프라인 재실행
+py -m pipeline.run_pipeline   # 경로 5/22 진입 직전 재확인
 ```
-- 2,125 row HTTP fetch
-- 멱등성 `WHERE end_date IS NULL`
-- Session 재사용 + sleep
+- 대상 = `bizinfo_all.json` 1,433 row (end_date 없음), NOT DB 2,242
+- 멱등성 = JSON row-level `skip_if_has_end` (`--enrich-force-all` 로 해제)
+- Session 재사용 + `sleep(0.12)` 이미 코드 적용됨
+- ⚠️ `--enrich-detail` 단독으로는 "확인 필요" 안 줄어듦 — ② 필수
 
 **4. AI fallback (필요 시 1~2h):**
 - 20% fallback 가정 시 ~$4
@@ -99,13 +122,13 @@ py connectors/connector_bizinfo.py --enrich-detail
 
 ### 위험 5건 (PoC 직전 정밀화)
 
-| # | 위험 | 확률 | 대응 |
+| # | 위험 | 확률 | 5/20 Step 1+2 결과 |
 |---|---|---|---|
-| A | table 추출이 기관별 본문 못 잡음 (10번째 정정 영향) | 중 | DRY-RUN ≥80% 검증 |
-| B | bizinfo rate limit | 낮음 | Session 재사용 + sleep |
-| C | 네트워크 끊김 | 중 | 멱등성 WHERE end_date IS NULL |
-| D | URL NULL row 처리 | 낮음 | 필터링 |
-| E | UPDATE 로직 미확인 | 중 | 코드 read 10분 선행 |
+| A | table 추출이 기관별 본문 못 잡음 | 중 | ✅ 해소 — DRY-RUN 90%. 단 표본 편향(지자체 위주) → 본 실행 시 재측정 |
+| B | bizinfo rate limit | 낮음 | ✅ Session 재사용 + sleep(0.12) 코드 적용 확인 |
+| C | 네트워크 끊김 | 중 | 멱등성 = JSON row-level `skip_if_has_end` (SQL WHERE 아님) |
+| D | URL NULL row 처리 | 낮음 | ✅ JSON 1,433 row 전부 url 보유 |
+| E | UPDATE 로직 미확인 | 중 | ⚠️ **정정** — connector 는 DB 미접근, JSON-only. DB 반영은 merge 파이프라인 별도 |
 
 ---
 
