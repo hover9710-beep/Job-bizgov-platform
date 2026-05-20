@@ -155,3 +155,4 @@
 | 2026-05-19 | 11번째 가설 정정 (PoC 사전 시뮬) — `description` 컬럼 = 날짜 문자열 (본문 X) / 본문 DB 부재 / `connector_bizinfo.py` 에 `fetch_detail()` + `--enrich-detail` + `_extract_period_status_from_detail_table()` 이미 존재 → Phase 3.0 = 기존 스크립트 실행 (코드 0), 7번째 entry 신설 | CC |
 | 2026-05-20 | 13번째 가설 정정 (enrich 비영구성) + PoC 검증 — 확인필요 2,302→1,446 (−37%), 파싱 정확성 100%, 야간 wipe 발견 → Phase 3 본 구현 = 영구화, 백로그 ①② 신설, 8번째 entry 신설 | CC |
 | 2026-05-21 | 14번째 가설 정정 (①A 오배치) — enrich 자동화를 `run_pipeline.py`(수동 웹 버튼)에 넣어 야간 경로(`run_all.py`) 미반영. ②·①B는 `update_db.py` 경유로 운영 반영. `enrich_in_run_all.md` 백로그 신설 | CC |
+| 2026-05-21 | 14번째 정정 해소 — enrich 단계를 `run_all.py` `run_bizinfo()`에 통합 (commit `db5f6bb`), `run_all.py --mode bizinfo` 검증 통과. Phase 3 본 구현 ①② 완료 | CC |

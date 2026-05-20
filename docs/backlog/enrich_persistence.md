@@ -4,15 +4,15 @@
 > **우선순위**: 높음
 > **예상 시간**: 2~4h
 > **분류**: Phase 3 본 구현 핵심
-> **상태**: 🟡 **부분 완료 (2026-05-21)** — ①B(방법 B) 완료, ①A(방법 A) 재작업 필요
+> **상태**: ✅ **완료 (2026-05-21)** — 방법 B(①B) + 방법 A(①A) 모두 운영 반영
 
 ---
 
-## 🟡 부분 완료 (2026-05-21)
+## ✅ 완료 (2026-05-21)
 
-- **방법 B 완료 ✅** — `update_db.py` `_upsert_one` UPDATE에 end_date 보존 가드 추가 (새 값 빈값 + 기존값 있으면 보존). 가드 테스트 통과: 빈 end_date 재upsert 시 기존값 `2026-12-10` 보존 확인. **운영 야간 경로(`run_all.py` → `update_db.py`)에 반영됨** (commit `44c20b0`).
-- **방법 A 재작업 필요 ❌ (14번째 가설 정정)** — `run_pipeline.py`에 `run_bizinfo_enrich()`를 추가했으나, `run_pipeline.py`는 **수동 웹 버튼**(`appy.py` `POST /run`) 전용. 야간 스케줄러(`auto_run.bat`)와 GitHub Actions(`daily-crawl.yml`)는 모두 **`run_all.py`** 사용 → enrich 미실행.
-- → enrich를 `run_all.py`에 이전하는 후속 작업: **`docs/backlog/enrich_in_run_all.md`**
+- **방법 B ✅** — `update_db.py` `_upsert_one` UPDATE에 end_date 보존 가드 (새 값 빈값 + 기존값 있으면 보존). 가드 테스트 통과: 빈 end_date 재upsert 시 기존값 `2026-12-10` 보존 확인. 운영 야간 경로(`run_all.py` → `update_db.py`) 반영 (commit `44c20b0`).
+- **방법 A ✅** — enrich 단계를 `run_all.py` `run_bizinfo()`에 통합 (commit `db5f6bb`). 야간 스케줄러(`auto_run.bat`)·GitHub Actions(`daily-crawl.yml`)가 crawl→enrich→merge→update_db 실행. (14번째 가설 정정: 처음 `run_pipeline.py`에 잘못 넣음 → `run_all.py`로 이전, `docs/backlog/enrich_in_run_all.md`)
+- 검증: `run_all.py --mode bizinfo` — "2a) enrich-detail" 단계 작동, enrich 0 실패, DB end_date 유지, 전 단계 exit 0.
 
 ---
 

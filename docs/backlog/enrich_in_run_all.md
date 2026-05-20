@@ -4,6 +4,16 @@
 > **우선순위**: 높음
 > **예상 시간**: 1~2h
 > **선행**: `docs/backlog/enrich_persistence.md` (①, 방법 A 재작업분)
+> **상태**: ✅ **완료 (2026-05-21, commit `db5f6bb`)**
+
+---
+
+## ✅ 완료 (2026-05-21)
+
+- `run_all.py` `run_bizinfo()`에 `run_bizinfo_enrich()` 추가 — 크롤 직후 `--enrich-detail` 실행 (non-fatal). `--mode all`·`--mode bizinfo`(GHA) 양쪽 적용.
+- `daily-crawl.yml` — `crawl-bizinfo` timeout 15→45분, job 95→120분.
+- 검증: `run_all.py --mode bizinfo` → "2a) BIZINFO enrich-detail" 단계 작동, enrich 1,427건 0 실패, DB end_date 1,500 유지, 전 단계 exit 0.
+- ⚠️ GHA 러너 enrich(클라우드 IP, 1,400+ 요청)는 런타임 검증 미완 — `workflow_dispatch` 수동 트리거 1회 권장.
 
 ---
 
