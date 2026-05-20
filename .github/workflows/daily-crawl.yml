@@ -11,7 +11,7 @@ permissions:
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 95   # 백로그 069 (5/17 EOD): 85 → 95 (ai_summary step 10분 여유)
+    timeout-minutes: 120  # enrich_in_run_all: 95 → 120 (bizinfo --enrich-detail ~25~30분 추가)
 
     steps:
       - name: Checkout repository
@@ -39,10 +39,10 @@ jobs:
           mkdir -p db
           python pipeline/_ensure_schema.py
 
-      - name: Crawl bizinfo (mode bizinfo + merge + DB)
+      - name: Crawl bizinfo (mode bizinfo + enrich + merge + DB)
         id: crawl-bizinfo
         continue-on-error: true
-        timeout-minutes: 15
+        timeout-minutes: 45
         env:
           DB_PATH: db/biz.db
           PYTHONPATH: ${{ github.workspace }}

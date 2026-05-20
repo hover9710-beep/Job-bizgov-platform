@@ -5,6 +5,7 @@ Run the full pipeline in order (project root = cwd for each subprocess).
 전체(--mode all):
   1) JBEXPORT: 상주 jbexport_proxy(:5001) + pipeline/jbexport_daily.py
   2) BIZINFO: connectors/connector_bizinfo.py
+  2a) BIZINFO enrich: connector_bizinfo.py --enrich-detail (end_date 보강)
   2b) K-Startup: connectors/connector_kstartup.py
   3) filter_recommend → merge_sources → diff_new → merge_jb → update_db
   4) make_mail / 카카오 / mailer
@@ -212,12 +213,34 @@ def run_jbexport() -> int:
 
 
 def run_bizinfo() -> int:
-    """bizinfo: connector_bizinfo 단일 실행."""
+    """bizinfo: connector_bizinfo 수집 + 상세 enrich(end_date 등).
+
+    백로그 enrich_in_run_all: 크롤 직후 같은 사이클에서 --enrich-detail 을 돌려
+    enrich 결과(end_date)가 다음 야간 크롤에 wipe 되지 않게 한다. enrich 는
+    non-fatal — 실패해도 크롤 종료 코드·파이프라인에 영향 없음.
+    """
     _section("2) BIZINFO crawler")
     rc = _run([PY, str(ROOT / "connectors" / "connector_bizinfo.py")])
     _log_json_list_count("BIZINFO 수집 산출물", BIZINFO_OUT_JSON)
     print(f"[run_all] BIZINFO crawler 종료 코드: {rc}", flush=True)
+    if rc == 0:
+        run_bizinfo_enrich()
     return rc
+
+
+def run_bizinfo_enrich() -> None:
+    """bizinfo 상세 보강(--enrich-detail) → bizinfo_all.json 갱신. non-fatal."""
+    _section("2a) BIZINFO enrich-detail")
+    erc = _run([PY, str(ROOT / "connectors" / "connector_bizinfo.py"), "--enrich-detail"])
+    _log_json_list_count("BIZINFO enrich 산출물", BIZINFO_OUT_JSON)
+    if erc != 0:
+        print(
+            f"[run_all] non-fatal: bizinfo --enrich-detail exit {erc}, "
+            "기존 bizinfo_all.json 으로 계속",
+            flush=True,
+        )
+    else:
+        print("[run_all] BIZINFO enrich-detail 완료", flush=True)
 
 
 def run_kstartup() -> int:
