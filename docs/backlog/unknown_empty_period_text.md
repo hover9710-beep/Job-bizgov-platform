@@ -4,7 +4,7 @@
 > **우선순위**: 중
 > **예상 시간**: 진단 30분~1h
 > **선행**: `docs/backlog/no_deadline_classification.md` (②), `docs/backlog/enrich_persistence.md` (①)
-> **상태**: 🔍 **진단 완료 (2026-05-21)** — fix(DB 기반 re-enrich)는 다음 사이클
+> **상태**: ✅ **완료 (2026-05-21)** — 진단 + fix(DB 기반 re-enrich) 모두 완료
 
 ---
 
@@ -54,6 +54,19 @@ DB 분석 + 상세 페이지 8건 샘플 fetch:
 - 멱등 (재실행 안전), DB 백업 선행, ~829건 HTTP (~15분, 안정 네트워크)
 - 예상 효과: 확인필요 906 → **~80** (대부분 `'마감'`으로 정정)
 - 구현: 신규 스크립트 또는 connector 에 `--enrich-db` 플래그 (코드 변경, 모드 A)
+
+---
+
+## ✅ fix 완료 (2026-05-21)
+
+신규 스크립트 `pipeline/enrich_db_bizinfo.py` — DB 기반 re-enrich:
+
+- 대상 **831건 전수 처리, fetch 실패 0**
+- 산출 status: 마감 792 / 접수중 25 / 확인필요 14
+- **확인 필요 906 → 89 (−817, −90%)** (bizinfo 확인필요 → 88)
+- 잔여(확인필요 + period_text 빈값) **1건** — 상세에 신청기간 자체가 없는 정당한 케이스
+- 멱등 (재실행 안전). DB 백업 `db/biz.backup.20260521_072002_pre_enrich_db.db`
+- 과거 누적 행이라 야간 `update_db` 가 재처리 안 함 → 결과 durable
 
 ---
 
